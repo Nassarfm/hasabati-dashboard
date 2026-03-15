@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { font-family: 'IBM Plex Sans Arabic', Tahoma, sans-serif; }
+  body {
+    background: #f0f4f8;
+    color: #1a2236;
+    direction: rtl;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #f1f5f9; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+}
+
+@layer components {
+  .card { @apply bg-white rounded-2xl shadow-sm border border-slate-100 p-5; }
+  .btn-primary { @apply bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-ghost { @apply bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150; }
+  .input { @apply w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-slate-50 placeholder-slate-400 transition-all; }
+  .select { @apply w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 bg-slate-50; }
+  .badge-success { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700; }
+  .badge-warning { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700; }
+  .badge-danger  { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600; }
+  .badge-info    { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700; }
+  .badge-gray    { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600; }
+  .nav-item { @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-slate-600 hover:bg-primary-50 hover:text-primary-700 cursor-pointer transition-all duration-150; }
+  .nav-item.active { @apply bg-primary-600 text-white hover:bg-primary-700 hover:text-white font-medium; }
+  .th { @apply text-xs font-semibold text-slate-500 uppercase tracking-wide py-3 px-4 text-right; }
+  .td { @apply py-3 px-4 text-sm text-slate-700; }
+  .page-enter { animation: fadeSlide 0.2s ease-out; }
+}
+
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.spinner {
+  width: 24px; height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3670f5;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.num { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+.num-debit  { color: #1d4ed8; font-weight: 600; }
+.num-credit { color: #059669; font-weight: 600; }
