@@ -165,17 +165,20 @@ export function TrialBalancePage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [rebuilding, setRebuilding] = useState(false)
-  const [year, setYear] = useState(new Date().getFullYear())
+  const [year, setYear]   = useState(new Date().getFullYear())
+  const [month, setMonth] = useState('')
 
   const loadData = () => {
     setLoading(true)
-    api.accounting.getTrialBalance({ fiscal_year: year })
+    const params = { fiscal_year: year }
+    if (month) params.fiscal_month = month
+    api.accounting.getTrialBalance(params)
       .then(d => setData(d?.data || d))
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { loadData() }, [year])
+  useEffect(() => { loadData() }, [year, month])
 
   const handleRebuild = async () => {
     if (!confirm('سيتم إعادة بناء كل الأرصدة من القيود المرحّلة. هل تريد المتابعة؟')) return
@@ -192,70 +195,92 @@ export function TrialBalancePage() {
   }
 
   const lines = data?.lines || []
-  const totPeriodD  = lines.reduce((s,l) => s + parseFloat(l.total_debit  || 0), 0)
-  const totPeriodC  = lines.reduce((s,l) => s + parseFloat(l.total_credit || 0), 0)
-  const totBalD     = lines.reduce((s,l) => s + parseFloat(l.closing_debit  || 0), 0)
-  const totBalC     = lines.reduce((s,l) => s + parseFloat(l.closing_credit || 0), 0)
-  const isBalanced  = data?.is_balanced ?? Math.abs(totBalD - totBalC) < 1
+  const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+
+  const periodLabel = month ? `${months[month-1]} ${year}` : `سنة ${year}`
 
   return (
     <div className="page-enter space-y-5">
       <PageHeader
         title="ميزان المراجعة"
-        subtitle={`السنة المالية ${year}`}
+        subtitle={periodLabel}
         actions={
-          <div className="flex gap-2">
-            <select className="select w-32" value={year} onChange={e => setYear(Number(e.target.value))}>
-              {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+          <div className="flex gap-2 flex-wrap">
+            <select className="select w-28" value={year} onChange={e => setYear(Number(e.target.value))}>
+              {[2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-            <button onClick={loadData} className="btn-ghost">🔄 تحديث</button>
-            <button onClick={handleRebuild} disabled={rebuilding} className="btn-ghost text-amber-600 border-amber-200 hover:bg-amber-50">
-              {rebuilding ? '⏳...' : '🔧 إعادة بناء الأرصدة'}
+            <select className="select w-32" value={month} onChange={e => setMonth(e.target.value ? Number(e.target.value) : '')}>
+              <option value="">كل السنة</option>
+              {months.map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+            <button onClick={loadData} className="btn-ghost">🔄</button>
+            <button onClick={handleRebuild} disabled={rebuilding} className="btn-ghost text-amber-600">
+              {rebuilding ? '⏳...' : '🔧 إعادة بناء'}
             </button>
           </div>
         }
       />
+
       <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="th w-20">الكود</th>
-                <th className="th">اسم الحساب</th>
-                <th className="th w-32 text-center">حركة المدين</th>
-                <th className="th w-32 text-center">حركة الدائن</th>
-                <th className="th w-32 text-center">الرصيد المدين</th>
-                <th className="th w-32 text-center">الرصيد الدائن</th>
+          <table className="w-full min-w-[900px] text-sm">
+            <thead>
+              <tr className="bg-slate-700 text-white">
+                <th className="px-3 py-2 text-right" rowSpan={2}>الكود</th>
+                <th className="px-3 py-2 text-right" rowSpan={2}>اسم الحساب</th>
+                <th className="px-3 py-2 text-center border-r border-slate-600" colSpan={2}>رصيد أول المدة</th>
+                <th className="px-3 py-2 text-center border-r border-slate-600" colSpan={2}>حركة الفترة</th>
+                <th className="px-3 py-2 text-center border-r border-slate-600" colSpan={2}>رصيد آخر المدة</th>
+                <th className="px-3 py-2 text-center" rowSpan={2}>صافي الإغلاق</th>
+              </tr>
+              <tr className="bg-slate-600 text-white text-xs">
+                <th className="px-3 py-1 text-center border-r border-slate-500">مدين</th>
+                <th className="px-3 py-1 text-center border-r border-slate-500">دائن</th>
+                <th className="px-3 py-1 text-center border-r border-slate-500">مدين</th>
+                <th className="px-3 py-1 text-center border-r border-slate-500">دائن</th>
+                <th className="px-3 py-1 text-center border-r border-slate-500">مدين</th>
+                <th className="px-3 py-1 text-center border-r border-slate-500">دائن</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-400">جارٍ التحميل...</td></tr>
+                <tr><td colSpan={9} className="text-center py-8 text-slate-400">جارٍ التحميل...</td></tr>
               ) : lines.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-400">لا توجد بيانات</td></tr>
+                <tr><td colSpan={9} className="text-center py-8 text-slate-400">لا توجد بيانات</td></tr>
               ) : lines.map((r, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="td"><span className="font-mono text-xs text-primary-600 font-semibold">{r.account_code}</span></td>
-                  <td className="td text-sm text-slate-700">{r.account_name || '—'}</td>
-                  <td className="td text-center"><span className="num num-debit text-sm">{parseFloat(r.total_debit) > 0 ? fmt(r.total_debit, 2) : ''}</span></td>
-                  <td className="td text-center"><span className="num num-credit text-sm">{parseFloat(r.total_credit) > 0 ? fmt(r.total_credit, 2) : ''}</span></td>
-                  <td className="td text-center"><span className="num num-debit font-semibold text-sm">{parseFloat(r.closing_debit) > 0 ? fmt(r.closing_debit, 2) : ''}</span></td>
-                  <td className="td text-center"><span className="num num-credit font-semibold text-sm">{parseFloat(r.closing_credit) > 0 ? fmt(r.closing_credit, 2) : ''}</span></td>
+                <tr key={i} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-3 py-2"><span className="font-mono text-xs text-primary-600 font-semibold">{r.account_code}</span></td>
+                  <td className="px-3 py-2 text-slate-700">{r.account_name || '—'}</td>
+                  <td className="px-3 py-2 text-center"><span className="num num-debit text-xs">{r.opening_debit > 0 ? fmt(r.opening_debit,2) : ''}</span></td>
+                  <td className="px-3 py-2 text-center"><span className="num num-credit text-xs">{r.opening_credit > 0 ? fmt(r.opening_credit,2) : ''}</span></td>
+                  <td className="px-3 py-2 text-center"><span className="num num-debit text-xs">{r.period_debit > 0 ? fmt(r.period_debit,2) : ''}</span></td>
+                  <td className="px-3 py-2 text-center"><span className="num num-credit text-xs">{r.period_credit > 0 ? fmt(r.period_credit,2) : ''}</span></td>
+                  <td className="px-3 py-2 text-center"><span className="num num-debit text-xs font-semibold">{r.closing_debit > 0 ? fmt(r.closing_debit,2) : ''}</span></td>
+                  <td className="px-3 py-2 text-center"><span className="num num-credit text-xs font-semibold">{r.closing_credit > 0 ? fmt(r.closing_credit,2) : ''}</span></td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`num text-xs font-bold ${r.closing_net >= 0 ? 'num-debit' : 'num-credit'}`}>
+                      {fmt(Math.abs(r.closing_net),2)}
+                      <span className="text-[10px] mr-1">{r.closing_net >= 0 ? 'م' : 'د'}</span>
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
             {!loading && lines.length > 0 && (
-              <tfoot className="bg-slate-800 text-white">
-                <tr>
-                  <td colSpan={2} className="px-4 py-3 text-sm font-semibold">الإجماليات</td>
-                  <td className="px-4 py-3 text-center num num-debit font-semibold">{fmt(totPeriodD, 2)}</td>
-                  <td className="px-4 py-3 text-center num num-credit font-semibold">{fmt(totPeriodC, 2)}</td>
-                  <td className="px-4 py-3 text-center num num-debit font-semibold">{fmt(totBalD, 2)}</td>
-                  <td className="px-4 py-3 text-center num num-credit font-semibold">{fmt(totBalC, 2)}</td>
+              <tfoot>
+                <tr className="bg-slate-800 text-white font-semibold">
+                  <td colSpan={2} className="px-3 py-3 text-sm">الإجماليات</td>
+                  <td className="px-3 py-3 text-center num num-debit">{fmt(data?.opening_debit_total||0,2)}</td>
+                  <td className="px-3 py-3 text-center num num-credit">{fmt(data?.opening_credit_total||0,2)}</td>
+                  <td className="px-3 py-3 text-center num num-debit">{fmt(data?.period_debit_total||0,2)}</td>
+                  <td className="px-3 py-3 text-center num num-credit">{fmt(data?.period_credit_total||0,2)}</td>
+                  <td className="px-3 py-3 text-center num num-debit">{fmt(data?.closing_debit_total||0,2)}</td>
+                  <td className="px-3 py-3 text-center num num-credit">{fmt(data?.closing_credit_total||0,2)}</td>
+                  <td className="px-3 py-3 text-center num">{fmt(Math.abs(data?.closing_net_total||0),2)}</td>
                 </tr>
                 <tr>
-                  <td colSpan={6} className={`px-4 py-2 text-center text-sm font-semibold ${isBalanced ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {isBalanced ? '✅ الميزان متوازن' : '⚠️ الميزان غير متوازن'}
+                  <td colSpan={9} className={`px-4 py-2 text-center text-sm font-semibold ${data?.is_balanced ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {data?.is_balanced ? '✅ الميزان متوازن' : '⚠️ الميزان غير متوازن'}
                   </td>
                 </tr>
               </tfoot>
