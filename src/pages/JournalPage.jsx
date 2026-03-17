@@ -328,3 +328,4 @@ function JEDetailModal({ je, onClose, onPosted }) {
     </Modal>
   )
 }
+ 
