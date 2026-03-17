@@ -181,21 +181,6 @@ export function TrialBalancePage() {
   const totBalC     = lines.reduce((s,l) => s + parseFloat(l.closing_credit || 0), 0)
   const isBalanced  = data?.is_balanced ?? Math.abs(totBalD - totBalC) < 1
 
-  const columns = [
-    { key: 'account_code', label: 'الكود',
-      render: r => <span className="font-mono text-xs text-primary-600 font-semibold">{r.account_code}</span> },
-    { key: 'account_name', label: 'اسم الحساب',
-      render: r => <span className="text-sm text-slate-700">{r.account_name || r.account_code}</span> },
-    { key: 'total_debit',  label: 'حركة المدين',
-      render: r => <span className="num num-debit text-sm">{parseFloat(r.total_debit) > 0 ? fmt(r.total_debit, 2) : ''}</span> },
-    { key: 'total_credit', label: 'حركة الدائن',
-      render: r => <span className="num num-credit text-sm">{parseFloat(r.total_credit) > 0 ? fmt(r.total_credit, 2) : ''}</span> },
-    { key: 'closing_debit',  label: 'الرصيد المدين',
-      render: r => <span className="num num-debit font-semibold text-sm">{parseFloat(r.closing_debit) > 0 ? fmt(r.closing_debit, 2) : ''}</span> },
-    { key: 'closing_credit', label: 'الرصيد الدائن',
-      render: r => <span className="num num-credit font-semibold text-sm">{parseFloat(r.closing_credit) > 0 ? fmt(r.closing_credit, 2) : ''}</span> },
-  ]
-
   return (
     <div className="page-enter space-y-5">
       <PageHeader
@@ -208,32 +193,52 @@ export function TrialBalancePage() {
         }
       />
       <div className="card p-0 overflow-hidden">
-        <DataTable columns={columns} data={lines} loading={loading} />
-        {!loading && lines.length > 0 && (
-          <div className="bg-slate-800 text-white px-6 py-3 grid grid-cols-4 gap-4 text-sm font-semibold num">
-            <div className="text-center">
-              <div className="text-slate-400 text-xs mb-1">حركة المدين</div>
-              <div className="num-debit">{fmt(totPeriodD, 2)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-slate-400 text-xs mb-1">حركة الدائن</div>
-              <div className="num-credit">{fmt(totPeriodC, 2)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-slate-400 text-xs mb-1">الرصيد المدين</div>
-              <div className="num-debit">{fmt(totBalD, 2)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-slate-400 text-xs mb-1">الرصيد الدائن</div>
-              <div className="num-credit">{fmt(totBalC, 2)}</div>
-            </div>
-          </div>
-        )}
-        {!loading && lines.length > 0 && (
-          <div className={`px-4 py-2 text-center text-sm font-semibold ${isBalanced ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-            {isBalanced ? '✅ الميزان متوازن' : '⚠️ الميزان غير متوازن — يرجى مراجعة القيود'}
-          </div>
-        )}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px]">
+            <thead className="bg-slate-50 border-b border-slate-100">
+              <tr>
+                <th className="th w-20">الكود</th>
+                <th className="th">اسم الحساب</th>
+                <th className="th w-32 text-center">حركة المدين</th>
+                <th className="th w-32 text-center">حركة الدائن</th>
+                <th className="th w-32 text-center">الرصيد المدين</th>
+                <th className="th w-32 text-center">الرصيد الدائن</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
+                <tr><td colSpan={6} className="text-center py-8 text-slate-400">جارٍ التحميل...</td></tr>
+              ) : lines.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-8 text-slate-400">لا توجد بيانات</td></tr>
+              ) : lines.map((r, i) => (
+                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="td"><span className="font-mono text-xs text-primary-600 font-semibold">{r.account_code}</span></td>
+                  <td className="td text-sm text-slate-700">{r.account_name || '—'}</td>
+                  <td className="td text-center"><span className="num num-debit text-sm">{parseFloat(r.total_debit) > 0 ? fmt(r.total_debit, 2) : ''}</span></td>
+                  <td className="td text-center"><span className="num num-credit text-sm">{parseFloat(r.total_credit) > 0 ? fmt(r.total_credit, 2) : ''}</span></td>
+                  <td className="td text-center"><span className="num num-debit font-semibold text-sm">{parseFloat(r.closing_debit) > 0 ? fmt(r.closing_debit, 2) : ''}</span></td>
+                  <td className="td text-center"><span className="num num-credit font-semibold text-sm">{parseFloat(r.closing_credit) > 0 ? fmt(r.closing_credit, 2) : ''}</span></td>
+                </tr>
+              ))}
+            </tbody>
+            {!loading && lines.length > 0 && (
+              <tfoot className="bg-slate-800 text-white">
+                <tr>
+                  <td colSpan={2} className="px-4 py-3 text-sm font-semibold">الإجماليات</td>
+                  <td className="px-4 py-3 text-center num num-debit font-semibold">{fmt(totPeriodD, 2)}</td>
+                  <td className="px-4 py-3 text-center num num-credit font-semibold">{fmt(totPeriodC, 2)}</td>
+                  <td className="px-4 py-3 text-center num num-debit font-semibold">{fmt(totBalD, 2)}</td>
+                  <td className="px-4 py-3 text-center num num-credit font-semibold">{fmt(totBalC, 2)}</td>
+                </tr>
+                <tr>
+                  <td colSpan={6} className={`px-4 py-2 text-center text-sm font-semibold ${isBalanced ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {isBalanced ? '✅ الميزان متوازن' : '⚠️ الميزان غير متوازن'}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
     </div>
   )
