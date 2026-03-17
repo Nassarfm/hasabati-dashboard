@@ -164,15 +164,32 @@ export function HRPage() {
 export function TrialBalancePage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [rebuilding, setRebuilding] = useState(false)
   const [year, setYear] = useState(new Date().getFullYear())
 
-  useEffect(() => {
+  const loadData = () => {
     setLoading(true)
     api.accounting.getTrialBalance({ fiscal_year: year })
       .then(d => setData(d?.data || d))
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
-  }, [year])
+  }
+
+  useEffect(() => { loadData() }, [year])
+
+  const handleRebuild = async () => {
+    if (!confirm('سيتم إعادة بناء كل الأرصدة من القيود المرحّلة. هل تريد المتابعة؟')) return
+    setRebuilding(true)
+    try {
+      const res = await api.accounting.rebuildBalances(year)
+      toast(res?.data?.message || 'تم إعادة بناء الأرصدة بنجاح ✅', 'success')
+      loadData()
+    } catch (e) {
+      toast(e.message, 'error')
+    } finally {
+      setRebuilding(false)
+    }
+  }
 
   const lines = data?.lines || []
   const totPeriodD  = lines.reduce((s,l) => s + parseFloat(l.total_debit  || 0), 0)
@@ -187,9 +204,15 @@ export function TrialBalancePage() {
         title="ميزان المراجعة"
         subtitle={`السنة المالية ${year}`}
         actions={
-          <select className="select w-32" value={year} onChange={e => setYear(Number(e.target.value))}>
-            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <div className="flex gap-2">
+            <select className="select w-32" value={year} onChange={e => setYear(Number(e.target.value))}>
+              {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button onClick={loadData} className="btn-ghost">🔄 تحديث</button>
+            <button onClick={handleRebuild} disabled={rebuilding} className="btn-ghost text-amber-600 border-amber-200 hover:bg-amber-50">
+              {rebuilding ? '⏳...' : '🔧 إعادة بناء الأرصدة'}
+            </button>
+          </div>
         }
       />
       <div className="card p-0 overflow-hidden">
