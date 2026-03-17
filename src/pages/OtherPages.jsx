@@ -169,7 +169,7 @@ export function TrialBalancePage() {
   useEffect(() => {
     setLoading(true)
     api.accounting.getTrialBalance({ fiscal_year: year })
-      .then(setData)
+      .then(d => setData(d?.data || d))
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }, [year])
@@ -179,7 +179,7 @@ export function TrialBalancePage() {
   const totPeriodC  = lines.reduce((s,l) => s + parseFloat(l.total_credit || 0), 0)
   const totBalD     = lines.reduce((s,l) => s + parseFloat(l.closing_debit  || 0), 0)
   const totBalC     = lines.reduce((s,l) => s + parseFloat(l.closing_credit || 0), 0)
-  const isBalanced  = Math.abs(totBalD - totBalC) < 1
+  const isBalanced  = data?.is_balanced ?? Math.abs(totBalD - totBalC) < 1
 
   const columns = [
     { key: 'account_code', label: 'الكود',
