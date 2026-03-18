@@ -258,9 +258,8 @@ export function TrialBalancePage() {
                   <td className="px-3 py-2 text-center"><span className="num num-debit text-xs font-semibold">{r.closing_debit > 0 ? fmt(r.closing_debit,2) : ''}</span></td>
                   <td className="px-3 py-2 text-center"><span className="num num-credit text-xs font-semibold">{r.closing_credit > 0 ? fmt(r.closing_credit,2) : ''}</span></td>
                   <td className="px-3 py-2 text-center">
-                    <span className={`num text-xs font-bold ${r.closing_net >= 0 ? 'num-debit' : 'num-credit'}`}>
-                      {fmt(Math.abs(r.closing_net),2)}
-                      <span className="text-[10px] mr-1">{r.closing_net >= 0 ? 'م' : 'د'}</span>
+                    <span className={`num text-sm font-bold ${r.closing_net >= 0 ? 'num-debit' : 'num-credit'}`}>
+                      {r.closing_net >= 0 ? fmt(r.closing_net || 0, 2) : `-${fmt(Math.abs(r.closing_net || 0), 2)}`}
                     </span>
                   </td>
                 </tr>
