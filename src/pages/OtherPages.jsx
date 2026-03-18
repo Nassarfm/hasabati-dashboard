@@ -292,103 +292,425 @@ export function TrialBalancePage() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// INCOME STATEMENT VIEW
+// REPORT VIEWS
 // ══════════════════════════════════════════════════════════════════
 function IncomeStatementView({ data }) {
   if (!data) return null
   const d = data?.data || data
   const s = d?.sections || {}
   const isProfit = (d?.net_income || 0) >= 0
+  const revenue = s.revenue?.total || 0
+  const expenses = s.expenses?.total || 0
+  const netIncome = d?.net_income || 0
 
   return (
-    <div className="space-y-0 border border-slate-200 rounded-xl overflow-hidden">
-      <div className="bg-slate-700 text-white px-6 py-4 text-center">
-        <h3 className="text-lg font-bold">قائمة الدخل</h3>
-        <p className="text-slate-300 text-sm mt-1">الفترة: {d?.period}</p>
-      </div>
-      <div className="bg-emerald-50">
-        <div className="px-6 py-3 bg-emerald-100 flex justify-between items-center">
-          <span className="font-bold text-emerald-800 text-sm">📈 {s.revenue?.label || 'الإيرادات'}</span>
-          <span className="num font-bold text-emerald-700">{fmt(s.revenue?.total || 0, 2)} ر.س</span>
+    <div className="space-y-4">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="card bg-emerald-50 border-emerald-200 text-center py-3">
+          <div className="text-xs text-emerald-600 font-medium">إجمالي الإيرادات</div>
+          <div className="num font-bold text-emerald-700 text-lg mt-1">{fmt(revenue,2)}</div>
+          <div className="text-xs text-emerald-500">ر.س</div>
         </div>
-        {(s.revenue?.rows || []).map((r, i) => (
-          <div key={i} className="px-8 py-2 flex justify-between border-b border-emerald-100">
-            <span className="text-sm text-slate-600">{r.account_name}</span>
-            <span className="num text-sm text-emerald-700">{fmt(r.amount, 2)}</span>
+        <div className="card bg-orange-50 border-orange-200 text-center py-3">
+          <div className="text-xs text-orange-600 font-medium">تكلفة البضاعة</div>
+          <div className="num font-bold text-orange-700 text-lg mt-1">{fmt(s.cogs?.total||0,2)}</div>
+          <div className="text-xs text-orange-500">ر.س</div>
+        </div>
+        <div className="card bg-red-50 border-red-200 text-center py-3">
+          <div className="text-xs text-red-600 font-medium">إجمالي المصاريف</div>
+          <div className="num font-bold text-red-700 text-lg mt-1">{fmt(expenses,2)}</div>
+          <div className="text-xs text-red-500">ر.س</div>
+        </div>
+        <div className={`card text-center py-3 ${isProfit?'bg-blue-50 border-blue-200':'bg-red-50 border-red-200'}`}>
+          <div className={`text-xs font-medium ${isProfit?'text-blue-600':'text-red-600'}`}>{isProfit?'صافي الدخل':'صافي الخسارة'}</div>
+          <div className={`num font-bold text-lg mt-1 ${isProfit?'text-blue-700':'text-red-700'}`}>{fmt(Math.abs(netIncome),2)}</div>
+          <div className={`text-xs ${isProfit?'text-blue-500':'text-red-500'}`}>ر.س</div>
+        </div>
+      </div>
+
+      {/* التقرير */}
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="bg-slate-700 text-white px-6 py-3 flex justify-between items-center">
+          <span className="font-bold">قائمة الدخل</span>
+          <span className="text-slate-300 text-sm">{d?.period}</span>
+        </div>
+
+        {/* الإيرادات */}
+        <div className="bg-emerald-50">
+          <div className="px-6 py-2 bg-emerald-100 flex justify-between font-bold text-emerald-800 text-sm">
+            <span>📈 {s.revenue?.label || 'الإيرادات'}</span>
           </div>
-        ))}
-        {(s.revenue?.rows || []).length === 0 && (
-          <div className="px-8 py-3 text-sm text-slate-400">لا توجد إيرادات مسجلة</div>
+          {(s.revenue?.rows||[]).length === 0
+            ? <div className="px-8 py-2 text-sm text-slate-400">لا توجد إيرادات</div>
+            : (s.revenue?.rows||[]).map((r,i)=>(
+              <div key={i} className="px-8 py-2 flex justify-between border-b border-emerald-100">
+                <span className="text-sm text-slate-600">{r.account_name}</span>
+                <span className="num text-sm text-emerald-700">{fmt(r.amount,2)}</span>
+              </div>
+            ))}
+          <div className="px-6 py-2 bg-emerald-200 flex justify-between font-bold text-emerald-800 text-sm">
+            <span>مجموع الإيرادات</span>
+            <span className="num">{fmt(s.revenue?.total||0,2)} ر.س</span>
+          </div>
+        </div>
+
+        {/* تكلفة البضاعة */}
+        <div className="bg-orange-50">
+          <div className="px-6 py-2 bg-orange-100 flex justify-between font-bold text-orange-800 text-sm">
+            <span>📦 {s.cogs?.label || 'تكلفة البضاعة'}</span>
+          </div>
+          {(s.cogs?.rows||[]).length === 0
+            ? <div className="px-8 py-2 text-sm text-slate-400">لا توجد تكاليف</div>
+            : (s.cogs?.rows||[]).map((r,i)=>(
+              <div key={i} className="px-8 py-2 flex justify-between border-b border-orange-100">
+                <span className="text-sm text-slate-600">{r.account_name}</span>
+                <span className="num text-sm text-orange-700">{fmt(r.amount,2)}</span>
+              </div>
+            ))}
+          <div className="px-6 py-2 bg-orange-200 flex justify-between font-bold text-orange-800 text-sm">
+            <span>مجموع تكلفة البضاعة</span>
+            <span className="num">{fmt(s.cogs?.total||0,2)} ر.س</span>
+          </div>
+        </div>
+
+        {/* مجمل الربح */}
+        <div className="px-6 py-3 bg-slate-100 flex justify-between font-bold text-slate-700 border-y border-slate-200">
+          <span>مجمل الربح (الخسارة)</span>
+          <span className={`num text-base ${(d?.gross_profit||0)>=0?'text-emerald-600':'text-red-600'}`}>{fmt(d?.gross_profit||0,2)} ر.س</span>
+        </div>
+
+        {/* المصاريف */}
+        <div className="bg-red-50">
+          <div className="px-6 py-2 bg-red-100 flex justify-between font-bold text-red-800 text-sm">
+            <span>💸 {s.expenses?.label || 'المصاريف'}</span>
+          </div>
+          {(s.expenses?.rows||[]).map((r,i)=>(
+            <div key={i} className="px-8 py-2 flex justify-between border-b border-red-100">
+              <span className="text-sm text-slate-600">{r.account_name}</span>
+              <span className="num text-sm text-red-600">{fmt(r.amount,2)}</span>
+            </div>
+          ))}
+          <div className="px-6 py-2 bg-red-200 flex justify-between font-bold text-red-800 text-sm">
+            <span>مجموع المصاريف التشغيلية</span>
+            <span className="num">{fmt(s.expenses?.total||0,2)} ر.س</span>
+          </div>
+        </div>
+
+        {/* صافي الدخل */}
+        <div className={`px-6 py-4 flex justify-between font-bold text-white ${isProfit?'bg-emerald-600':'bg-red-600'}`}>
+          <span className="text-base">{isProfit?'✅ صافي الدخل':'⚠️ صافي الخسارة'}</span>
+          <span className="num text-xl">{fmt(Math.abs(netIncome),2)} ر.س</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BalanceSheetView({ data }) {
+  if (!data) return null
+  const d = data?.data || data
+  const s = d?.sections || {}
+
+  const currentPrefixes = ['10','11','12','13','14']
+  const nonCurrentPrefixes = ['15','16','17','18','19']
+  const currentLiabPrefixes = ['21','22','23']
+  const longLiabPrefixes = ['24','25','26','27','28','29']
+
+  const allAssets = s.assets?.rows || []
+  const currentAssets = allAssets.filter(r => currentPrefixes.some(p => r.account_code.startsWith(p)))
+  const nonCurrentAssets = allAssets.filter(r => nonCurrentPrefixes.some(p => r.account_code.startsWith(p)))
+  const otherAssets = allAssets.filter(r => !currentAssets.includes(r) && !nonCurrentAssets.includes(r))
+  const currentAssetsAll = [...currentAssets, ...otherAssets]
+
+  const allLiab = s.liabilities?.rows || []
+  const currentLiab = allLiab.filter(r => currentLiabPrefixes.some(p => r.account_code.startsWith(p)))
+  const longLiab = allLiab.filter(r => longLiabPrefixes.some(p => r.account_code.startsWith(p)))
+  const otherLiab = allLiab.filter(r => !currentLiab.includes(r) && !longLiab.includes(r))
+  const currentLiabAll = [...currentLiab, ...otherLiab]
+
+  const sumRows = rows => rows.reduce((s, r) => s + (r.amount || 0), 0)
+
+  const renderRows = (rows, borderColor) => rows.map((r, i) => (
+    <div key={i} className={"px-8 py-2 flex justify-between border-b " + borderColor}>
+      <span className="text-sm text-slate-600">{r.account_name}</span>
+      <span className={"num text-sm font-semibold " + (r.amount < 0 ? "text-red-500" : "text-slate-700")}>{fmt(r.amount, 2)}</span>
+    </div>
+  ))
+
+  const isBalanced = d?.balanced
+  const balancedClass = isBalanced
+    ? "px-6 py-2 text-center text-sm font-bold bg-emerald-50 text-emerald-700"
+    : "px-6 py-2 text-center text-sm font-bold bg-red-50 text-red-700"
+  const balancedText = isBalanced
+    ? "الميزانية متوازنة"
+    : "الميزانية غير متوازنة"
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="card bg-blue-50 border-blue-200 text-center py-3">
+          <div className="text-xs text-blue-600 font-medium">إجمالي الأصول</div>
+          <div className="num font-bold text-blue-700 text-lg mt-1">{fmt(d?.total_assets || 0, 2)}</div>
+          <div className="text-xs text-blue-500">ر.س</div>
+        </div>
+        <div className="card bg-red-50 border-red-200 text-center py-3">
+          <div className="text-xs text-red-600 font-medium">إجمالي الخصوم</div>
+          <div className="num font-bold text-red-700 text-lg mt-1">{fmt(s.liabilities?.total || 0, 2)}</div>
+          <div className="text-xs text-red-500">ر.س</div>
+        </div>
+        <div className="card bg-purple-50 border-purple-200 text-center py-3">
+          <div className="text-xs text-purple-600 font-medium">حقوق الملكية</div>
+          <div className="num font-bold text-purple-700 text-lg mt-1">{fmt(s.equity?.total || 0, 2)}</div>
+          <div className="text-xs text-purple-500">ر.س</div>
+        </div>
+      </div>
+
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="bg-slate-700 text-white px-6 py-3 flex justify-between items-center">
+          <span className="font-bold">الميزانية العمومية</span>
+          <span className="text-slate-300 text-sm">{"كما في: " + (d?.as_of || '')}</span>
+        </div>
+
+        <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x md:divide-x-reverse divide-slate-200">
+          <div>
+            <div className="px-6 py-2 bg-blue-600 text-white font-bold text-sm text-center">الأصول</div>
+            {currentAssetsAll.length > 0 && (
+              <div>
+                <div className="px-6 py-1 bg-blue-100 text-blue-800 text-xs font-bold">أصول متداولة</div>
+                {renderRows(currentAssetsAll, 'border-blue-50')}
+                <div className="px-6 py-1 bg-blue-50 flex justify-between text-xs font-bold text-blue-700">
+                  <span>مجموع الأصول المتداولة</span>
+                  <span className="num">{fmt(sumRows(currentAssetsAll), 2)}</span>
+                </div>
+              </div>
+            )}
+            {nonCurrentAssets.length > 0 && (
+              <div>
+                <div className="px-6 py-1 bg-blue-100 text-blue-800 text-xs font-bold">أصول غير متداولة</div>
+                {renderRows(nonCurrentAssets, 'border-blue-50')}
+                <div className="px-6 py-1 bg-blue-50 flex justify-between text-xs font-bold text-blue-700">
+                  <span>مجموع الأصول غير المتداولة</span>
+                  <span className="num">{fmt(sumRows(nonCurrentAssets), 2)}</span>
+                </div>
+              </div>
+            )}
+            <div className="px-6 py-3 bg-blue-700 text-white flex justify-between font-bold">
+              <span>إجمالي الأصول</span>
+              <span className="num">{fmt(d?.total_assets || 0, 2)} ر.س</span>
+            </div>
+          </div>
+
+          <div>
+            <div className="px-6 py-2 bg-red-600 text-white font-bold text-sm text-center">الخصوم وحقوق الملكية</div>
+            {currentLiabAll.length > 0 && (
+              <div>
+                <div className="px-6 py-1 bg-red-100 text-red-800 text-xs font-bold">خصوم متداولة</div>
+                {renderRows(currentLiabAll, 'border-red-50')}
+                <div className="px-6 py-1 bg-red-50 flex justify-between text-xs font-bold text-red-700">
+                  <span>مجموع الخصوم المتداولة</span>
+                  <span className="num">{fmt(sumRows(currentLiabAll), 2)}</span>
+                </div>
+              </div>
+            )}
+            {longLiab.length > 0 && (
+              <div>
+                <div className="px-6 py-1 bg-red-100 text-red-800 text-xs font-bold">خصوم طويلة الأجل</div>
+                {renderRows(longLiab, 'border-red-50')}
+                <div className="px-6 py-1 bg-red-50 flex justify-between text-xs font-bold text-red-700">
+                  <span>مجموع خصوم طويلة الأجل</span>
+                  <span className="num">{fmt(sumRows(longLiab), 2)}</span>
+                </div>
+              </div>
+            )}
+            <div>
+              <div className="px-6 py-1 bg-purple-100 text-purple-800 text-xs font-bold">{s.equity?.label || 'حقوق الملكية'}</div>
+              {renderRows(s.equity?.rows || [], 'border-purple-50')}
+              <div className="px-6 py-1 bg-purple-50 flex justify-between text-xs font-bold text-purple-700">
+                <span>مجموع حقوق الملكية</span>
+                <span className="num">{fmt(s.equity?.total || 0, 2)}</span>
+              </div>
+            </div>
+            <div className="px-6 py-3 bg-red-700 text-white flex justify-between font-bold">
+              <span>إجمالي الخصوم وحقوق الملكية</span>
+              <span className="num">{fmt(d?.total_liab_equity || 0, 2)} ر.س</span>
+            </div>
+          </div>
+        </div>
+
+        <div className={balancedClass}>
+          {isBalanced ? "✅ " : "⚠️ "}{balancedText}
+          {!isBalanced && (" — الفرق: " + fmt(d?.difference || 0, 2) + " ر.س")}
+        </div>
+      </div>
+    </div>
+  )
+}
+function VATView({ data }) {
+  if (!data) return null
+  const d = data?.data || data
+  const z = d?.zatca || {}
+  const isPayable = d?.payment_required
+  const isRefund = d?.refund_due
+
+  return (
+    <div className="space-y-4">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="card bg-emerald-50 border-emerald-200 text-center py-3">
+          <div className="text-xs text-emerald-600 font-medium">المبيعات الخاضعة للضريبة</div>
+          <div className="num font-bold text-emerald-700 text-lg mt-1">{fmt(z.box_1_taxable_sales||0,2)}</div>
+          <div className="text-xs text-emerald-500">ر.س</div>
+        </div>
+        <div className="card bg-amber-50 border-amber-200 text-center py-3">
+          <div className="text-xs text-amber-600 font-medium">ضريبة المخرجات</div>
+          <div className="num font-bold text-amber-700 text-lg mt-1">{fmt(z.box_2_output_vat||0,2)}</div>
+          <div className="text-xs text-amber-500">ر.س</div>
+        </div>
+        <div className={"card text-center py-3 " + (isPayable ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200")}>
+          <div className={"text-xs font-medium " + (isPayable ? "text-red-600" : "text-emerald-600")}>
+            {isPayable ? "مستحق الدفع" : isRefund ? "مسترد" : "صفر"}
+          </div>
+          <div className={"num font-bold text-lg mt-1 " + (isPayable ? "text-red-700" : "text-emerald-700")}>{fmt(d?.amount||0,2)}</div>
+          <div className={"text-xs " + (isPayable ? "text-red-500" : "text-emerald-500")}>ر.س</div>
+        </div>
+      </div>
+
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="bg-slate-700 text-white px-6 py-3 flex justify-between items-center">
+          <span className="font-bold">إقرار ضريبة القيمة المضافة — ZATCA</span>
+          <span className="text-slate-300 text-sm">{d?.period}</span>
+        </div>
+        <div className="divide-y divide-slate-100">
+          <div className="px-6 py-3 flex justify-between">
+            <span className="text-sm text-slate-600">الخانة 1 — المبيعات الخاضعة</span>
+            <span className="num font-semibold">{fmt(z.box_1_taxable_sales||0,2)} ر.س</span>
+          </div>
+          <div className="px-6 py-3 flex justify-between">
+            <span className="text-sm text-slate-600">الخانة 2 — ضريبة المخرجات</span>
+            <span className="num font-semibold text-amber-600">{fmt(z.box_2_output_vat||0,2)} ر.س</span>
+          </div>
+          <div className="px-6 py-3 flex justify-between">
+            <span className="text-sm text-slate-600">الخانة 3 — المشتريات الخاضعة</span>
+            <span className="num font-semibold">{fmt(z.box_3_taxable_purchases||0,2)} ر.س</span>
+          </div>
+          <div className="px-6 py-3 flex justify-between">
+            <span className="text-sm text-slate-600">الخانة 4 — ضريبة المدخلات</span>
+            <span className="num font-semibold text-blue-600">{fmt(Math.abs(z.box_4_input_vat||0),2)} ر.س</span>
+          </div>
+          <div className={"px-6 py-3 flex justify-between font-bold " + (isPayable ? "bg-red-50" : "bg-emerald-50")}>
+            <span className={"text-sm " + (isPayable ? "text-red-700" : "text-emerald-700")}>
+              الخانة 5 — {isPayable ? "صافي الضريبة المستحقة" : "ضريبة مستردة"}
+            </span>
+            <span className={"num " + (isPayable ? "text-red-700" : "text-emerald-700")}>
+              {fmt(z.box_5_net_vat_due||0,2)} ر.س
+            </span>
+          </div>
+        </div>
+        <div className={"px-6 py-2 text-center text-sm font-bold " + (isPayable ? "bg-red-600 text-white" : "bg-emerald-600 text-white")}>
+          {isPayable ? "💳 مستحق الدفع: " : "💰 مسترد: "}{fmt(d?.amount||0,2)} ر.س
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SalesSummaryView({ data }) {
+  if (!data) return null
+  const d = data?.data || data
+  const isProfit = (d?.gross_profit || 0) >= 0
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="card bg-emerald-50 border-emerald-200 text-center py-3">
+          <div className="text-xs text-emerald-600 font-medium">إجمالي الإيرادات</div>
+          <div className="num font-bold text-emerald-700 text-lg mt-1">{fmt(d?.total_revenue||0,2)}</div>
+          <div className="text-xs text-emerald-500">ر.س</div>
+        </div>
+        <div className="card bg-amber-50 border-amber-200 text-center py-3">
+          <div className="text-xs text-amber-600 font-medium">ضريبة القيمة المضافة</div>
+          <div className="num font-bold text-amber-700 text-lg mt-1">{fmt(d?.total_vat||0,2)}</div>
+          <div className="text-xs text-amber-500">ر.س</div>
+        </div>
+        <div className="card bg-orange-50 border-orange-200 text-center py-3">
+          <div className="text-xs text-orange-600 font-medium">تكلفة البضاعة</div>
+          <div className="num font-bold text-orange-700 text-lg mt-1">{fmt(d?.total_cogs||0,2)}</div>
+          <div className="text-xs text-orange-500">ر.س</div>
+        </div>
+        <div className={"card text-center py-3 " + (isProfit ? "bg-blue-50 border-blue-200" : "bg-red-50 border-red-200")}>
+          <div className={"text-xs font-medium " + (isProfit ? "text-blue-600" : "text-red-600")}>مجمل الربح</div>
+          <div className={"num font-bold text-lg mt-1 " + (isProfit ? "text-blue-700" : "text-red-700")}>{fmt(d?.gross_profit||0,2)}</div>
+          <div className={"text-xs " + (isProfit ? "text-blue-500" : "text-red-500")}>ر.س ({fmt(d?.gross_margin||0,1)}%)</div>
+        </div>
+      </div>
+
+      <div className="border border-slate-200 rounded-xl overflow-hidden">
+        <div className="bg-slate-700 text-white px-6 py-3 flex justify-between">
+          <span className="font-bold">ملخص المبيعات</span>
+          <span className="text-slate-300 text-sm">{d?.period}</span>
+        </div>
+        <div className="px-6 py-3 grid grid-cols-2 gap-4 border-b border-slate-100">
+          <div className="flex justify-between">
+            <span className="text-sm text-slate-500">عدد الفواتير</span>
+            <span className="font-bold text-slate-700">{d?.invoice_count || 0}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-slate-500">هامش الربح</span>
+            <span className={"font-bold num " + (isProfit ? "text-emerald-600" : "text-red-600")}>{fmt(d?.gross_margin||0,1)}%</span>
+          </div>
+        </div>
+        {(d?.top_customers||[]).length > 0 && (
+          <div>
+            <div className="px-6 py-2 bg-slate-50 text-slate-600 text-xs font-bold">أفضل العملاء</div>
+            {d.top_customers.map((c, i) => (
+              <div key={i} className="px-8 py-2 flex justify-between border-b border-slate-100">
+                <span className="text-sm text-slate-600">{c.customer_name || c.name}</span>
+                <span className="num text-sm font-semibold text-emerald-700">{fmt(c.total||c.amount||0,2)} ر.س</span>
+              </div>
+            ))}
+          </div>
         )}
-      </div>
-      <div className="bg-orange-50">
-        <div className="px-6 py-3 bg-orange-100 flex justify-between items-center">
-          <span className="font-bold text-orange-800 text-sm">📦 {s.cogs?.label || 'تكلفة البضاعة'}</span>
-          <span className="num font-bold text-orange-700">{fmt(s.cogs?.total || 0, 2)} ر.س</span>
-        </div>
-        {(s.cogs?.rows || []).map((r, i) => (
-          <div key={i} className="px-8 py-2 flex justify-between border-b border-orange-100">
-            <span className="text-sm text-slate-600">{r.account_name}</span>
-            <span className="num text-sm text-orange-700">{fmt(r.amount, 2)}</span>
-          </div>
-        ))}
-        {(s.cogs?.rows || []).length === 0 && (
-          <div className="px-8 py-3 text-sm text-slate-400">لا توجد تكاليف مسجلة</div>
+        {(d?.top_customers||[]).length === 0 && (
+          <div className="px-6 py-4 text-center text-sm text-slate-400">لا توجد مبيعات في هذه الفترة</div>
         )}
-      </div>
-      <div className="px-6 py-3 bg-slate-100 flex justify-between items-center border-y border-slate-200">
-        <span className="font-bold text-slate-700">مجمل الربح (الخسارة)</span>
-        <span className={`num font-bold text-base ${(d?.gross_profit||0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-          {fmt(d?.gross_profit || 0, 2)} ر.س
-        </span>
-      </div>
-      <div className="bg-red-50">
-        <div className="px-6 py-3 bg-red-100 flex justify-between items-center">
-          <span className="font-bold text-red-800 text-sm">💸 {s.expenses?.label || 'المصاريف'}</span>
-          <span className="num font-bold text-red-700">{fmt(s.expenses?.total || 0, 2)} ر.س</span>
-        </div>
-        {(s.expenses?.rows || []).map((r, i) => (
-          <div key={i} className="px-8 py-2 flex justify-between border-b border-red-100">
-            <span className="text-sm text-slate-600">{r.account_name}</span>
-            <span className="num text-sm text-red-600">{fmt(r.amount, 2)}</span>
-          </div>
-        ))}
-      </div>
-      <div className={`px-6 py-4 flex justify-between items-center ${isProfit ? 'bg-emerald-600' : 'bg-red-600'} text-white`}>
-        <span className="font-bold text-lg">{isProfit ? '✅ صافي الدخل' : '⚠️ صافي الخسارة'}</span>
-        <span className="num font-bold text-xl">{fmt(Math.abs(d?.net_income || 0), 2)} ر.س</span>
       </div>
     </div>
   )
 }
 
 // ══════════════════════════════════════════════════════════════════
-// REPORTS
+// REPORTS PAGE
 // ══════════════════════════════════════════════════════════════════
 export function ReportsPage() {
-  const [year, setYear] = useState(new Date().getFullYear())
-  const [loading, setLoading] = useState({})
-  const [results, setResults] = useState({})
+  const now = new Date()
+  const [year,      setYear]      = useState(now.getFullYear())
+  const [month,     setMonth]     = useState(now.getMonth()+1)
+  const [monthFrom, setMonthFrom] = useState(1)
+  const [monthTo,   setMonthTo]   = useState(now.getMonth()+1)
+  const [dateFrom,  setDateFrom]  = useState(`${now.getFullYear()}-01-01`)
+  const [dateTo,    setDateTo]    = useState(now.toISOString().split('T')[0])
+  const [loading,   setLoading]   = useState({})
+  const [results,   setResults]   = useState({})
 
-  const reports = [
-    { key: 'incomeStatement',    label: 'قائمة الدخل',               icon: '📈' },
-    { key: 'balanceSheet',       label: 'الميزانية العمومية',         icon: '⚖️' },
-    { key: 'vatReturn',          label: 'إقرار ضريبة القيمة المضافة', icon: '🧮' },
-    { key: 'salesSummary',       label: 'ملخص المبيعات',             icon: '🧾' },
-    { key: 'inventoryValuation', label: 'تقييم المخزون',             icon: '📦' },
-  ]
+  const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 
   const run = async (key) => {
     setLoading(p => ({ ...p, [key]: true }))
     try {
       let data
-      if (key === 'incomeStatement')    data = await api.reports.incomeStatement({ year })
-      else if (key === 'balanceSheet')  data = await api.reports.balanceSheet({ year })
-      else if (key === 'vatReturn')     data = await api.reports.vatReturn({ year, quarter: 1 })
-      else if (key === 'salesSummary')  data = await api.reports.salesSummary({ year })
-      else                              data = await api.reports.inventoryValuation()
+      if (key === 'incomeStatement')
+        data = await api.reports.incomeStatement({ year, month_from: monthFrom, month_to: monthTo })
+      else if (key === 'balanceSheet')
+        data = await api.reports.balanceSheet({ year, month })
+      else if (key === 'vatReturn')
+        data = await api.reports.vatReturn({ year, month_from: monthFrom, month_to: monthTo })
+      else if (key === 'salesSummary')
+        data = await api.reports.salesSummary({ date_from: dateFrom, date_to: dateTo })
+      else
+        data = await api.reports.inventoryValuation()
       setResults(p => ({ ...p, [key]: data }))
-      toast(`تم جلب ${reports.find(r=>r.key===key)?.label}`, 'success')
+      toast('تم جلب التقرير ✅', 'success')
     } catch (e) {
       toast(e.message, 'error')
     } finally {
@@ -396,18 +718,63 @@ export function ReportsPage() {
     }
   }
 
+  const reports = [
+    { key: 'incomeStatement',    label: 'قائمة الدخل',               icon: '📈' },
+    { key: 'balanceSheet',       label: 'الميزانية العمومية',         icon: '⚖️' },
+    { key: 'vatReturn',          label: 'ضريبة القيمة المضافة',      icon: '🧮' },
+    { key: 'salesSummary',       label: 'ملخص المبيعات',             icon: '🧾' },
+    { key: 'inventoryValuation', label: 'تقييم المخزون',             icon: '📦' },
+  ]
+
+  const close = key => setResults(p => { const n={...p}; delete n[key]; return n })
+
   return (
     <div className="page-enter space-y-5">
-      <PageHeader
-        title="التقارير المالية"
-        subtitle={`السنة ${year}`}
-        actions={
-          <select className="select w-28" value={year} onChange={e => setYear(Number(e.target.value))}>
-            {[2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        }
-      />
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <PageHeader title="التقارير المالية" subtitle="اختر الفترة والتقرير" />
+
+      {/* فلاتر */}
+      <div className="card space-y-3">
+        <div className="text-sm font-semibold text-slate-600">فلاتر التقارير</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">السنة</label>
+            <select className="select w-full" value={year} onChange={e=>setYear(Number(e.target.value))}>
+              {[2024,2025,2026].map(y=><option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">الشهر (للميزانية)</label>
+            <select className="select w-full" value={month} onChange={e=>setMonth(Number(e.target.value))}>
+              {months.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">من شهر</label>
+            <select className="select w-full" value={monthFrom} onChange={e=>setMonthFrom(Number(e.target.value))}>
+              {months.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">إلى شهر</label>
+            <select className="select w-full" value={monthTo} onChange={e=>setMonthTo(Number(e.target.value))}>
+              {months.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">من تاريخ (للمبيعات)</label>
+            <input type="date" className="input w-full" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">إلى تاريخ (للمبيعات)</label>
+            <input type="date" className="input w-full" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      {/* أزرار التقارير */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {reports.map(r => (
           <button key={r.key} onClick={() => run(r.key)} disabled={loading[r.key]}
             className="card text-center hover:shadow-md hover:border-primary-200 transition-all cursor-pointer disabled:opacity-60 active:scale-95 py-4">
@@ -418,25 +785,56 @@ export function ReportsPage() {
           </button>
         ))}
       </div>
+
+      {/* النتائج */}
       {results.incomeStatement && (
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold text-slate-700">📈 قائمة الدخل</h3>
-            <button onClick={() => setResults(p => { const n={...p}; delete n.incomeStatement; return n })} className="text-slate-400 text-xs">✕ إغلاق</button>
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-bold text-slate-700">📈 قائمة الدخل</span>
+            <button onClick={()=>close('incomeStatement')} className="text-slate-400 text-xs">✕ إغلاق</button>
           </div>
           <IncomeStatementView data={results.incomeStatement} />
         </div>
       )}
-      {Object.entries(results).filter(([k]) => k !== 'incomeStatement').map(([key, data]) => (
-        <div key={key} className="card">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-slate-700 text-sm">
-              {reports.find(r=>r.key===key)?.icon} {reports.find(r=>r.key===key)?.label}
-            </h3>
-            <button onClick={() => setResults(p => { const n={...p}; delete n[key]; return n })} className="text-slate-400 text-xs">✕ إغلاق</button>
+
+      {results.balanceSheet && (
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-bold text-slate-700">⚖️ الميزانية العمومية</span>
+            <button onClick={()=>close('balanceSheet')} className="text-slate-400 text-xs">✕ إغلاق</button>
           </div>
-          <pre className="text-xs bg-slate-50 rounded-xl p-4 overflow-auto max-h-60 num text-slate-600 text-left">
-            {JSON.stringify(data?.data || data, null, 2)}
+          <BalanceSheetView data={results.balanceSheet} />
+        </div>
+      )}
+
+      {results.vatReturn && (
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-bold text-slate-700">🧮 ضريبة القيمة المضافة</span>
+            <button onClick={()=>close('vatReturn')} className="text-slate-400 text-xs">✕ إغلاق</button>
+          </div>
+          <VATView data={results.vatReturn} />
+        </div>
+      )}
+
+      {results.salesSummary && (
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-bold text-slate-700">🧾 ملخص المبيعات</span>
+            <button onClick={()=>close('salesSummary')} className="text-slate-400 text-xs">✕ إغلاق</button>
+          </div>
+          <SalesSummaryView data={results.salesSummary} />
+        </div>
+      )}
+
+      {Object.entries(results).filter(([k])=>!['incomeStatement','balanceSheet','vatReturn','salesSummary'].includes(k)).map(([key,data])=>(
+        <div key={key} className="card">
+          <div className="flex justify-between mb-2">
+            <span className="font-semibold text-slate-700 text-sm">{reports.find(r=>r.key===key)?.icon} {reports.find(r=>r.key===key)?.label}</span>
+            <button onClick={()=>close(key)} className="text-slate-400 text-xs">✕</button>
+          </div>
+          <pre className="text-xs bg-slate-50 rounded-xl p-4 overflow-auto max-h-60 text-slate-600 text-left">
+            {JSON.stringify(data?.data||data,null,2)}
           </pre>
         </div>
       ))}
