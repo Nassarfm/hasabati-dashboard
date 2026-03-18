@@ -292,64 +292,151 @@ export function TrialBalancePage() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// INCOME STATEMENT VIEW
+// ══════════════════════════════════════════════════════════════════
+function IncomeStatementView({ data }) {
+  if (!data) return null
+  const d = data?.data || data
+  const s = d?.sections || {}
+  const isProfit = (d?.net_income || 0) >= 0
+
+  return (
+    <div className="space-y-0 border border-slate-200 rounded-xl overflow-hidden">
+      <div className="bg-slate-700 text-white px-6 py-4 text-center">
+        <h3 className="text-lg font-bold">قائمة الدخل</h3>
+        <p className="text-slate-300 text-sm mt-1">الفترة: {d?.period}</p>
+      </div>
+      <div className="bg-emerald-50">
+        <div className="px-6 py-3 bg-emerald-100 flex justify-between items-center">
+          <span className="font-bold text-emerald-800 text-sm">📈 {s.revenue?.label || 'الإيرادات'}</span>
+          <span className="num font-bold text-emerald-700">{fmt(s.revenue?.total || 0, 2)} ر.س</span>
+        </div>
+        {(s.revenue?.rows || []).map((r, i) => (
+          <div key={i} className="px-8 py-2 flex justify-between border-b border-emerald-100">
+            <span className="text-sm text-slate-600">{r.account_name}</span>
+            <span className="num text-sm text-emerald-700">{fmt(r.amount, 2)}</span>
+          </div>
+        ))}
+        {(s.revenue?.rows || []).length === 0 && (
+          <div className="px-8 py-3 text-sm text-slate-400">لا توجد إيرادات مسجلة</div>
+        )}
+      </div>
+      <div className="bg-orange-50">
+        <div className="px-6 py-3 bg-orange-100 flex justify-between items-center">
+          <span className="font-bold text-orange-800 text-sm">📦 {s.cogs?.label || 'تكلفة البضاعة'}</span>
+          <span className="num font-bold text-orange-700">{fmt(s.cogs?.total || 0, 2)} ر.س</span>
+        </div>
+        {(s.cogs?.rows || []).map((r, i) => (
+          <div key={i} className="px-8 py-2 flex justify-between border-b border-orange-100">
+            <span className="text-sm text-slate-600">{r.account_name}</span>
+            <span className="num text-sm text-orange-700">{fmt(r.amount, 2)}</span>
+          </div>
+        ))}
+        {(s.cogs?.rows || []).length === 0 && (
+          <div className="px-8 py-3 text-sm text-slate-400">لا توجد تكاليف مسجلة</div>
+        )}
+      </div>
+      <div className="px-6 py-3 bg-slate-100 flex justify-between items-center border-y border-slate-200">
+        <span className="font-bold text-slate-700">مجمل الربح (الخسارة)</span>
+        <span className={`num font-bold text-base ${(d?.gross_profit||0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+          {fmt(d?.gross_profit || 0, 2)} ر.س
+        </span>
+      </div>
+      <div className="bg-red-50">
+        <div className="px-6 py-3 bg-red-100 flex justify-between items-center">
+          <span className="font-bold text-red-800 text-sm">💸 {s.expenses?.label || 'المصاريف'}</span>
+          <span className="num font-bold text-red-700">{fmt(s.expenses?.total || 0, 2)} ر.س</span>
+        </div>
+        {(s.expenses?.rows || []).map((r, i) => (
+          <div key={i} className="px-8 py-2 flex justify-between border-b border-red-100">
+            <span className="text-sm text-slate-600">{r.account_name}</span>
+            <span className="num text-sm text-red-600">{fmt(r.amount, 2)}</span>
+          </div>
+        ))}
+      </div>
+      <div className={`px-6 py-4 flex justify-between items-center ${isProfit ? 'bg-emerald-600' : 'bg-red-600'} text-white`}>
+        <span className="font-bold text-lg">{isProfit ? '✅ صافي الدخل' : '⚠️ صافي الخسارة'}</span>
+        <span className="num font-bold text-xl">{fmt(Math.abs(d?.net_income || 0), 2)} ر.س</span>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════
 // REPORTS
 // ══════════════════════════════════════════════════════════════════
 export function ReportsPage() {
+  const [year, setYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState({})
   const [results, setResults] = useState({})
 
   const reports = [
-    { key: 'incomeStatement',    label: 'قائمة الدخل',             icon: '📈', fn: () => api.reports.incomeStatement({ year: 2026 }) },
-    { key: 'balanceSheet',       label: 'الميزانية العمومية',       icon: '⚖️', fn: () => api.reports.balanceSheet({ year: 2026 }) },
-    { key: 'vatReturn',          label: 'إقرار ضريبة القيمة المضافة', icon: '🧮', fn: () => api.reports.vatReturn({ year: 2026, quarter: 1 }) },
-    { key: 'arAging',            label: 'تقادم الذمم المدينة',     icon: '📋', fn: () => api.reports.arAging() },
-    { key: 'salesSummary',       label: 'ملخص المبيعات',           icon: '🧾', fn: () => api.reports.salesSummary({ year: 2026 }) },
-    { key: 'inventoryValuation', label: 'تقييم المخزون',           icon: '📦', fn: () => api.reports.inventoryValuation() },
+    { key: 'incomeStatement',    label: 'قائمة الدخل',               icon: '📈' },
+    { key: 'balanceSheet',       label: 'الميزانية العمومية',         icon: '⚖️' },
+    { key: 'vatReturn',          label: 'إقرار ضريبة القيمة المضافة', icon: '🧮' },
+    { key: 'salesSummary',       label: 'ملخص المبيعات',             icon: '🧾' },
+    { key: 'inventoryValuation', label: 'تقييم المخزون',             icon: '📦' },
   ]
 
-  const run = async (r) => {
-    setLoading(p => ({ ...p, [r.key]: true }))
+  const run = async (key) => {
+    setLoading(p => ({ ...p, [key]: true }))
     try {
-      const data = await r.fn()
-      setResults(p => ({ ...p, [r.key]: data }))
-      toast(`تم جلب ${r.label}`, 'success')
+      let data
+      if (key === 'incomeStatement')    data = await api.reports.incomeStatement({ year })
+      else if (key === 'balanceSheet')  data = await api.reports.balanceSheet({ year })
+      else if (key === 'vatReturn')     data = await api.reports.vatReturn({ year, quarter: 1 })
+      else if (key === 'salesSummary')  data = await api.reports.salesSummary({ year })
+      else                              data = await api.reports.inventoryValuation()
+      setResults(p => ({ ...p, [key]: data }))
+      toast(`تم جلب ${reports.find(r=>r.key===key)?.label}`, 'success')
     } catch (e) {
       toast(e.message, 'error')
     } finally {
-      setLoading(p => ({ ...p, [r.key]: false }))
+      setLoading(p => ({ ...p, [key]: false }))
     }
   }
 
   return (
     <div className="page-enter space-y-5">
-      <PageHeader title="التقارير المالية" subtitle="تقارير مباشرة من الـ Backend" />
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <PageHeader
+        title="التقارير المالية"
+        subtitle={`السنة ${year}`}
+        actions={
+          <select className="select w-28" value={year} onChange={e => setYear(Number(e.target.value))}>
+            {[2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        }
+      />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {reports.map(r => (
-          <button
-            key={r.key}
-            onClick={() => run(r)}
-            disabled={loading[r.key]}
-            className="card text-right hover:shadow-md hover:border-primary-200 transition-all
-                       cursor-pointer disabled:opacity-60 active:scale-95"
-          >
-            <div className="text-2xl mb-2">{r.icon}</div>
-            <div className="font-semibold text-slate-700 text-sm">{r.label}</div>
-            {loading[r.key] && <div className="text-xs text-primary-500 mt-1">⏳ جاري الجلب...</div>}
-            {results[r.key] && <div className="text-xs text-emerald-600 mt-1">✅ جاهز للعرض</div>}
+          <button key={r.key} onClick={() => run(r.key)} disabled={loading[r.key]}
+            className="card text-center hover:shadow-md hover:border-primary-200 transition-all cursor-pointer disabled:opacity-60 active:scale-95 py-4">
+            <div className="text-3xl mb-2">{r.icon}</div>
+            <div className="font-semibold text-slate-700 text-xs">{r.label}</div>
+            {loading[r.key] && <div className="text-xs text-primary-500 mt-1">⏳...</div>}
+            {results[r.key] && <div className="text-xs text-emerald-600 mt-1">✅</div>}
           </button>
         ))}
       </div>
-      {/* عرض النتائج */}
-      {Object.entries(results).map(([key, data]) => (
+      {results.incomeStatement && (
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <h3 className="font-bold text-slate-700">📈 قائمة الدخل</h3>
+            <button onClick={() => setResults(p => { const n={...p}; delete n.incomeStatement; return n })} className="text-slate-400 text-xs">✕ إغلاق</button>
+          </div>
+          <IncomeStatementView data={results.incomeStatement} />
+        </div>
+      )}
+      {Object.entries(results).filter(([k]) => k !== 'incomeStatement').map(([key, data]) => (
         <div key={key} className="card">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-700 text-sm">
               {reports.find(r=>r.key===key)?.icon} {reports.find(r=>r.key===key)?.label}
             </h3>
-            <button onClick={() => setResults(p => { const n={...p}; delete n[key]; return n })} className="text-slate-400 hover:text-slate-600 text-xs">✕ إغلاق</button>
+            <button onClick={() => setResults(p => { const n={...p}; delete n[key]; return n })} className="text-slate-400 text-xs">✕ إغلاق</button>
           </div>
-          <pre className="text-xs bg-slate-50 rounded-xl p-4 overflow-auto max-h-60 num text-slate-600">
-            {JSON.stringify(data, null, 2)}
+          <pre className="text-xs bg-slate-50 rounded-xl p-4 overflow-auto max-h-60 num text-slate-600 text-left">
+            {JSON.stringify(data?.data || data, null, 2)}
           </pre>
         </div>
       ))}
@@ -357,7 +444,6 @@ export function ReportsPage() {
   )
 }
 
-// ══════════════════════════════════════════════════════════════════
 // VAT
 // ══════════════════════════════════════════════════════════════════
 export function VATPage() {
