@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { PageHeader, DataTable, Modal, Field, toast, fmt, StatusBadge } from '../components/UI'
 import api from '../api/client'
 
@@ -43,11 +43,12 @@ export default function JournalPage() {
   }
 
   const columns = [
-    { key: 'serial', label: 'رقم القيد', render: je => <span className="font-mono text-primary-600 font-semibold text-xs">{je.serial || je.je_number}</span> },
+    { key: 'serial', label: 'رقم القيد', render: je => <span className="font-mono text-primary-600 font-semibold text-sm">{je.serial || je.je_number}</span> },
     { key: 'entry_date', label: 'التاريخ' },
-    { key: 'description', label: 'البيان', render: je => <span className="max-w-[180px] block truncate">{je.description}</span> },
-    { key: 'total_debit', label: 'المدين', render: je => <span className="num num-debit">{fmt(je.total_debit, 2)}</span> },
-    { key: 'total_credit', label: 'الدائن', render: je => <span className="num num-credit">{fmt(je.total_credit, 2)}</span> },
+    { key: 'je_type', label: 'النوع', render: je => <span className="badge-gray text-xs">{je.je_type}</span> },
+    { key: 'description', label: 'البيان', render: je => <span className="max-w-[200px] block truncate">{je.description}</span> },
+    { key: 'total_debit', label: 'المدين', render: je => <span className="num num-debit font-semibold">{fmt(je.total_debit, 2)}</span> },
+    { key: 'total_credit', label: 'الدائن', render: je => <span className="num num-credit font-semibold">{fmt(je.total_credit, 2)}</span> },
     { key: 'status', label: 'الحالة', render: je => <StatusBadge status={je.status} /> },
   ]
 
@@ -92,10 +93,7 @@ export default function JournalPage() {
           open={showAdd}
           onClose={closeAdd}
           accounts={accounts}
-          onSaved={() => {
-            closeAdd()
-            load()
-          }}
+          onSaved={() => { closeAdd(); load() }}
         />
       ) : null}
 
@@ -110,6 +108,54 @@ export default function JournalPage() {
   )
 }
 
+// ── مكوّن بحث الحساب ────────────────────────────────────────────
+function AccountSearch({ accounts, value, onChange }) {
+  const [search, setSearch] = useState('')
+  const [open,   setOpen]   = useState(false)
+  const ref = useRef(null)
+
+  const selected = accounts.find(a => a.code === value)
+  const filtered = accounts.filter(a =>
+    a.code.includes(search) || a.name_ar.includes(search)
+  ).slice(0, 20)
+
+  useEffect(() => {
+    const handleClick = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        className="input text-xs w-full"
+        placeholder="ابحث بالكود أو الاسم..."
+        autoComplete="off"
+        value={open ? search : (selected ? `${selected.code} — ${selected.name_ar}` : '')}
+        onFocus={() => { setOpen(true); setSearch('') }}
+        onChange={e => { setSearch(e.target.value); setOpen(true) }}
+      />
+      {open && (
+        <div className="absolute z-50 top-full right-0 left-0 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-slate-400">لا توجد نتائج</div>
+          ) : filtered.map(a => (
+            <div
+              key={a.id}
+              className="px-3 py-2 text-xs hover:bg-primary-50 cursor-pointer flex gap-2"
+              onMouseDown={() => { onChange(a.code); setOpen(false); setSearch('') }}
+            >
+              <span className="font-mono text-primary-600 font-semibold w-12">{a.code}</span>
+              <span className="text-slate-700">{a.name_ar}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── مودال إضافة قيد ─────────────────────────────────────────────
 function AddJEModal({ open, onClose, accounts, onSaved }) {
   const emptyLine = () => ({ account_code: '', description: '', debit: '', credit: '' })
 
@@ -132,11 +178,12 @@ function AddJEModal({ open, onClose, accounts, onSaved }) {
     setError('')
   }
 
-  useEffect(() => {
-    if (open) resetForm()
-  }, [open])
+  useEffect(() => { if (open) resetForm() }, [open])
 
   const setLine = (i, k, v) => setLines(ls => ls.map((l, idx) => idx === i ? { ...l, [k]: v } : l))
+  const addLine = () => setLines(ls => [...ls, emptyLine()])
+  const removeLine = i => { if (lines.length > 2) setLines(ls => ls.filter((_,idx) => idx !== i)) }
+
   const totalD = lines.reduce((s, l) => s + (parseFloat(l.debit)  || 0), 0)
   const totalC = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0)
   const balanced = Math.abs(totalD - totalC) < 0.01
@@ -175,8 +222,9 @@ function AddJEModal({ open, onClose, accounts, onSaved }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="📝 قيد محاسبي جديد" size="xl">
+    <Modal open={open} onClose={() => { resetForm(); onClose() }} title="📝 قيد محاسبي جديد" size="xl">
       <div className="space-y-4">
+        {/* رأس القيد */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Field label="التاريخ" required>
             <input type="date" className="input" autoComplete="off" value={form.entry_date}
@@ -203,17 +251,22 @@ function AddJEModal({ open, onClose, accounts, onSaved }) {
               onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
           </Field>
         </div>
+
+        {/* أسطر القيد */}
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <table className="w-full">
             <thead className="bg-slate-50">
               <tr>
-                <th className="th">الحساب</th>
+                <th className="th w-56">الحساب</th>
                 <th className="th">البيان</th>
-                <th className="th w-28">مدين</th>
-                <th className="th w-28">دائن</th>
-                <th className="th w-10">
-                  <button onClick={() => setLines(ls => [...ls, emptyLine()])}
-                    className="text-primary-600 text-xs font-bold">+</button>
+                <th className="th w-32">مدين</th>
+                <th className="th w-32">دائن</th>
+                <th className="th w-12 text-center">
+                  <button
+                    onClick={addLine}
+                    className="w-7 h-7 rounded-lg bg-primary-600 text-white text-base font-bold hover:bg-primary-700 transition-colors flex items-center justify-center mx-auto"
+                    title="إضافة سطر"
+                  >+</button>
                 </th>
               </tr>
             </thead>
@@ -221,31 +274,33 @@ function AddJEModal({ open, onClose, accounts, onSaved }) {
               {lines.map((line, i) => (
                 <tr key={i} className="border-b border-slate-100">
                   <td className="px-3 py-2">
-                    <select className="select text-xs" value={line.account_code}
-                      onChange={e => setLine(i, 'account_code', e.target.value)}>
-                      <option value="">— اختر —</option>
-                      {accounts.map(a => <option key={a.id} value={a.code}>{a.code} — {a.name_ar}</option>)}
-                    </select>
+                    <AccountSearch
+                      accounts={accounts}
+                      value={line.account_code}
+                      onChange={v => setLine(i, 'account_code', v)}
+                    />
                   </td>
                   <td className="px-3 py-2">
-                    <input className="input text-xs" placeholder="البيان" autoComplete="off"
+                    <input className="input text-sm" placeholder="البيان" autoComplete="off"
                       value={line.description}
                       onChange={e => setLine(i, 'description', e.target.value)} />
                   </td>
                   <td className="px-3 py-2">
-                    <input type="number" className="input text-xs num text-center" placeholder="0.00" autoComplete="off"
+                    <input type="number" className="input text-sm num text-center" placeholder="0.00" autoComplete="off"
                       value={line.debit}
                       onChange={e => { setLine(i, 'debit', e.target.value); if(e.target.value) setLine(i,'credit','') }} />
                   </td>
                   <td className="px-3 py-2">
-                    <input type="number" className="input text-xs num text-center" placeholder="0.00" autoComplete="off"
+                    <input type="number" className="input text-sm num text-center" placeholder="0.00" autoComplete="off"
                       value={line.credit}
                       onChange={e => { setLine(i, 'credit', e.target.value); if(e.target.value) setLine(i,'debit','') }} />
                   </td>
                   <td className="px-3 py-2 text-center">
                     {lines.length > 2 && (
-                      <button onClick={() => setLines(ls => ls.filter((_,idx) => idx !== i))}
-                        className="text-red-400 text-xs">✕</button>
+                      <button onClick={() => removeLine(i)}
+                        className="w-6 h-6 rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors text-xs font-bold">
+                        ✕
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -253,15 +308,28 @@ function AddJEModal({ open, onClose, accounts, onSaved }) {
             </tbody>
             <tfoot className="bg-slate-50 border-t border-slate-200">
               <tr>
-                <td colSpan={2} className="px-4 py-2 text-xs text-slate-500 font-medium">الإجمالي</td>
-                <td className="px-3 py-2 num num-debit text-center font-bold">{fmt(totalD, 2)}</td>
-                <td className="px-3 py-2 num num-credit text-center font-bold">{fmt(totalC, 2)}</td>
-                <td className="text-center">{balanced ? '✅' : <span className="text-red-500 text-xs">!</span>}</td>
+                <td colSpan={2} className="px-4 py-3 text-sm text-slate-600 font-semibold">
+                  الإجمالي
+                  <span className="text-xs text-slate-400 mr-2">({lines.length} سطر)</span>
+                </td>
+                <td className="px-3 py-3 num num-debit text-center font-bold text-sm">{fmt(totalD, 2)}</td>
+                <td className="px-3 py-3 num num-credit text-center font-bold text-sm">{fmt(totalC, 2)}</td>
+                <td className="text-center text-lg">{balanced ? '✅' : <span className="text-red-500">⚠️</span>}</td>
               </tr>
             </tfoot>
           </table>
         </div>
+
+        {/* زر إضافة سطر خارج الجدول */}
+        <button
+          onClick={addLine}
+          className="w-full py-2 border-2 border-dashed border-primary-300 rounded-xl text-primary-600 text-sm font-medium hover:bg-primary-50 transition-colors"
+        >
+          + إضافة سطر جديد
+        </button>
+
         {error && <div className="text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
+
         <div className="flex justify-end gap-2">
           <button onClick={() => { resetForm(); onClose() }} className="btn-ghost">إلغاء</button>
           <button onClick={() => handleSave(false)} disabled={saving || !balanced} className="btn-ghost">💾 مسودة</button>
@@ -274,6 +342,7 @@ function AddJEModal({ open, onClose, accounts, onSaved }) {
   )
 }
 
+// ── مودال تفاصيل القيد ──────────────────────────────────────────
 function JEDetailModal({ je, onClose, onPosted }) {
   const [posting, setPosting] = useState(false)
   const handlePost = async () => {
@@ -292,9 +361,11 @@ function JEDetailModal({ je, onClose, onPosted }) {
     <Modal open={!!je} onClose={onClose} title={`تفاصيل القيد — ${je.serial || je.je_number}`} size="lg">
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <div><span className="text-slate-500">التاريخ:</span> <strong>{je.entry_date}</strong></div>
-          <div><span className="text-slate-500">الحالة:</span> <StatusBadge status={je.status} /></div>
-          <div className="col-span-2"><span className="text-slate-500">البيان:</span> {je.description}</div>
+          <div><span className="text-slate-500">التاريخ:</span> <strong className="mr-1">{je.entry_date}</strong></div>
+          <div><span className="text-slate-500">الحالة:</span> <span className="mr-1"><StatusBadge status={je.status} /></span></div>
+          <div><span className="text-slate-500">النوع:</span> <strong className="mr-1">{je.je_type}</strong></div>
+          <div><span className="text-slate-500">المرجع:</span> <strong className="mr-1">{je.reference || '—'}</strong></div>
+          <div className="col-span-2"><span className="text-slate-500">البيان:</span> <strong className="mr-1">{je.description}</strong></div>
         </div>
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <table className="w-full">
@@ -307,13 +378,20 @@ function JEDetailModal({ je, onClose, onPosted }) {
             <tbody>
               {(je.lines || []).map((l, i) => (
                 <tr key={i} className="border-b border-slate-50">
-                  <td className="td"><span className="font-mono text-primary-600 text-xs">{l.account_code}</span></td>
-                  <td className="td text-xs text-slate-500">{l.description}</td>
-                  <td className="td num num-debit">{parseFloat(l.debit) > 0 ? fmt(l.debit, 2) : ''}</td>
-                  <td className="td num num-credit">{parseFloat(l.credit) > 0 ? fmt(l.credit, 2) : ''}</td>
+                  <td className="td"><span className="font-mono text-primary-600 text-sm font-semibold">{l.account_code}</span></td>
+                  <td className="td text-sm text-slate-600">{l.description}</td>
+                  <td className="td num num-debit font-semibold">{parseFloat(l.debit) > 0 ? fmt(l.debit, 2) : ''}</td>
+                  <td className="td num num-credit font-semibold">{parseFloat(l.credit) > 0 ? fmt(l.credit, 2) : ''}</td>
                 </tr>
               ))}
             </tbody>
+            <tfoot className="bg-slate-50 border-t border-slate-200">
+              <tr>
+                <td colSpan={2} className="px-4 py-2 text-sm font-semibold text-slate-600">الإجمالي</td>
+                <td className="px-4 py-2 num num-debit text-center font-bold">{fmt(je.total_debit, 2)}</td>
+                <td className="px-4 py-2 num num-credit text-center font-bold">{fmt(je.total_credit, 2)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         <div className="flex justify-end gap-2">
@@ -328,4 +406,3 @@ function JEDetailModal({ je, onClose, onPosted }) {
     </Modal>
   )
 }
- 
