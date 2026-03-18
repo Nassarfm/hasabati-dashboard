@@ -1,5 +1,5 @@
 // Placeholder pages for modules to be built
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { PageHeader, DataTable, StatCard, toast, fmt, StatusBadge } from '../components/UI'
 import api from '../api/client'
 
@@ -93,13 +93,13 @@ export function InventoryPage() {
 
   useEffect(() => {
     api.inventory.getProducts({ limit: 100 })
-      .then(d => setProducts(d?.items || d || []))
+      .then(d => setProducts(d?.data || d?.items || d || []))
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }, [])
 
   const columns = [
-    { key: 'sku', label: 'SKU', render: r => <span className="font-mono text-xs text-primary-600">{r.sku}</span> },
+    { key: 'code', label: 'الكود', render: r => <span className="font-mono text-xs text-primary-600">{r.code}</span> },
     { key: 'name_ar', label: 'الاسم' },
     { key: 'product_type', label: 'النوع' },
     { key: 'unit_of_measure', label: 'الوحدة' },
@@ -128,7 +128,7 @@ export function HRPage() {
 
   useEffect(() => {
     api.hr.getEmployees({ limit: 100 })
-      .then(d => setEmployees(d?.items || d || []))
+      .then(d => setEmployees(d?.data || d?.items || d || []))
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }, [])
@@ -162,11 +162,15 @@ export function HRPage() {
 // TRIAL BALANCE
 // ══════════════════════════════════════════════════════════════════
 export function TrialBalancePage() {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData]         = useState(null)
+  const [loading, setLoading]   = useState(true)
   const [rebuilding, setRebuilding] = useState(false)
-  const [year, setYear]   = useState(new Date().getFullYear())
-  const [month, setMonth] = useState('')
+  const [year, setYear]         = useState(new Date().getFullYear())
+  const [month, setMonth]       = useState('')
+  const tableRef                = useRef(null)
+
+  const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+  const periodLabel = month ? `${months[month-1]} ${year}` : `سنة ${year}`
 
   const loadData = () => {
     setLoading(true)
@@ -194,10 +198,80 @@ export function TrialBalancePage() {
     }
   }
 
-  const lines = data?.lines || []
-  const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+  const handlePrint = () => {
+    const printContent = `
+      <html dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>ميزان المراجعة - ${periodLabel}</title>
+        <style>
+          body { font-family: Arial, sans-serif; font-size: 12px; direction: rtl; }
+          h2 { text-align: center; margin-bottom: 4px; }
+          p { text-align: center; color: #666; margin-bottom: 12px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+          th { background: #334155; color: white; }
+          .dr { color: #1d4ed8; }
+          .cr { color: #dc2626; }
+          .bold { font-weight: bold; }
+          tfoot tr { background: #1e293b; color: white; font-weight: bold; }
+          .balanced { background: #dcfce7; color: #166534; padding: 6px; text-align: center; }
+          .unbalanced { background: #fee2e2; color: #991b1b; padding: 6px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <h2>ميزان المراجعة</h2>
+        <p>${periodLabel}</p>
+        ${tableRef.current?.outerHTML || ''}
+        <div class="${data?.is_balanced ? 'balanced' : 'unbalanced'}">
+          ${data?.is_balanced ? '✅ الميزان متوازن' : '⚠️ الميزان غير متوازن'}
+        </div>
+      </body>
+      </html>
+    `
+    const w = window.open('', '_blank')
+    w.document.write(printContent)
+    w.document.close()
+    w.print()
+  }
 
-  const periodLabel = month ? `${months[month-1]} ${year}` : `سنة ${year}`
+  const handleExcelExport = () => {
+    const lines = data?.lines || []
+    const headers = ['الكود','اسم الحساب','أول المدة مدين','أول المدة دائن','حركة مدين','حركة دائن','آخر المدة مدين','آخر المدة دائن','صافي الإغلاق']
+    const rows = lines.map(r => [
+      r.account_code,
+      r.account_name,
+      r.opening_debit || 0,
+      r.opening_credit || 0,
+      r.period_debit || 0,
+      r.period_credit || 0,
+      r.closing_debit || 0,
+      r.closing_credit || 0,
+      r.closing_net || 0,
+    ])
+    rows.push([
+      'الإجماليات', '',
+      data?.opening_debit_total||0, data?.opening_credit_total||0,
+      data?.period_debit_total||0,  data?.period_credit_total||0,
+      data?.closing_debit_total||0, data?.closing_credit_total||0,
+      data?.closing_net_total||0,
+    ])
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ميزان_المراجعة_${periodLabel}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast('تم تصدير الملف ✅', 'success')
+  }
+
+  const lines = data?.lines || []
 
   return (
     <div className="page-enter space-y-5">
@@ -213,8 +287,10 @@ export function TrialBalancePage() {
               <option value="">كل السنة</option>
               {months.map((m,i) => <option key={i+1} value={i+1}>{m}</option>)}
             </select>
-            <button onClick={loadData} className="btn-ghost">🔄</button>
-            <button onClick={handleRebuild} disabled={rebuilding} className="btn-ghost text-amber-600">
+            <button onClick={loadData} className="btn-ghost" title="تحديث">🔄</button>
+            <button onClick={handlePrint} className="btn-ghost" title="طباعة">🖨️ طباعة</button>
+            <button onClick={handleExcelExport} className="btn-ghost text-emerald-600" title="تصدير Excel">📊 Excel</button>
+            <button onClick={handleRebuild} disabled={rebuilding} className="btn-ghost text-amber-600" title="إعادة بناء الأرصدة">
               {rebuilding ? '⏳...' : '🔧 إعادة بناء'}
             </button>
           </div>
@@ -223,41 +299,41 @@ export function TrialBalancePage() {
 
       <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table ref={tableRef} className="w-full min-w-[950px]">
             <thead>
               <tr className="bg-slate-700 text-white">
-                <th className="px-3 py-2 text-right" rowSpan={2}>الكود</th>
-                <th className="px-3 py-2 text-right" rowSpan={2}>اسم الحساب</th>
-                <th className="px-3 py-2 text-center border-r border-slate-600" colSpan={2}>رصيد أول المدة</th>
-                <th className="px-3 py-2 text-center border-r border-slate-600" colSpan={2}>حركة الفترة</th>
-                <th className="px-3 py-2 text-center border-r border-slate-600" colSpan={2}>رصيد آخر المدة</th>
-                <th className="px-3 py-2 text-center" rowSpan={2}>صافي الإغلاق</th>
+                <th className="px-4 py-3 text-right text-sm" rowSpan={2}>الكود</th>
+                <th className="px-4 py-3 text-right text-sm" rowSpan={2}>اسم الحساب</th>
+                <th className="px-4 py-3 text-center text-sm border-r border-slate-500" colSpan={2}>رصيد أول المدة</th>
+                <th className="px-4 py-3 text-center text-sm border-r border-slate-500" colSpan={2}>حركة الفترة</th>
+                <th className="px-4 py-3 text-center text-sm border-r border-slate-500" colSpan={2}>رصيد آخر المدة</th>
+                <th className="px-4 py-3 text-center text-sm" rowSpan={2}>صافي الإغلاق</th>
               </tr>
-              <tr className="bg-slate-600 text-white text-xs">
-                <th className="px-3 py-1 text-center border-r border-slate-500">مدين</th>
-                <th className="px-3 py-1 text-center border-r border-slate-500">دائن</th>
-                <th className="px-3 py-1 text-center border-r border-slate-500">مدين</th>
-                <th className="px-3 py-1 text-center border-r border-slate-500">دائن</th>
-                <th className="px-3 py-1 text-center border-r border-slate-500">مدين</th>
-                <th className="px-3 py-1 text-center border-r border-slate-500">دائن</th>
+              <tr className="bg-slate-600 text-white">
+                <th className="px-4 py-2 text-center text-xs border-r border-slate-500">مدين</th>
+                <th className="px-4 py-2 text-center text-xs border-r border-slate-500">دائن</th>
+                <th className="px-4 py-2 text-center text-xs border-r border-slate-500">مدين</th>
+                <th className="px-4 py-2 text-center text-xs border-r border-slate-500">دائن</th>
+                <th className="px-4 py-2 text-center text-xs border-r border-slate-500">مدين</th>
+                <th className="px-4 py-2 text-center text-xs border-r border-slate-500">دائن</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-8 text-slate-400">جارٍ التحميل...</td></tr>
+                <tr><td colSpan={9} className="text-center py-10 text-slate-400">جارٍ التحميل...</td></tr>
               ) : lines.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-8 text-slate-400">لا توجد بيانات</td></tr>
+                <tr><td colSpan={9} className="text-center py-10 text-slate-400">لا توجد بيانات</td></tr>
               ) : lines.map((r, i) => (
                 <tr key={i} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-3 py-2"><span className="font-mono text-xs text-primary-600 font-semibold">{r.account_code}</span></td>
-                  <td className="px-3 py-2 text-slate-700">{r.account_name || '—'}</td>
-                  <td className="px-3 py-2 text-center"><span className="num num-debit text-xs">{r.opening_debit > 0 ? fmt(r.opening_debit,2) : ''}</span></td>
-                  <td className="px-3 py-2 text-center"><span className="num num-credit text-xs">{r.opening_credit > 0 ? fmt(r.opening_credit,2) : ''}</span></td>
-                  <td className="px-3 py-2 text-center"><span className="num num-debit text-xs">{r.period_debit > 0 ? fmt(r.period_debit,2) : ''}</span></td>
-                  <td className="px-3 py-2 text-center"><span className="num num-credit text-xs">{r.period_credit > 0 ? fmt(r.period_credit,2) : ''}</span></td>
-                  <td className="px-3 py-2 text-center"><span className="num num-debit text-xs font-semibold">{r.closing_debit > 0 ? fmt(r.closing_debit,2) : ''}</span></td>
-                  <td className="px-3 py-2 text-center"><span className="num num-credit text-xs font-semibold">{r.closing_credit > 0 ? fmt(r.closing_credit,2) : ''}</span></td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-4 py-3"><span className="font-mono text-sm text-primary-600 font-bold">{r.account_code}</span></td>
+                  <td className="px-4 py-3 text-sm text-slate-700 font-medium">{r.account_name || '—'}</td>
+                  <td className="px-4 py-3 text-center"><span className="num num-debit text-sm font-semibold">{r.opening_debit > 0 ? fmt(r.opening_debit,2) : ''}</span></td>
+                  <td className="px-4 py-3 text-center"><span className="num num-credit text-sm font-semibold">{r.opening_credit > 0 ? fmt(r.opening_credit,2) : ''}</span></td>
+                  <td className="px-4 py-3 text-center"><span className="num num-debit text-sm font-semibold">{r.period_debit > 0 ? fmt(r.period_debit,2) : ''}</span></td>
+                  <td className="px-4 py-3 text-center"><span className="num num-credit text-sm font-semibold">{r.period_credit > 0 ? fmt(r.period_credit,2) : ''}</span></td>
+                  <td className="px-4 py-3 text-center"><span className="num num-debit text-sm font-bold">{r.closing_debit > 0 ? fmt(r.closing_debit,2) : ''}</span></td>
+                  <td className="px-4 py-3 text-center"><span className="num num-credit text-sm font-bold">{r.closing_credit > 0 ? fmt(r.closing_credit,2) : ''}</span></td>
+                  <td className="px-4 py-3 text-center">
                     <span className={`num text-sm font-bold ${r.closing_net >= 0 ? 'num-debit' : 'num-credit'}`}>
                       {r.closing_net >= 0 ? fmt(r.closing_net || 0, 2) : `-${fmt(Math.abs(r.closing_net || 0), 2)}`}
                     </span>
@@ -267,18 +343,18 @@ export function TrialBalancePage() {
             </tbody>
             {!loading && lines.length > 0 && (
               <tfoot>
-                <tr className="bg-slate-800 text-white font-semibold">
-                  <td colSpan={2} className="px-3 py-3 text-sm">الإجماليات</td>
-                  <td className="px-3 py-3 text-center num num-debit">{fmt(data?.opening_debit_total||0,2)}</td>
-                  <td className="px-3 py-3 text-center num num-credit">{fmt(data?.opening_credit_total||0,2)}</td>
-                  <td className="px-3 py-3 text-center num num-debit">{fmt(data?.period_debit_total||0,2)}</td>
-                  <td className="px-3 py-3 text-center num num-credit">{fmt(data?.period_credit_total||0,2)}</td>
-                  <td className="px-3 py-3 text-center num num-debit">{fmt(data?.closing_debit_total||0,2)}</td>
-                  <td className="px-3 py-3 text-center num num-credit">{fmt(data?.closing_credit_total||0,2)}</td>
-                  <td className="px-3 py-3 text-center num">{fmt(Math.abs(data?.closing_net_total||0),2)}</td>
+                <tr className="bg-slate-800 text-white">
+                  <td colSpan={2} className="px-4 py-3 text-sm font-bold">الإجماليات</td>
+                  <td className="px-4 py-3 text-center num num-debit text-sm font-bold">{fmt(data?.opening_debit_total||0,2)}</td>
+                  <td className="px-4 py-3 text-center num num-credit text-sm font-bold">{fmt(data?.opening_credit_total||0,2)}</td>
+                  <td className="px-4 py-3 text-center num num-debit text-sm font-bold">{fmt(data?.period_debit_total||0,2)}</td>
+                  <td className="px-4 py-3 text-center num num-credit text-sm font-bold">{fmt(data?.period_credit_total||0,2)}</td>
+                  <td className="px-4 py-3 text-center num num-debit text-sm font-bold">{fmt(data?.closing_debit_total||0,2)}</td>
+                  <td className="px-4 py-3 text-center num num-credit text-sm font-bold">{fmt(data?.closing_credit_total||0,2)}</td>
+                  <td className="px-4 py-3 text-center num text-sm font-bold">{fmt(Math.abs(data?.closing_net_total||0),2)}</td>
                 </tr>
                 <tr>
-                  <td colSpan={9} className={`px-4 py-2 text-center text-sm font-semibold ${data?.is_balanced ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                  <td colSpan={9} className={`px-4 py-2 text-center text-sm font-bold ${data?.is_balanced ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                     {data?.is_balanced ? '✅ الميزان متوازن' : '⚠️ الميزان غير متوازن'}
                   </td>
                 </tr>
@@ -302,7 +378,6 @@ export function ReportsPage() {
     { key: 'incomeStatement',    label: 'قائمة الدخل',             icon: '📈', fn: () => api.reports.incomeStatement({ fiscal_year: 2025 }) },
     { key: 'balanceSheet',       label: 'الميزانية العمومية',       icon: '⚖️', fn: () => api.reports.balanceSheet({ fiscal_year: 2025 }) },
     { key: 'vatReturn',          label: 'إقرار ضريبة القيمة المضافة', icon: '🧮', fn: () => api.reports.vatReturn({ year: 2025, quarter: 1 }) },
-    { key: 'arAging',            label: 'تقادم الذمم المدينة',     icon: '📋', fn: () => api.reports.arAging() },
     { key: 'salesSummary',       label: 'ملخص المبيعات',           icon: '🧾', fn: () => api.reports.salesSummary({ fiscal_year: 2025 }) },
     { key: 'inventoryValuation', label: 'تقييم المخزون',           icon: '📦', fn: () => api.reports.inventoryValuation() },
   ]
@@ -339,7 +414,6 @@ export function ReportsPage() {
           </button>
         ))}
       </div>
-      {/* عرض النتائج */}
       {Object.entries(results).map(([key, data]) => (
         <div key={key} className="card">
           <div className="flex items-center justify-between mb-3">
@@ -396,7 +470,6 @@ export function VATPage() {
           {loading ? '⏳ ...' : '🧮 استخراج الإقرار'}
         </button>
       </div>
-
       {data && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard icon="📤" label="ضريبة المبيعات (المخرجات)" value={fmt(data.output_vat,2)+' ر.س'} color="amber" />
@@ -408,7 +481,6 @@ export function VATPage() {
   )
 }
 
-// Assets & Treasury placeholders
 export function AssetsPage() {
   return <div className="page-enter card text-center py-16 text-slate-400"><div className="text-4xl mb-3">🏗️</div><p>الأصول الثابتة — قريباً</p></div>
 }
