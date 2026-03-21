@@ -23,15 +23,15 @@ export default function COAPage() {
   const [editAccount, setEditAccount] = useState(null)
   const [seeding,    setSeeding]    = useState(false)
 
-  const load = (filter = typeFilter) => {
+  const load = () => {
     setLoading(true)
-    api.accounting.getCOA({ limit: 500, ...(filter ? { account_type: filter } : {}) })
+    api.accounting.getCOA({ limit: 500 })
       .then(d => setAccounts(d?.data || d?.items || []))
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { load(typeFilter) }, [typeFilter])
+  useEffect(() => { load() }, [])
 
   const handlePrint = () => {
     const rows = filtered.map(a => `
@@ -325,11 +325,16 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
     if (!form.code || !form.name_ar) { setError('الكود والاسم بالعربي إلزاميان'); return }
     setSaving(true); setError('')
     try {
-      await api.accounting.createAccount({
+      const payload = {
         ...form,
         parent_id: form.parent_id || null,
         opening_balance: parseFloat(form.opening_balance) || 0,
-      })
+      }
+      if (isEdit) {
+        await api.accounting.updateAccount(account.id, payload)
+      } else {
+        await api.accounting.createAccount(payload)
+      }
       toast(`تم ${isEdit ? 'تعديل' : 'إضافة'} الحساب ${form.code}`, 'success')
       onSaved()
     } catch (e) {
