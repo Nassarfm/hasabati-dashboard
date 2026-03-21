@@ -32,6 +32,7 @@ export const api = {
     getDashboard:     ()                => get('/accounting/dashboard'),
     getCOA:           (p={})            => get('/accounting/coa', p),
     createAccount:    (b)               => post('/accounting/coa', b),
+    updateAccount:    (id, b)            => put(`/accounting/coa/${id}`, b),
     seedCOA:          ()                => post('/accounting/coa/seed', {}),
     getJEs:           (p={})            => get('/accounting/je', p),
     createJE:         (b)               => post('/accounting/je', b),

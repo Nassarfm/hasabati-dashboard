@@ -331,7 +331,8 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
         opening_balance: parseFloat(form.opening_balance) || 0,
       }
       if (isEdit) {
-        await api.accounting.updateAccount(account.id, payload)
+        const { code, ...updatePayload } = payload
+        await api.accounting.updateAccount(account.id, updatePayload)
       } else {
         await api.accounting.createAccount(payload)
       }
