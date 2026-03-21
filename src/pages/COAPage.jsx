@@ -82,6 +82,34 @@ export default function COAPage() {
     toast('تم تصدير الملف ✅', 'success')
   }
 
+  const handleImport = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const { data: { session } } = await (await import('../AuthContext')).supabase.auth.getSession()
+      const token = session?.access_token
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'https://hasabati-erp-production.up.railway.app/api/v1'}/accounting/coa/import`,
+        {
+          method: 'POST',
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: formData,
+        }
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error?.message || `خطأ ${res.status}`)
+      const d = json?.data
+      toast(`✅ تم الاستيراد — ${d?.success_count || 0} حساب جديد | ${d?.skipped?.length || 0} موجود مسبقاً`, 'success')
+      load()
+    } catch (e) {
+      toast(e.message, 'error')
+    }
+    e.target.value = ''
+  }
+
   const handleSeed = async () => {
     if (!confirm('سيتم تحميل دليل الحسابات الجاهز. هل تريد المتابعة؟')) return
     setSeeding(true)
@@ -161,7 +189,11 @@ export default function COAPage() {
         </div>
         <button onClick={load} className="btn-ghost">🔄</button>
         <button onClick={handlePrint} className="btn-ghost">🖨️ طباعة</button>
-        <button onClick={handleExport} className="btn-ghost text-emerald-600">📊 Excel</button>
+        <button onClick={handleExport} className="btn-ghost text-emerald-600">📊 تصدير</button>
+        <label className="btn-ghost text-blue-600 cursor-pointer">
+          📥 استيراد Excel
+          <input type="file" accept=".xlsx,.csv" className="hidden" onChange={handleImport} />
+        </label>
       </div>
 
       {/* عرض القائمة */}
@@ -332,6 +364,8 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
       }
       if (isEdit) {
         const { code, ...updatePayload } = payload
+        // تأكد أن parent_id إما UUID صحيح أو null
+        if (!updatePayload.parent_id) updatePayload.parent_id = null
         await api.accounting.updateAccount(account.id, updatePayload)
       } else {
         await api.accounting.createAccount(payload)
