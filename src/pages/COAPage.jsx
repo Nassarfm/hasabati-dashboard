@@ -102,7 +102,15 @@ export default function COAPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error?.message || `خطأ ${res.status}`)
       const d = json?.data
-      toast(`✅ تم الاستيراد — ${d?.success_count || 0} حساب جديد | ${d?.skipped?.length || 0} موجود مسبقاً`, 'success')
+      const inserted = d?.inserted || 0
+      const skipped = typeof d?.skipped === 'number' ? d.skipped : (d?.skipped?.length || 0)
+      const errors = d?.errors || 0
+      if (errors > 0) {
+        const firstError = d?.error_details?.[0]
+        toast(`⚠️ يوجد ${errors} خطأ في الملف — السطر ${firstError?.row}: ${firstError?.message}`, 'error')
+      } else {
+        toast(`✅ تم الاستيراد — ${inserted} حساب جديد | ${skipped} موجود مسبقاً`, 'success')
+      }
       load()
     } catch (e) {
       toast(e.message, 'error')
@@ -413,9 +421,14 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
         <Field label="الحساب الأب">
           <select className="select" value={form.parent_id} onChange={e => set('parent_id', e.target.value)}>
             <option value="">— لا يوجد —</option>
-            {accounts.filter(a => !a.postable && a.id !== account?.id).map(a => (
-              <option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>
-            ))}
+            {accounts
+              .filter(a => a.id !== account?.id && a.level <= 4)
+              .sort((a, b) => a.code.localeCompare(b.code))
+              .map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.code} — {a.name_ar} {a.level > 1 ? `(مستوى ${a.level})` : ''}
+                </option>
+              ))}
           </select>
         </Field>
         <div className="flex flex-col gap-3 justify-center">
