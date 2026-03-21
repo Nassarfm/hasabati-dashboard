@@ -194,7 +194,17 @@ export function TrialBalancePage() {
     }
   }
 
-  const lines = data?.lines || []
+  const [levelFilter, setLevelFilter] = useState('')
+
+  const allLines = data?.lines || []
+  const lines = levelFilter
+    ? allLines.filter(r => {
+        const codeLen = r.account_code?.length || 0
+        const levelMap = { '1': 1, '2': 2, '3': 4, '4': 6, '5': 8 }
+        const targetLen = levelMap[levelFilter]
+        return targetLen ? codeLen === targetLen : true
+      })
+    : allLines
   const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 
   const periodLabel = month ? `${months[month-1]} ${year}` : `سنة ${year}`

@@ -22,6 +22,7 @@ export default function COAPage() {
   const [showModal,  setShowModal]  = useState(false)
   const [editAccount, setEditAccount] = useState(null)
   const [seeding,    setSeeding]    = useState(false)
+  const [levelFilter, setLevelFilter] = useState('')
 
   const load = () => {
     setLoading(true)
@@ -132,12 +133,14 @@ export default function COAPage() {
     }
   }
 
-  const filtered = accounts.filter(a =>
-    !search ||
-    a.code?.toLowerCase().includes(search.toLowerCase()) ||
-    a.name_ar?.includes(search) ||
-    a.name_en?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = accounts.filter(a => {
+    const matchSearch = !search ||
+      a.code?.toLowerCase().includes(search.toLowerCase()) ||
+      a.name_ar?.includes(search) ||
+      a.name_en?.toLowerCase().includes(search.toLowerCase())
+    const matchLevel = !levelFilter || a.level === Number(levelFilter)
+    return matchSearch && matchLevel
+  })
 
   // بناء الشجرة
   const buildTree = (items) => {
@@ -195,6 +198,14 @@ export default function COAPage() {
             🌳 شجرة
           </button>
         </div>
+        <select className="select w-36" value={levelFilter} onChange={e => setLevelFilter(e.target.value)}>
+          <option value="">كل المستويات</option>
+          <option value="1">مستوى 1</option>
+          <option value="2">مستوى 2</option>
+          <option value="3">مستوى 3</option>
+          <option value="4">مستوى 4</option>
+          <option value="5">مستوى 5</option>
+        </select>
         <button onClick={load} className="btn-ghost">🔄</button>
         <button onClick={handlePrint} className="btn-ghost">🖨️ طباعة</button>
         <button onClick={handleExport} className="btn-ghost text-emerald-600">📊 تصدير</button>
