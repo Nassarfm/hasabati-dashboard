@@ -358,15 +358,20 @@ function TreeView({ nodes, onEdit }) {
 function AccountModal({ open, onClose, accounts, onSaved, account }) {
   const isEdit = !!account
   const [form, setForm] = useState({
-    code:            account?.code            || '',
-    name_ar:         account?.name_ar         || '',
-    name_en:         account?.name_en         || '',
-    account_type:    account?.account_type    || 'asset',
-    account_nature:  account?.account_nature  || 'debit',
-    parent_id:       account?.parent_id       || '',
-    postable:        account?.postable        ?? true,
-    opening_balance: account?.opening_balance || 0,
-    is_active:       account?.is_active       ?? true,
+    code:               account?.code               || '',
+    name_ar:            account?.name_ar            || '',
+    name_en:            account?.name_en            || '',
+    account_type:       account?.account_type       || 'asset',
+    account_nature:     account?.account_nature     || 'debit',
+    parent_id:          account?.parent_id          || '',
+    postable:           account?.postable           ?? true,
+    opening_balance:    account?.opening_balance    || 0,
+    is_active:          account?.is_active          ?? true,
+    function_type:      account?.function_type      || 'BS',
+    grp:                account?.grp                || '',
+    sub_group:          account?.sub_group          || '',
+    cash_flow_type:     account?.cash_flow_type     || 'none',
+    dimension_required: account?.dimension_required ?? false,
   })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
@@ -457,6 +462,42 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
           </label>
         </div>
       </div>
+      {/* حقول القوائم المالية */}
+      <div className="border-t border-slate-100 pt-3">
+        <div className="text-xs font-semibold text-slate-500 mb-3">📊 حقول القوائم المالية</div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="نوع القائمة (BS/PL)">
+            <select className="select" value={form.function_type} onChange={e => set('function_type', e.target.value)}>
+              <option value="BS">BS — ميزانية عمومية</option>
+              <option value="PL">PL — قائمة دخل</option>
+              <option value="BS/PL">BS/PL — كلاهما</option>
+            </select>
+          </Field>
+          <Field label="نوع التدفق النقدي">
+            <select className="select" value={form.cash_flow_type} onChange={e => set('cash_flow_type', e.target.value)}>
+              <option value="none">— لا ينطبق —</option>
+              <option value="operating">تشغيلي - Operating</option>
+              <option value="investing">استثماري - Investing</option>
+              <option value="financing">تمويلي - Financing</option>
+            </select>
+          </Field>
+          <Field label="المجموعة (Group)">
+            <input className="input" value={form.grp} onChange={e => set('grp', e.target.value)} placeholder="مثال: Current Assets" />
+          </Field>
+          <Field label="المجموعة الفرعية (Sub-Group)">
+            <input className="input" value={form.sub_group} onChange={e => set('sub_group', e.target.value)} placeholder="مثال: Cash and Cash Equivalents" />
+          </Field>
+        </div>
+        <div className="mt-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.dimension_required}
+              onChange={e => set('dimension_required', e.target.checked)}
+              className="w-4 h-4 rounded text-primary-600" />
+            <span className="text-sm text-slate-700">يتطلب بُعد عند الترحيل (Dimension Required)</span>
+          </label>
+        </div>
+      </div>
+
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
       <div className="flex justify-end gap-2 mt-6">
         <button onClick={onClose} className="btn-ghost">إلغاء</button>
