@@ -378,7 +378,18 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   const handleSave = async () => {
-    if (!form.code || !form.name_ar) { setError('الكود والاسم بالعربي إلزاميان'); return }
+    // التحقق من الحقول الإجبارية
+    const missing = []
+    if (!form.code)            missing.push('كود الحساب')
+    if (!form.name_ar)         missing.push('الاسم بالعربي')
+    if (!form.name_en)         missing.push('الاسم بالإنجليزي')
+    if (!form.account_type)    missing.push('نوع الحساب')
+    if (!form.account_nature)  missing.push('الطبيعة')
+    if (!form.function_type)   missing.push('نوع القائمة BS/PL')
+    if (!form.grp)             missing.push('المجموعة (Group)')
+    if (!form.sub_group)       missing.push('المجموعة الفرعية (Sub-Group)')
+    if (!form.cash_flow_type || form.cash_flow_type === '') missing.push('نوع التدفق النقدي')
+    if (missing.length > 0) { setError('الحقول التالية إلزامية: ' + missing.join(' | ')); return }
     setSaving(true); setError('')
     try {
       const payload = {
