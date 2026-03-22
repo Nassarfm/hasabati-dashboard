@@ -34,6 +34,21 @@ export const api = {
     createAccount:    (b)               => post('/accounting/coa', b),
     updateAccount:    (id, b)            => put(`/accounting/coa/${id}`, b),
     resetCOA:          ()                  => del(`/accounting/coa/reset`),
+  },
+
+  dimensions: {
+    list:         ()                      => get('/dimensions'),
+    get:          (id)                    => get(`/dimensions/${id}`),
+    create:       (b)                     => post('/dimensions', b),
+    update:       (id, b)                 => put(`/dimensions/${id}`, b),
+    remove:       (id)                    => del(`/dimensions/${id}`),
+    listValues:   (dimId)                 => get(`/dimensions/${dimId}/values`),
+    createValue:  (dimId, b)              => post(`/dimensions/${dimId}/values`, b),
+    updateValue:  (dimId, valId, b)       => put(`/dimensions/${dimId}/values/${valId}`, b),
+    deleteValue:  (dimId, valId)          => del(`/dimensions/${dimId}/values/${valId}`),
+  },
+
+  _placeholder: {
     seedCOA:          ()                => post('/accounting/coa/seed', {}),
     getJEs:           (p={})            => get('/accounting/je', p),
     createJE:         (b)               => post('/accounting/je', b),
