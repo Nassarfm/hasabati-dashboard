@@ -33,6 +33,7 @@ export const api = {
     getCOA:           (p={})            => get('/accounting/coa', p),
     createAccount:    (b)               => post('/accounting/coa', b),
     updateAccount:    (id, b)            => put(`/accounting/coa/${id}`, b),
+    resetCOA:          ()                  => del(`/accounting/coa/reset`),
     seedCOA:          ()                => post('/accounting/coa/seed', {}),
     getJEs:           (p={})            => get('/accounting/je', p),
     createJE:         (b)               => post('/accounting/je', b),

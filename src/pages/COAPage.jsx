@@ -21,8 +21,9 @@ export default function COAPage() {
   const [viewMode,   setViewMode]   = useState('list') // list | tree
   const [showModal,  setShowModal]  = useState(false)
   const [editAccount, setEditAccount] = useState(null)
-  const [seeding,    setSeeding]    = useState(false)
-  const [levelFilter, setLevelFilter] = useState('')
+  const [seeding,      setSeeding]    = useState(false)
+  const [levelFilter,  setLevelFilter] = useState('')
+  const [showReset,    setShowReset]   = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -133,6 +134,25 @@ export default function COAPage() {
     }
   }
 
+  const handleReset = async (confirmText) => {
+    if (confirmText !== 'تأكيد الحذف') return
+    try {
+      const { data: { session } } = await (await import('../AuthContext')).supabase.auth.getSession()
+      const token = session?.access_token
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'https://hasabati-erp-production.up.railway.app/api/v1'}/accounting/coa/reset`,
+        { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error?.message || `خطأ ${res.status}`)
+      toast(json?.data?.message || '✅ تم إعادة التهيئة', 'success')
+      setShowReset(false)
+      load()
+    } catch (e) {
+      toast(e.message, 'error')
+    }
+  }
+
   const filtered = accounts.filter(a => {
     const matchSearch = !search ||
       a.code?.toLowerCase().includes(search.toLowerCase()) ||
@@ -171,6 +191,10 @@ export default function COAPage() {
                 {seeding ? '⏳...' : '🌱 تحميل جاهز'}
               </button>
             )}
+            <button onClick={() => setShowReset(true)}
+              className="btn-ghost text-red-600 border border-red-200 hover:bg-red-50">
+              ⚠️ إعادة تهيئة
+            </button>
             <button onClick={() => setShowModal(true)} className="btn-primary">+ حساب جديد</button>
           </div>
         }
@@ -290,6 +314,15 @@ export default function COAPage() {
         />
       )}
 
+      {/* مودال إعادة التهيئة */}
+      {showReset && (
+        <ResetCOAModal
+          onClose={() => setShowReset(false)}
+          onConfirm={handleReset}
+          count={accounts.length}
+        />
+      )}
+
       {/* مودال تعديل */}
       {editAccount && (
         <AccountModal
@@ -353,6 +386,54 @@ function TreeView({ nodes, onEdit }) {
     </div>
   )
 }
+
+// ── مودال إعادة تهيئة دليل الحسابات ────────────────────────────
+function ResetCOAModal({ onClose, onConfirm, count }) {
+  const [text, setText] = useState('')
+  const [loading, setLoading] = useState(false)
+  const isValid = text === 'تأكيد الحذف'
+
+  const handleConfirm = async () => {
+    setLoading(true)
+    await onConfirm(text)
+    setLoading(false)
+  }
+
+  return (
+    <Modal open onClose={onClose} title="⚠️ إعادة تهيئة دليل الحسابات" size="md">
+      <div className="space-y-4">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="text-red-700 font-bold text-sm mb-1">⚠️ تحذير — هذا الإجراء لا يمكن التراجع عنه</p>
+          <p className="text-red-600 text-sm">سيتم حذف <strong>{count} حساب</strong> من دليل الحسابات وجميع الأرصدة المرتبطة بها.</p>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+          ✅ مسموح فقط إذا لا توجد قيود مرحّلة
+        </div>
+        <div>
+          <p className="text-sm text-slate-600 mb-2">اكتب <strong className="text-red-600">تأكيد الحذف</strong> للمتابعة:</p>
+          <input
+            className="input w-full text-center font-mono"
+            placeholder="تأكيد الحذف"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            dir="rtl"
+          />
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 mt-6">
+        <button onClick={onClose} className="btn-ghost">إلغاء</button>
+        <button
+          onClick={handleConfirm}
+          disabled={!isValid || loading}
+          className={"px-4 py-2 rounded-xl font-medium text-sm transition-colors " +
+            (isValid ? "bg-red-600 text-white hover:bg-red-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+          {loading ? '⏳ جارٍ الحذف...' : '🗑️ إعادة التهيئة'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 
 // ── مودال إضافة/تعديل حساب ───────────────────────────────────
 function AccountModal({ open, onClose, accounts, onSaved, account }) {
