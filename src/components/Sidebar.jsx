@@ -1,13 +1,14 @@
- import { useAuth } from '../AuthContext'
+import { useAuth } from '../AuthContext'
 
 const modules = [
   { label: 'الرئيسية', items: [
     { id: 'dashboard', label: 'لوحة التحكم', icon: '📊' },
   ]},
   { label: 'المالية', items: [
-    { id: 'coa',      label: 'دليل الحسابات',  icon: '📋' },
-    { id: 'journal',  label: 'القيود اليومية',  icon: '📝' },
-    { id: 'trialbal', label: 'ميزان المراجعة', icon: '⚖️' },
+    { id: 'coa',        label: 'دليل الحسابات',     icon: '📋' },
+    { id: 'dimensions', label: 'الأبعاد المحاسبية',  icon: '🎯' },
+    { id: 'journal',    label: 'القيود اليومية',     icon: '📝' },
+    { id: 'trialbal',   label: 'ميزان المراجعة',    icon: '⚖️' },
   ]},
   { label: 'العمليات', items: [
     { id: 'sales',     label: 'المبيعات',   icon: '🧾' },

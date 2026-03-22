@@ -6,24 +6,26 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import COAPage from './pages/COAPage'
 import JournalPage from './pages/JournalPage'
+import DimensionsPage from './pages/DimensionsPage'
 import {
   SalesPage, PurchasesPage, InventoryPage, HRPage,
   TrialBalancePage, ReportsPage, VATPage, AssetsPage, TreasuryPage
 } from './pages/OtherPages'
 
 const PAGES = {
-  dashboard: { component: DashboardPage, label: 'لوحة التحكم' },
-  coa:       { component: COAPage,       label: 'دليل الحسابات' },
-  journal:   { component: JournalPage,   label: 'القيود اليومية' },
-  trialbal:  { component: TrialBalancePage, label: 'ميزان المراجعة' },
-  sales:     { component: SalesPage,     label: 'المبيعات' },
-  purchases: { component: PurchasesPage, label: 'المشتريات' },
-  inventory: { component: InventoryPage, label: 'المخزون' },
-  hr:        { component: HRPage,        label: 'الموارد البشرية' },
-  assets:    { component: AssetsPage,    label: 'الأصول الثابتة' },
-  treasury:  { component: TreasuryPage,  label: 'الخزينة' },
-  reports:   { component: ReportsPage,   label: 'التقارير المالية' },
-  vat:       { component: VATPage,       label: 'ضريبة القيمة المضافة' },
+  dashboard:  { component: DashboardPage,    label: 'لوحة التحكم' },
+  coa:        { component: COAPage,          label: 'دليل الحسابات' },
+  dimensions: { component: DimensionsPage,   label: 'الأبعاد المحاسبية' },
+  journal:    { component: JournalPage,      label: 'القيود اليومية' },
+  trialbal:   { component: TrialBalancePage, label: 'ميزان المراجعة' },
+  sales:      { component: SalesPage,        label: 'المبيعات' },
+  purchases:  { component: PurchasesPage,    label: 'المشتريات' },
+  inventory:  { component: InventoryPage,    label: 'المخزون' },
+  hr:         { component: HRPage,           label: 'الموارد البشرية' },
+  assets:     { component: AssetsPage,       label: 'الأصول الثابتة' },
+  treasury:   { component: TreasuryPage,     label: 'الخزينة' },
+  reports:    { component: ReportsPage,      label: 'التقارير المالية' },
+  vat:        { component: VATPage,          label: 'ضريبة القيمة المضافة' },
 }
 
 function AppContent() {
