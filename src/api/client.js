@@ -55,6 +55,8 @@ export const api = {
     updateRegion:      (id, b)         => put(`/settings/regions/${id}`, b),
     deleteRegion:      (id)            => del(`/settings/regions/${id}`),
     // Cities
+    suggestRegionCode: ()              => get('/settings/regions/suggest-code'),
+    suggestCityCode:   (regionId)      => get(`/settings/cities/suggest-code?region_id=${regionId}`),
     listCities:        (regionId)      => get('/settings/cities' + (regionId ? `?region_id=${regionId}` : '')),
     createCity:        (regionId, b)   => post(`/settings/cities?region_id=${regionId}`, b),
     updateCity:        (id, b)         => put(`/settings/cities/${id}`, b),

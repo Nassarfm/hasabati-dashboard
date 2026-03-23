@@ -381,9 +381,8 @@ function RegionsTab() {
           </tbody>
         </table>
       </div>
-      {showModal && <SimpleModal title="➕ منطقة جديدة" onClose={() => setShowModal(false)}
-        onSaved={() => { load(); setShowModal(false) }}
-        onSubmit={async (f) => api.settings.createRegion(f)} withCode />}
+      {showModal && <RegionModal onClose={() => setShowModal(false)}
+        onSaved={() => { load(); setShowModal(false) }} />}
       {editItem && <SimpleModal title={`✏️ تعديل — ${editItem.name_ar}`} item={editItem}
         onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }}
         onSubmit={async (f) => api.settings.updateRegion(editItem.id, f)} />}
@@ -470,15 +469,26 @@ function CitiesTab() {
 
 function CityModal({ regions, onClose, onSaved }) {
   const [form, setForm] = useState({ region_id: '', code: '', name_ar: '', name_en: '' })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [saving,     setSaving]     = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
+  const [error,      setError]      = useState('')
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
+  const suggestCode = async (regionId) => {
+    if (!regionId) return
+    setSuggesting(true)
+    try {
+      const d = await api.settings.suggestCityCode(regionId)
+      set('code', d?.data?.suggested_code || '')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setSuggesting(false) }
+  }
+
   const handleSave = async () => {
-    if (!form.region_id || !form.code || !form.name_ar) { setError('جميع الحقول المميزة إلزامية'); return }
+    if (!form.region_id || !form.name_ar) { setError('المنطقة والاسم إلزاميان'); return }
     setSaving(true); setError('')
     try {
-      await api.settings.createCity(form.region_id, { code: form.code, name_ar: form.name_ar, name_en: form.name_en || null })
+      await api.settings.createCity(form.region_id, { code: form.code || null, name_ar: form.name_ar, name_en: form.name_en || null })
       toast('تم إضافة المدينة', 'success')
       onSaved()
     } catch (e) { setError(e.message) }
@@ -490,22 +500,30 @@ function CityModal({ regions, onClose, onSaved }) {
       footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel="إضافة المدينة" />}>
       <div className="space-y-3">
         <Field label="المنطقة" required>
-          <select className="select" value={form.region_id} onChange={e => set('region_id', e.target.value)}>
+          <select className="select" value={form.region_id}
+            onChange={e => { set('region_id', e.target.value); suggestCode(e.target.value) }}>
             <option value="">— اختر المنطقة —</option>
             {regions.map(r => <option key={r.id} value={r.id}>{r.name_ar}</option>)}
           </select>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="كود المدينة" required>
-            <input className="input font-mono" value={form.code} onChange={e => set('code', e.target.value)} placeholder="01" />
-          </Field>
-          <Field label="الاسم بالعربي" required>
-            <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} placeholder="الرياض" />
-          </Field>
-          <Field label="الاسم بالإنجليزي" className="col-span-2">
-            <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} placeholder="Riyadh" />
-          </Field>
-        </div>
+        <Field label="كود المدينة">
+          <div className="flex gap-2">
+            <input className="input font-mono flex-1" value={form.code}
+              onChange={e => set('code', e.target.value)}
+              placeholder={suggesting ? '...' : '01'} />
+            <button onClick={() => suggestCode(form.region_id)} disabled={!form.region_id || suggesting}
+              className="btn-ghost text-xs px-3" title="توليد تلقائي">
+              {suggesting ? '⏳' : '🔢'}
+            </button>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">يُولَّد تلقائياً عند اختيار المنطقة</p>
+        </Field>
+        <Field label="الاسم بالعربي" required>
+          <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} placeholder="الرياض" />
+        </Field>
+        <Field label="الاسم بالإنجليزي">
+          <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} placeholder="Riyadh" />
+        </Field>
       </div>
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
     </SlideOver>
@@ -569,6 +587,64 @@ function BranchTypesTab() {
     </div>
   )
 }
+
+// ══════════════════════════════════════════════
+// Region Modal with auto-code
+// ══════════════════════════════════════════════
+function RegionModal({ onClose, onSaved }) {
+  const [form, setForm] = useState({ code: '', name_ar: '', name_en: '' })
+  const [saving, setSaving] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  useEffect(() => {
+    const suggest = async () => {
+      setSuggesting(true)
+      try {
+        const d = await api.settings.suggestRegionCode()
+        set('code', d?.data?.suggested_code || '')
+      } catch (e) {}
+      finally { setSuggesting(false) }
+    }
+    suggest()
+  }, [])
+
+  const handleSave = async () => {
+    if (!form.name_ar) { setError('الاسم بالعربي إلزامي'); return }
+    setSaving(true); setError('')
+    try {
+      await api.settings.createRegion({ code: form.code, name_ar: form.name_ar, name_en: form.name_en || null })
+      toast('تم إضافة المنطقة', 'success')
+      onSaved()
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <SlideOver open onClose={onClose} title="إضافة منطقة جديدة" size="sm"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel="إضافة المنطقة" />}>
+      <div className="space-y-3">
+        <Field label="كود المنطقة">
+          <div className="flex gap-2">
+            <input className="input font-mono flex-1" value={form.code}
+              onChange={e => set('code', e.target.value)}
+              placeholder={suggesting ? '...' : '1'} />
+          </div>
+          <p className="text-xs text-slate-400 mt-1">يُولَّد تلقائياً</p>
+        </Field>
+        <Field label="الاسم بالعربي" required>
+          <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} placeholder="المنطقة الوسطى" />
+        </Field>
+        <Field label="الاسم بالإنجليزي">
+          <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} placeholder="Central Region" />
+        </Field>
+      </div>
+      {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
+    </SlideOver>
+  )
+}
+
 
 // ══════════════════════════════════════════════
 // Shared Simple Modal
