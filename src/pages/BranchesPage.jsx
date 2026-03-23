@@ -79,13 +79,31 @@ function BranchesTab() {
     !search || b.code?.includes(search) || b.name_ar?.includes(search) || b.name_en?.toLowerCase().includes(search.toLowerCase())
   )
 
+  const [viewMode, setViewMode] = useState('list') // list | tree
+
   return (
     <div className="space-y-4">
       <div className="card flex gap-3">
         <input className="input flex-1" placeholder="🔍 بحث..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="flex border border-slate-200 rounded-lg overflow-hidden">
+          <button onClick={() => setViewMode('list')}
+            className={"px-3 py-1.5 text-xs font-medium " + (viewMode === 'list' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50')}>
+            ☰ قائمة
+          </button>
+          <button onClick={() => setViewMode('tree')}
+            className={"px-3 py-1.5 text-xs font-medium " + (viewMode === 'tree' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50')}>
+            🌳 شجرة
+          </button>
+        </div>
         <button onClick={load} className="btn-ghost">🔄</button>
         <button onClick={() => setShowModal(true)} className="btn-primary">+ فرع جديد</button>
       </div>
+
+      {viewMode === 'tree' && (
+        <BranchTreeView regions={regions} branches={filtered} onEdit={setEditItem} onDeactivate={setDeactivateItem} onActivate={handleActivate} />
+      )}
+
+      {viewMode === 'list' && (
 
       <div className="card p-0 overflow-hidden">
         <table className="w-full">
@@ -134,10 +152,12 @@ function BranchesTab() {
         </table>
       </div>
 
+      )}
+
       {showModal && <BranchModal regions={regions} branches={branches} branchTypes={branchTypes}
         onClose={() => setShowModal(false)} onSaved={() => { load(); setShowModal(false) }} />}
       {deactivateItem && <DeactivateModal
-        name={deactivateItem.name_ar}
+        name={deactivateItem?.name_ar}
         onClose={() => setDeactivateItem(null)}
         onConfirm={async (reason) => {
           await api.settings.deactivateBranch(deactivateItem.id, reason)
@@ -587,6 +607,164 @@ function BranchTypesTab() {
     </div>
   )
 }
+
+// ══════════════════════════════════════════════
+// Branch Tree View
+// ══════════════════════════════════════════════
+function BranchTreeView({ regions, branches, onEdit, onDeactivate, onActivate }) {
+  const [expanded, setExpanded] = useState({})
+  const toggle = (key) => setExpanded(p => ({ ...p, [key]: !p[key] }))
+
+  // group branches by city_id
+  const branchesByCity = {}
+  const branchesNoCity = []
+  branches.forEach(b => {
+    if (b.city_id) {
+      if (!branchesByCity[b.city_id]) branchesByCity[b.city_id] = []
+      branchesByCity[b.city_id].push(b)
+    } else {
+      branchesNoCity.push(b)
+    }
+  })
+
+  if (!regions.length) {
+    return (
+      <div className="card text-center py-12 text-slate-400">
+        لا توجد مناطق — أضف منطقة أولاً
+      </div>
+    )
+  }
+
+  return (
+    <div className="card p-0 overflow-hidden">
+      {regions.map(region => {
+        const regionKey = `r-${region.id}`
+        const regionOpen = expanded[regionKey] !== false // default open
+        const cities = region.cities || []
+        const totalBranches = cities.reduce((s, c) => s + (branchesByCity[c.id]?.length || 0), 0)
+
+        return (
+          <div key={region.id} className="border-b border-slate-100 last:border-0">
+            {/* المنطقة */}
+            <div
+              className="flex items-center gap-3 px-4 py-3 bg-primary-50 cursor-pointer hover:bg-primary-100 transition-colors"
+              onClick={() => toggle(regionKey)}
+            >
+              <span className="text-slate-400 w-4 text-center text-xs">
+                {regionOpen ? '▾' : '▸'}
+              </span>
+              <span className="text-lg">🗺️</span>
+              <div className="flex-1">
+                <span className="font-bold text-primary-800">{region.name_ar}</span>
+                {region.name_en && <span className="text-xs text-primary-500 mr-2">({region.name_en})</span>}
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-500">
+                <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-mono">{region.code}</span>
+                <span>{cities.length} مدينة</span>
+                <span>{totalBranches} فرع</span>
+              </div>
+            </div>
+
+            {/* المدن */}
+            {regionOpen && cities.map(city => {
+              const cityKey = `c-${city.id}`
+              const cityOpen = expanded[cityKey] !== false
+              const cityBranches = branchesByCity[city.id] || []
+
+              return (
+                <div key={city.id} className="border-t border-slate-50">
+                  {/* المدينة */}
+                  <div
+                    className="flex items-center gap-3 px-6 py-2.5 bg-slate-50 cursor-pointer hover:bg-blue-50 transition-colors"
+                    onClick={() => toggle(cityKey)}
+                  >
+                    <span className="text-slate-400 w-4 text-center text-xs">
+                      {cityOpen ? '▾' : '▸'}
+                    </span>
+                    <span>🏙️</span>
+                    <div className="flex-1">
+                      <span className="font-semibold text-slate-700">{city.name_ar}</span>
+                      {city.name_en && <span className="text-xs text-slate-400 mr-2">({city.name_en})</span>}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                      <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-mono">
+                        {region.code}{city.code}
+                      </span>
+                      <span>{cityBranches.length} فرع</span>
+                    </div>
+                  </div>
+
+                  {/* الفروع */}
+                  {cityOpen && (
+                    <div>
+                      {cityBranches.length === 0 ? (
+                        <div className="px-16 py-2 text-xs text-slate-300 italic">لا توجد فروع في هذه المدينة</div>
+                      ) : cityBranches.sort((a,b) => a.code.localeCompare(b.code)).map(branch => (
+                        <div key={branch.id}
+                          className={"flex items-center gap-3 px-10 py-2.5 border-t border-slate-50 hover:bg-slate-50 transition-colors " +
+                            (!branch.is_active ? "opacity-60" : "")}>
+                          <span className="w-4" />
+                          <span>{branch.is_active ? '🏢' : '🔒'}</span>
+                          <div className="flex-1">
+                            <span className={"font-medium text-sm " + (!branch.is_active ? "text-slate-400 line-through" : "text-slate-700")}>
+                              {branch.name_ar}
+                            </span>
+                            {branch.name_en && <span className="text-xs text-slate-400 mr-2">({branch.name_en})</span>}
+                            {branch.branch_type_name && (
+                              <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full mr-2">
+                                {branch.branch_type_name}
+                              </span>
+                            )}
+                            {!branch.is_active && branch.deactivation_reason && (
+                              <span className="text-xs text-red-400 mr-2">— {branch.deactivation_reason}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                              {branch.code}
+                            </span>
+                            <span className={branch.is_active
+                              ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full"
+                              : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
+                              {branch.is_active ? 'نشط' : 'موقف'}
+                            </span>
+                            <div className="flex gap-1">
+                              <button onClick={() => onEdit(branch)}
+                                className="text-xs text-primary-600 hover:text-primary-800 px-1">✏️</button>
+                              {branch.is_active
+                                ? <button onClick={() => onDeactivate(branch)}
+                                    className="text-xs text-red-500 hover:text-red-700 px-1">⏸️</button>
+                                : <button onClick={() => onActivate(branch)}
+                                    className="text-xs text-emerald-600 hover:text-emerald-800 px-1">▶️</button>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* فروع بدون مدينة */}
+            {regionOpen && branchesNoCity.filter(b => !b.region_id || b.region_id === region.id).map(branch => (
+              <div key={branch.id}
+                className="flex items-center gap-3 px-10 py-2.5 border-t border-slate-50 hover:bg-slate-50">
+                <span className="w-4" />
+                <span>🏢</span>
+                <span className="flex-1 font-medium text-sm text-slate-700">{branch.name_ar}</span>
+                <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{branch.code}</span>
+                <button onClick={() => onEdit(branch)} className="text-xs text-primary-600">✏️</button>
+              </div>
+            ))}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 
 // ══════════════════════════════════════════════
 // Region Modal with auto-code
