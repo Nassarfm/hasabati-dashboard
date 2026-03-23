@@ -566,21 +566,33 @@ function AccountSearch({ accounts, value, onChange }) {
 // SlideOver تفاصيل القيد
 // ══════════════════════════════════════════════
 function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
-  const [posting, setPosting] = useState(false)
+  const [loading,     setLoading]     = useState(false)
+  const [rejectModal, setRejectModal] = useState(false)
+  const [rejectNote,  setRejectNote]  = useState('')
   const jeType = jeTypes.find(t => t.code === je.je_type)
 
-  const handlePost = async () => {
-    setPosting(true)
+  const doAction = async (action, successMsg) => {
+    setLoading(true)
     try {
-      await api.accounting.postJE(je.id)
-      toast('تم ترحيل القيد بنجاح ✅', 'success')
+      await action()
+      toast(successMsg, 'success')
       onPosted()
     } catch (e) {
       toast(e.message, 'error')
     } finally {
-      setPosting(false)
+      setLoading(false)
     }
   }
+
+  const STATUS_LABELS = {
+    draft:          { label: 'مسودة',         color: 'bg-slate-100 text-slate-600' },
+    pending_review: { label: 'قيد المراجعة',  color: 'bg-amber-100 text-amber-700' },
+    approved:       { label: 'معتمد',          color: 'bg-blue-100 text-blue-700' },
+    posted:         { label: 'مرحَّل',         color: 'bg-emerald-100 text-emerald-700' },
+    rejected:       { label: 'مرفوض',         color: 'bg-red-100 text-red-700' },
+    reversed:       { label: 'معكوس',          color: 'bg-purple-100 text-purple-700' },
+  }
+  const statusInfo = STATUS_LABELS[je.status] || { label: je.status, color: 'bg-slate-100 text-slate-600' }
 
   return (
     <SlideOver open={!!je} onClose={onClose}
@@ -590,18 +602,70 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
       footer={
         <div className="flex items-center justify-between">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إغلاق</button>
-          {je.status === 'draft' && (
-            <button onClick={handlePost} disabled={posting}
-              className="px-5 py-2 rounded-xl text-sm font-semibold bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-              {posting ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />جارٍ...</> : '✅ ترحيل'}
-            </button>
-          )}
+          <div className="flex gap-2">
+            {/* Draft → إرسال للمراجعة */}
+            {je.status === 'draft' && (
+              <button onClick={() => doAction(() => api.accounting.submitJE(je.id), 'تم إرسال القيد للمراجعة')}
+                disabled={loading}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50">
+                📤 إرسال للمراجعة
+              </button>
+            )}
+            {/* Draft → ترحيل مباشر */}
+            {je.status === 'draft' && (
+              <button onClick={() => doAction(() => api.accounting.postJE(je.id), 'تم ترحيل القيد ✅')}
+                disabled={loading}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50">
+                ✅ ترحيل مباشر
+              </button>
+            )}
+            {/* Pending Review → موافقة أو رفض */}
+            {je.status === 'pending_review' && (
+              <>
+                <button onClick={() => setRejectModal(true)} disabled={loading}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50">
+                  ❌ رفض
+                </button>
+                <button onClick={() => doAction(() => api.accounting.approveJE(je.id), 'تمت الموافقة والترحيل ✅')}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+                  ✅ موافقة وترحيل
+                </button>
+              </>
+            )}
+          </div>
         </div>
       }>
+
+      {/* مودال الرفض */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setRejectModal(false)} />
+          <div className="relative bg-white rounded-2xl p-6 w-96 shadow-2xl">
+            <h3 className="font-bold text-slate-800 mb-3">❌ سبب الرفض</h3>
+            <textarea className="input w-full" rows={4}
+              value={rejectNote} onChange={e => setRejectNote(e.target.value)}
+              placeholder="أدخل سبب رفض القيد..." />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setRejectModal(false)} className="btn-ghost">إلغاء</button>
+              <button onClick={() => {
+                setRejectModal(false)
+                doAction(() => api.accounting.rejectJE(je.id, rejectNote), 'تم رفض القيد وإعادته للمسودة')
+              }} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold">
+                تأكيد الرفض
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-4 text-sm">
           <div><div className="text-slate-400 text-xs mb-0.5">رقم القيد</div><div className="font-mono font-bold text-primary-600">{je.serial}</div></div>
-          <div><div className="text-slate-400 text-xs mb-0.5">الحالة</div><StatusBadge status={je.status} /></div>
+          <div>
+            <div className="text-slate-400 text-xs mb-0.5">الحالة</div>
+            <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
+            {je.rejection_note && <div className="text-xs text-red-500 mt-1">سبب الرفض: {je.rejection_note}</div>}
+          </div>
           <div><div className="text-slate-400 text-xs mb-0.5">النوع</div><div className="font-medium">{jeType ? `${jeType.code} — ${jeType.name_ar}` : je.je_type}</div></div>
           <div><div className="text-slate-400 text-xs mb-0.5">التاريخ</div><div className="font-medium">{je.entry_date}</div></div>
           <div><div className="text-slate-400 text-xs mb-0.5">المرجع</div><div className="font-medium">{je.reference || '—'}</div></div>
