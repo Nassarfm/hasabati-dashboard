@@ -85,6 +85,10 @@ export const api = {
     deactivateCostCenter: (id, b={})   => post(`/settings/cost-centers/${id}/deactivate`, b),
     activateCostCenter:   (id)         => post(`/settings/cost-centers/${id}/activate`, {}),
     suggestCCCode:     (parentCode)    => get(`/settings/cost-centers/suggest-code?parent_code=${parentCode}`),
+    // JE Types
+    listJETypes:       ()              => get('/settings/je-types'),
+    createJEType:      (b)             => post('/settings/je-types', b),
+    updateJEType:      (id, b)         => put(`/settings/je-types/${id}`, b),
     // Projects
     listProjects:      ()              => get('/settings/projects'),
     createProject:     (b)             => post('/settings/projects', b),
