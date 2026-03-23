@@ -69,6 +69,8 @@ export const api = {
     createBranch:      (b)             => post('/settings/branches', b),
     updateBranch:      (id, b)         => put(`/settings/branches/${id}`, b),
     deleteBranch:      (id)            => del(`/settings/branches/${id}`),
+    deactivateBranch:  (id, b={})      => post(`/settings/branches/${id}/deactivate`, b),
+    activateBranch:    (id)            => post(`/settings/branches/${id}/activate`, {}),
     suggestBranchCode: (rc, cc)        => get(`/settings/branches/suggest-code?region_code=${rc}&city_code=${cc}`),
     // Cost Center Types
     listCCTypes:       ()              => get('/settings/cost-center-types'),
@@ -80,6 +82,8 @@ export const api = {
     createCostCenter:  (b)             => post('/settings/cost-centers', b),
     updateCostCenter:  (id, b)         => put(`/settings/cost-centers/${id}`, b),
     deleteCostCenter:  (id)            => del(`/settings/cost-centers/${id}`),
+    deactivateCostCenter: (id, b={})   => post(`/settings/cost-centers/${id}/deactivate`, b),
+    activateCostCenter:   (id)         => post(`/settings/cost-centers/${id}/activate`, {}),
     suggestCCCode:     (parentCode)    => get(`/settings/cost-centers/suggest-code?parent_code=${parentCode}`),
     // Projects
     listProjects:      ()              => get('/settings/projects'),

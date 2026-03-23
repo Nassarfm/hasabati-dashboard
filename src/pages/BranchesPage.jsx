@@ -43,9 +43,19 @@ function BranchesTab() {
   const [regions,      setRegions]      = useState([])
   const [branchTypes,  setBranchTypes]  = useState([])
   const [loading,      setLoading]      = useState(true)
-  const [showModal,    setShowModal]    = useState(false)
-  const [editItem,     setEditItem]     = useState(null)
-  const [search,       setSearch]       = useState('')
+  const [showModal,      setShowModal]      = useState(false)
+  const [editItem,       setEditItem]       = useState(null)
+  const [deactivateItem, setDeactivateItem] = useState(null)
+  const [search,         setSearch]         = useState('')
+
+  const handleActivate = async (b) => {
+    if (!confirm(`هل تريد تفعيل الفرع ${b.name_ar}؟`)) return
+    try {
+      await api.settings.activateBranch(b.id)
+      toast(`تم تفعيل الفرع ${b.name_ar}`, 'success')
+      load()
+    } catch (e) { toast(e.message, 'error') }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -109,7 +119,13 @@ function BranchesTab() {
                   </span>
                 </td>
                 <td className="td text-center">
-                  <button onClick={() => setEditItem(b)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
+                  <div className="flex items-center justify-center gap-2">
+                    <button onClick={() => setEditItem(b)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
+                    {b.is_active
+                      ? <button onClick={() => setDeactivateItem(b)} className="text-xs text-red-500 hover:text-red-700" title="إيقاف">⏸️</button>
+                      : <button onClick={() => handleActivate(b)} className="text-xs text-emerald-600 hover:text-emerald-800" title="تفعيل">▶️</button>
+                    }
+                  </div>
                 </td>
               </tr>
             ))}
@@ -119,6 +135,14 @@ function BranchesTab() {
 
       {showModal && <BranchModal regions={regions} branches={branches} branchTypes={branchTypes}
         onClose={() => setShowModal(false)} onSaved={() => { load(); setShowModal(false) }} />}
+      {deactivateItem && <DeactivateModal
+        name={deactivateItem.name_ar}
+        onClose={() => setDeactivateItem(null)}
+        onConfirm={async (reason) => {
+          await api.settings.deactivateBranch(deactivateItem.id, reason)
+          toast(`تم إيقاف الفرع ${deactivateItem.name_ar}`, 'success')
+          setDeactivateItem(null); load()
+        }} />}
       {editItem && <BranchModal regions={regions} branches={branches} branchTypes={branchTypes} branch={editItem}
         onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }} />}
     </div>
@@ -255,6 +279,44 @@ function BranchModal({ branch, regions, branches, branchTypes, onClose, onSaved 
     </Modal>
   )
 }
+
+// ══════════════════════════════════════════════
+// Shared Deactivate Modal
+// ══════════════════════════════════════════════
+function DeactivateModal({ name, onClose, onConfirm }) {
+  const [reason,  setReason]  = useState('')
+  const [saving,  setSaving]  = useState(false)
+
+  const handleConfirm = async () => {
+    setSaving(true)
+    try { await onConfirm(reason || null) }
+    catch (e) { toast(e.message, 'error') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`⏸️ إيقاف — ${name}`} size="sm">
+      <div className="space-y-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+          ⚠️ سيتم إيقاف هذا العنصر ومنع أي حركات مستقبلية عليه.
+        </div>
+        <Field label="سبب الإيقاف">
+          <textarea className="input" rows={3} value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="اختياري — مثال: الفرع أُغلق بتاريخ..." />
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2 mt-4">
+        <button onClick={onClose} className="btn-ghost">إلغاء</button>
+        <button onClick={handleConfirm} disabled={saving}
+          className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700">
+          {saving ? '⏳...' : '⏸️ إيقاف'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 
 // ══════════════════════════════════════════════
 // Tab: المناطق
