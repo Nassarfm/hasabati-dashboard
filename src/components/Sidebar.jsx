@@ -6,7 +6,10 @@ const modules = [
   ]},
   { label: 'المالية', items: [
     { id: 'coa',        label: 'دليل الحسابات',     icon: '📋' },
-    { id: 'dimensions', label: 'الأبعاد المحاسبية',  icon: '🎯' },
+    { id: 'dimensions',   label: 'الأبعاد المحاسبية',  icon: '🎯' },
+    { id: 'branches',     label: 'الفروع',               icon: '🏢' },
+    { id: 'costcenters',  label: 'مراكز التكلفة',         icon: '💰' },
+    { id: 'projects',     label: 'المشاريع',              icon: '📁' },
     { id: 'journal',    label: 'القيود اليومية',     icon: '📝' },
     { id: 'trialbal',   label: 'ميزان المراجعة',    icon: '⚖️' },
   ]},

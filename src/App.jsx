@@ -7,6 +7,9 @@ import DashboardPage from './pages/DashboardPage'
 import COAPage from './pages/COAPage'
 import JournalPage from './pages/JournalPage'
 import DimensionsPage from './pages/DimensionsPage'
+import BranchesPage from './pages/BranchesPage'
+import CostCentersPage from './pages/CostCentersPage'
+import ProjectsPage from './pages/ProjectsPage'
 import {
   SalesPage, PurchasesPage, InventoryPage, HRPage,
   TrialBalancePage, ReportsPage, VATPage, AssetsPage, TreasuryPage
@@ -15,7 +18,10 @@ import {
 const PAGES = {
   dashboard:  { component: DashboardPage,    label: 'لوحة التحكم' },
   coa:        { component: COAPage,          label: 'دليل الحسابات' },
-  dimensions: { component: DimensionsPage,   label: 'الأبعاد المحاسبية' },
+  dimensions:   { component: DimensionsPage,   label: 'الأبعاد المحاسبية' },
+  branches:     { component: BranchesPage,     label: 'الفروع' },
+  costcenters:  { component: CostCentersPage,  label: 'مراكز التكلفة' },
+  projects:     { component: ProjectsPage,     label: 'المشاريع' },
   journal:    { component: JournalPage,      label: 'القيود اليومية' },
   trialbal:   { component: TrialBalancePage, label: 'ميزان المراجعة' },
   sales:      { component: SalesPage,        label: 'المبيعات' },

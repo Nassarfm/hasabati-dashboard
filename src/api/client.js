@@ -48,6 +48,20 @@ export const api = {
     unlockPeriod:    (id)                  => del(`/accounting/fiscal-locks/${id}`),
   },
 
+  settings: {
+    listRegions:       ()        => get('/settings/regions'),
+    listBranches:      ()        => get('/settings/branches'),
+    createBranch:      (b)       => post('/settings/branches', b),
+    updateBranch:      (id, b)   => put(`/settings/branches/${id}`, b),
+    deleteBranch:      (id)      => del(`/settings/branches/${id}`),
+    listCostCenters:   ()        => get('/settings/cost-centers'),
+    createCostCenter:  (b)       => post('/settings/cost-centers', b),
+    updateCostCenter:  (id, b)   => put(`/settings/cost-centers/${id}`, b),
+    listProjects:      ()        => get('/settings/projects'),
+    createProject:     (b)       => post('/settings/projects', b),
+    updateProject:     (id, b)   => put(`/settings/projects/${id}`, b),
+  },
+
   dimensions: {
     list:        ()                        => get('/dimensions'),
     get:         (id)                      => get(`/dimensions/${id}`),
