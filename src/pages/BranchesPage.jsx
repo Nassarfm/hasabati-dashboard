@@ -508,11 +508,7 @@ function CityModal({ regions, onClose, onSaved }) {
         </div>
       </div>
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-      <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">{saving ? '⏳...' : '✅ إضافة'}</button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }
 
