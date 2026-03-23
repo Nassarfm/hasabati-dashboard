@@ -49,17 +49,35 @@ export const api = {
   },
 
   settings: {
-    listRegions:       ()        => get('/settings/regions'),
-    listBranches:      ()        => get('/settings/branches'),
-    createBranch:      (b)       => post('/settings/branches', b),
-    updateBranch:      (id, b)   => put(`/settings/branches/${id}`, b),
-    deleteBranch:      (id)      => del(`/settings/branches/${id}`),
-    listCostCenters:   ()        => get('/settings/cost-centers'),
-    createCostCenter:  (b)       => post('/settings/cost-centers', b),
-    updateCostCenter:  (id, b)   => put(`/settings/cost-centers/${id}`, b),
-    listProjects:      ()        => get('/settings/projects'),
-    createProject:     (b)       => post('/settings/projects', b),
-    updateProject:     (id, b)   => put(`/settings/projects/${id}`, b),
+    // Regions
+    listRegions:       ()              => get('/settings/regions'),
+    createRegion:      (b)             => post('/settings/regions', b),
+    updateRegion:      (id, b)         => put(`/settings/regions/${id}`, b),
+    deleteRegion:      (id)            => del(`/settings/regions/${id}`),
+    // Cities
+    listCities:        (regionId)      => get('/settings/cities' + (regionId ? `?region_id=${regionId}` : '')),
+    createCity:        (regionId, b)   => post(`/settings/cities?region_id=${regionId}`, b),
+    updateCity:        (id, b)         => put(`/settings/cities/${id}`, b),
+    deleteCity:        (id)            => del(`/settings/cities/${id}`),
+    // Branch Types
+    listBranchTypes:   ()              => get('/settings/branch-types'),
+    createBranchType:  (b)             => post('/settings/branch-types', b),
+    updateBranchType:  (id, b)         => put(`/settings/branch-types/${id}`, b),
+    deleteBranchType:  (id)            => del(`/settings/branch-types/${id}`),
+    // Branches
+    listBranches:      ()              => get('/settings/branches'),
+    createBranch:      (b)             => post('/settings/branches', b),
+    updateBranch:      (id, b)         => put(`/settings/branches/${id}`, b),
+    deleteBranch:      (id)            => del(`/settings/branches/${id}`),
+    suggestBranchCode: (rc, cc)        => get(`/settings/branches/suggest-code?region_code=${rc}&city_code=${cc}`),
+    // Cost Centers
+    listCostCenters:   ()              => get('/settings/cost-centers'),
+    createCostCenter:  (b)             => post('/settings/cost-centers', b),
+    updateCostCenter:  (id, b)         => put(`/settings/cost-centers/${id}`, b),
+    // Projects
+    listProjects:      ()              => get('/settings/projects'),
+    createProject:     (b)             => post('/settings/projects', b),
+    updateProject:     (id, b)         => put(`/settings/projects/${id}`, b),
   },
 
   dimensions: {
