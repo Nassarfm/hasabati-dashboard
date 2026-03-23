@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { PageHeader, Modal, Field, toast, fmt } from '../components/UI'
+import { PageHeader, Field, toast, fmt } from '../components/UI'
+import SlideOver, { SlideOverFooter } from '../components/SlideOver'
 import api from '../api/client'
 
 const REVENUE_METHODS = ['POC','Milestone-Based','Time-Based','Point-in-Time','COMPLETED']
@@ -138,7 +139,11 @@ function ProjectModal({ project, onClose, onSaved }) {
   }
 
   return (
-    <Modal open onClose={onClose} title={isEdit ? `✏️ تعديل — ${project.name}` : '➕ مشروع جديد'} size="xl">
+    <SlideOver open onClose={onClose}
+      title={isEdit ? `تعديل — ${project.name}` : 'مشروع جديد'}
+      subtitle={isEdit ? `الرقم: ${project.code}` : 'أدخل بيانات المشروع'}
+      size="xl"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ التعديل' : 'إضافة المشروع'} />}>
       <div className="space-y-4">
         {/* معلومات أساسية */}
         <div className="border-b pb-3">
@@ -220,12 +225,6 @@ function ProjectModal({ project, onClose, onSaved }) {
       </div>
 
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-      <div className="flex justify-end gap-2 mt-6">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving ? '⏳...' : (isEdit ? '✅ حفظ' : '✅ إضافة')}
-        </button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }

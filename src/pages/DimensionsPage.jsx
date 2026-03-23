@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { PageHeader, Modal, Field, toast } from '../components/UI'
+import { PageHeader, Field, toast } from '../components/UI'
+import SlideOver, { SlideOverFooter } from '../components/SlideOver'
 import api from '../api/client'
 
 const CLASSIFICATION_MAP = {
@@ -274,7 +275,10 @@ function DimensionModal({ dimension, onClose, onSaved }) {
   }
 
   return (
-    <Modal open onClose={onClose} title={isEdit ? `✏️ تعديل البُعد — ${dimension.name_ar}` : '➕ بُعد جديد'} size="md">
+    <SlideOver open onClose={onClose}
+      title={isEdit ? `تعديل البُعد — ${dimension.name_ar}` : 'بُعد جديد'}
+      size="md"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ' : 'إضافة'} />}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Field label="كود البُعد" required>
@@ -313,13 +317,7 @@ function DimensionModal({ dimension, onClose, onSaved }) {
         </div>
         {error && <div className="text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
       </div>
-      <div className="flex justify-end gap-2 mt-6">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving ? '⏳...' : (isEdit ? '✅ حفظ' : '✅ إضافة')}
-        </button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }
 
@@ -364,9 +362,11 @@ function ValueModal({ dimension, value, onClose, onSaved }) {
   }
 
   return (
-    <Modal open onClose={onClose}
-      title={isEdit ? `✏️ تعديل — ${value.name_ar}` : `➕ قيمة جديدة — ${dimension.name_ar}`}
-      size="md">
+    <SlideOver open onClose={onClose}
+      title={isEdit ? `تعديل — ${value.name_ar}` : `قيمة جديدة`}
+      subtitle={`البُعد: ${dimension.name_ar}`}
+      size="sm"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ' : 'إضافة'} />}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Field label="الكود" required>
@@ -395,12 +395,6 @@ function ValueModal({ dimension, value, onClose, onSaved }) {
         </div>
         {error && <div className="text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
       </div>
-      <div className="flex justify-end gap-2 mt-6">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving ? '⏳...' : (isEdit ? '✅ حفظ' : '✅ إضافة')}
-        </button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }

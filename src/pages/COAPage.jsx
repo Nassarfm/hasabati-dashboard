@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { PageHeader, Modal, Field, toast, fmt } from '../components/UI'
+import { PageHeader, Field, toast, fmt } from '../components/UI'
+import SlideOver, { SlideOverFooter } from '../components/SlideOver'
 import api from '../api/client'
 
 const TYPE_MAP = {
@@ -496,7 +497,11 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={isEdit ? `✏️ تعديل حساب — ${account.code}` : '➕ إضافة حساب جديد'} size="lg">
+    <SlideOver open={open} onClose={onClose}
+      title={isEdit ? `تعديل حساب — ${account.code}` : 'إضافة حساب جديد'}
+      subtitle={isEdit ? account.name_ar : 'أدخل بيانات الحساب الجديد'}
+      size="lg"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ التعديل' : 'إضافة الحساب'} />}>
       <div className="grid grid-cols-2 gap-4">
         <Field label="كود الحساب" required>
           <input className="input font-mono" value={form.code} onChange={e => set('code', e.target.value)} placeholder="1101" />
@@ -591,12 +596,6 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
       </div>
 
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-      <div className="flex justify-end gap-2 mt-6">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving ? '⏳ جاري الحفظ...' : (isEdit ? '✅ حفظ التعديل' : '✅ إضافة')}
-        </button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }

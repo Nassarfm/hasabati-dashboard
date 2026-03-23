@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { PageHeader, Modal, Field, toast } from '../components/UI'
+import { PageHeader, Field, toast } from '../components/UI'
+import SlideOver, { SlideOverFooter } from '../components/SlideOver'
 import api from '../api/client'
 
 const TABS = [
@@ -202,8 +203,12 @@ function BranchModal({ branch, regions, branches, branchTypes, onClose, onSaved 
   }
 
   return (
-    <Modal open onClose={onClose} title={isEdit ? `✏️ تعديل — ${branch.name_ar}` : '➕ فرع جديد'} size="xl">
-      <div className="grid grid-cols-3 gap-4">
+    <SlideOver open onClose={onClose}
+      title={isEdit ? `تعديل فرع — ${branch.name_ar}` : 'إضافة فرع جديد'}
+      subtitle={isEdit ? `الكود: ${branch.code}` : 'أدخل بيانات الفرع الجديد'}
+      size="lg"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ التعديل' : 'إضافة الفرع'} />}>
+      <div className="grid grid-cols-2 gap-4">
         {/* المنطقة والمدينة أولاً لتوليد الكود */}
         <Field label="المنطقة">
           <select className="select" value={form.region_id}
@@ -270,13 +275,7 @@ function BranchModal({ branch, regions, branches, branchTypes, onClose, onSaved 
         )}
       </div>
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-      <div className="flex justify-end gap-2 mt-6">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving ? '⏳...' : (isEdit ? '✅ حفظ' : '✅ إضافة')}
-        </button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }
 
@@ -295,9 +294,18 @@ function DeactivateModal({ name, onClose, onConfirm }) {
   }
 
   return (
-    <Modal open onClose={onClose} title={`⏸️ إيقاف — ${name}`} size="sm">
-      <div className="space-y-3">
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+    <SlideOver open onClose={onClose} title={`إيقاف — ${name}`} subtitle="هذا الإجراء يمنع أي حركات مستقبلية" size="sm"
+      footer={
+        <div className="flex items-center justify-between">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إلغاء</button>
+          <button onClick={handleConfirm} disabled={saving}
+            className="px-5 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+            {saving ? '⏳ جارٍ...' : '⏸️ تأكيد الإيقاف'}
+          </button>
+        </div>
+      }>
+      <div className="space-y-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
           ⚠️ سيتم إيقاف هذا العنصر ومنع أي حركات مستقبلية عليه.
         </div>
         <Field label="سبب الإيقاف">
@@ -306,14 +314,7 @@ function DeactivateModal({ name, onClose, onConfirm }) {
             placeholder="اختياري — مثال: الفرع أُغلق بتاريخ..." />
         </Field>
       </div>
-      <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleConfirm} disabled={saving}
-          className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700">
-          {saving ? '⏳...' : '⏸️ إيقاف'}
-        </button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }
 
@@ -485,7 +486,8 @@ function CityModal({ regions, onClose, onSaved }) {
   }
 
   return (
-    <Modal open onClose={onClose} title="➕ مدينة جديدة" size="md">
+    <SlideOver open onClose={onClose} title="إضافة مدينة جديدة" size="sm"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel="إضافة المدينة" />}>
       <div className="space-y-3">
         <Field label="المنطقة" required>
           <select className="select" value={form.region_id} onChange={e => set('region_id', e.target.value)}>
@@ -597,7 +599,8 @@ function SimpleModal({ title, item, onClose, onSaved, onSubmit, withCode = false
   }
 
   return (
-    <Modal open onClose={onClose} title={title} size="sm">
+    <SlideOver open onClose={onClose} title={title} size="sm"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={item ? 'حفظ' : 'إضافة'} />}>
       <div className="space-y-3">
         {(withCode || item) && (
           <Field label="الكود" required={withCode && !item}>
@@ -618,12 +621,6 @@ function SimpleModal({ title, item, onClose, onSaved, onSubmit, withCode = false
         )}
       </div>
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-      <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving ? '⏳...' : (item ? '✅ حفظ' : '✅ إضافة')}
-        </button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }

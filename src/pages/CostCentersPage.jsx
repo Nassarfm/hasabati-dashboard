@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { PageHeader, Modal, Field, toast } from '../components/UI'
+import { PageHeader, Field, toast } from '../components/UI'
+import SlideOver, { SlideOverFooter } from '../components/SlideOver'
 import api from '../api/client'
 
 const TABS = [
@@ -302,7 +303,8 @@ function CCTypeModal({ item, onClose, onSaved }) {
   }
 
   return (
-    <Modal open onClose={onClose} title={isEdit ? `✏️ تعديل — ${item.name_en}` : '➕ نوع جديد'} size="sm">
+    <SlideOver open onClose={onClose} title={isEdit ? `تعديل — ${item.name_en}` : 'نوع جديد'} size="sm"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ' : 'إضافة'} />}>
       <div className="space-y-3">
         {!isEdit && (
           <Field label="الكود" required>
@@ -323,11 +325,7 @@ function CCTypeModal({ item, onClose, onSaved }) {
         )}
       </div>
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-      <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">{saving ? '⏳...' : (isEdit ? '✅ حفظ' : '✅ إضافة')}</button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }
 
@@ -344,7 +342,15 @@ function DeactivateModal({ name, onClose, onConfirm }) {
     finally { setSaving(false) }
   }
   return (
-    <Modal open onClose={onClose} title={`⏸️ إيقاف — ${name}`} size="sm">
+    <SlideOver open onClose={onClose} title={`إيقاف — ${name}`} subtitle="هذا الإجراء يمنع الحركات المستقبلية" size="sm"
+      footer={
+        <div className="flex items-center justify-between">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إلغاء</button>
+          <button onClick={handleConfirm} disabled={saving} className="px-5 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
+            {saving ? '⏳ جارٍ...' : '⏸️ تأكيد الإيقاف'}
+          </button>
+        </div>
+      }>
       <div className="space-y-3">
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
           ⚠️ سيتم إيقاف هذا العنصر ومنع أي حركات مستقبلية عليه.
@@ -362,7 +368,7 @@ function DeactivateModal({ name, onClose, onConfirm }) {
           {saving ? '⏳...' : '⏸️ إيقاف'}
         </button>
       </div>
-    </Modal>
+    </SlideOver>
   )
 }
 
@@ -417,9 +423,11 @@ function CCModal({ item, level, ccTypes, departments = [], onClose, onSaved }) {
   }
 
   return (
-    <Modal open onClose={onClose}
-      title={isEdit ? `✏️ تعديل — ${item.name_en}` : (level === 1 ? '➕ قسم جديد' : '➕ مركز تكلفة جديد')}
-      size="lg">
+    <SlideOver open onClose={onClose}
+      title={isEdit ? `تعديل — ${item.name_en}` : (level === 1 ? 'قسم جديد' : 'مركز تكلفة جديد')}
+      subtitle={isEdit ? `الكود: ${item.code}` : 'أدخل البيانات المطلوبة'}
+      size="lg"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ التعديل' : (level === 1 ? 'إضافة القسم' : 'إضافة مركز التكلفة')} />}>
       <div className="grid grid-cols-2 gap-4">
         {level === 2 && (
           <Field label="القسم الأب" required className="col-span-2">
@@ -464,12 +472,6 @@ function CCModal({ item, level, ccTypes, departments = [], onClose, onSaved }) {
         )}
       </div>
       {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-      <div className="flex justify-end gap-2 mt-6">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleSave} disabled={saving} className="btn-primary">
-          {saving ? '⏳...' : (isEdit ? '✅ حفظ' : '✅ إضافة')}
-        </button>
-      </div>
-    </Modal>
+    </SlideOver>
   )
 }
