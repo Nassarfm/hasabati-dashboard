@@ -682,10 +682,9 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
           <div><div className="text-slate-400 text-xs mb-0.5">رُحِّل بواسطة</div><div className="text-xs font-medium">{je.posted_by || '—'}</div></div>
           <div className="col-span-2"><div className="text-slate-400 text-xs mb-0.5">البيان</div><div className="font-medium">{je.description}</div></div>
         </div>
-        {/* أسطر القيد */}
+        {/* ── أسطر القيد ── */}
         <div className="overflow-hidden rounded-xl border border-slate-200">
-          {/* Header */}
-          <div className="grid grid-cols-12 bg-slate-800 text-white text-xs font-semibold">
+          <div className="grid grid-cols-12 text-white text-xs font-semibold" style={{background:'#1e3a5f'}}>
             <div className="col-span-1 px-3 py-2.5 text-center">#</div>
             <div className="col-span-2 px-3 py-2.5">كود الحساب</div>
             <div className="col-span-3 px-3 py-2.5">اسم الحساب</div>
@@ -694,68 +693,47 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
             <div className="col-span-2 px-3 py-2.5 text-center">دائن</div>
           </div>
 
-          {/* الأسطر */}
           {(je.lines || []).map((l, i) => (
-            <div key={i} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
-              {/* السطر الرئيسي */}
+            <div key={i} className="border-b border-slate-100 last:border-0 hover:bg-blue-50/30 transition-colors">
               <div className="grid grid-cols-12 items-center">
                 <div className="col-span-1 px-3 py-3 text-center text-xs text-slate-400 font-mono">{i + 1}</div>
                 <div className="col-span-2 px-3 py-3">
-                  <span className="font-mono text-sm font-bold text-primary-600">{l.account_code}</span>
+                  <span className="font-mono text-sm font-bold text-blue-700">{l.account_code}</span>
                 </div>
                 <div className="col-span-3 px-3 py-3">
-                  <span className="text-sm font-medium text-slate-700">{l.account_name || '—'}</span>
+                  <span className="text-sm font-medium text-slate-800">{l.account_name || '—'}</span>
                 </div>
                 <div className="col-span-2 px-3 py-3">
                   <span className="text-xs text-slate-500">{l.description}</span>
                 </div>
                 <div className="col-span-2 px-3 py-3 text-center">
                   {parseFloat(l.debit) > 0 && (
-                    <span className="font-mono font-bold text-blue-700 text-sm">{fmt(l.debit, 2)}</span>
+                    <span className="font-mono font-bold text-blue-700 text-sm bg-blue-50 px-2 py-0.5 rounded">{fmt(l.debit, 2)}</span>
                   )}
                 </div>
                 <div className="col-span-2 px-3 py-3 text-center">
                   {parseFloat(l.credit) > 0 && (
-                    <span className="font-mono font-bold text-emerald-700 text-sm">{fmt(l.credit, 2)}</span>
+                    <span className="font-mono font-bold text-emerald-700 text-sm bg-emerald-50 px-2 py-0.5 rounded">{fmt(l.credit, 2)}</span>
                   )}
                 </div>
               </div>
-
-              {/* صف الأبعاد */}
               {(l.branch_code || l.cost_center || l.project_code || l.expense_classification_code) && (
-                <div className="grid grid-cols-12 bg-amber-50/50 border-t border-amber-100">
+                <div className="grid grid-cols-12 bg-amber-50/60 border-t border-amber-100">
                   <div className="col-span-1" />
                   <div className="col-span-11 px-3 py-1.5 flex gap-2 flex-wrap">
-                    {l.branch_code && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        🏢 <span>{l.branch_name || l.branch_code}</span>
-                      </span>
-                    )}
-                    {l.cost_center && (
-                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        💰 <span>{l.cost_center_name || l.cost_center}</span>
-                      </span>
-                    )}
-                    {l.project_code && (
-                      <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        📁 <span>{l.project_name || l.project_code}</span>
-                      </span>
-                    )}
-                    {l.expense_classification_code && (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        🏷️ <span>{l.expense_classification_name || l.expense_classification_code}</span>
-                      </span>
-                    )}
+                    {l.branch_code && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🏢 {l.branch_name || l.branch_code}</span>}
+                    {l.cost_center && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">💰 {l.cost_center_name || l.cost_center}</span>}
+                    {l.project_code && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">📁 {l.project_name || l.project_code}</span>}
+                    {l.expense_classification_code && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">🏷️ {l.expense_classification_name || l.expense_classification_code}</span>}
                   </div>
                 </div>
               )}
             </div>
           ))}
 
-          {/* Footer الإجمالي */}
-          <div className="grid grid-cols-12 bg-slate-100 border-t-2 border-slate-300">
+          <div className="grid grid-cols-12 border-t-2 border-slate-300" style={{background:'#f0f4f8'}}>
             <div className="col-span-8 px-3 py-3 text-sm font-bold text-slate-700">
-              الإجمالي <span className="text-xs text-slate-400 font-normal mr-1">({(je.lines || []).length} سطر)</span>
+              الإجمالي <span className="text-xs text-slate-400 font-normal mr-1">({(je.lines||[]).length} سطر)</span>
             </div>
             <div className="col-span-2 px-3 py-3 text-center">
               <span className="font-mono font-bold text-blue-700">{fmt(je.total_debit, 2)}</span>
@@ -765,6 +743,146 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
             </div>
           </div>
         </div>
+
+        {/* ── ملخص التأثير ── */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
+            📊 ملخص التأثير المالي
+          </div>
+          <div className="grid grid-cols-3 divide-x divide-slate-100">
+            <div className="px-4 py-3 text-center">
+              <div className="text-xs text-slate-400 mb-1">إجمالي المدين</div>
+              <div className="font-mono font-bold text-blue-700 text-base">{fmt(je.total_debit, 2)}</div>
+            </div>
+            <div className="px-4 py-3 text-center">
+              <div className="text-xs text-slate-400 mb-1">إجمالي الدائن</div>
+              <div className="font-mono font-bold text-emerald-700 text-base">{fmt(je.total_credit, 2)}</div>
+            </div>
+            <div className="px-4 py-3 text-center">
+              <div className="text-xs text-slate-400 mb-1">الفرق</div>
+              <div className={`font-mono font-bold text-base ${Math.abs(je.total_debit - je.total_credit) < 0.01 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {fmt(Math.abs(je.total_debit - je.total_credit), 2)}
+                {Math.abs(je.total_debit - je.total_credit) < 0.01 && <span className="text-xs mr-1">✅</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── الأبعاد المطبقة ── */}
+        {(() => {
+          const allDims = (je.lines || []).filter(l => l.branch_code || l.cost_center || l.project_code || l.expense_classification_code)
+          if (!allDims.length) return null
+          const branches   = [...new Set(allDims.filter(l=>l.branch_code).map(l=>l.branch_name||l.branch_code))]
+          const ccs        = [...new Set(allDims.filter(l=>l.cost_center).map(l=>l.cost_center_name||l.cost_center))]
+          const projs      = [...new Set(allDims.filter(l=>l.project_code).map(l=>l.project_name||l.project_code))]
+          const exps       = [...new Set(allDims.filter(l=>l.expense_classification_code).map(l=>l.expense_classification_name||l.expense_classification_code))]
+          return (
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
+                🎯 الأبعاد المطبقة
+              </div>
+              <div className="p-4 grid grid-cols-2 gap-3">
+                {branches.length > 0 && (
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1.5">🏢 الفروع</div>
+                    <div className="flex gap-1 flex-wrap">
+                      {branches.map((b,i) => <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{b}</span>)}
+                    </div>
+                  </div>
+                )}
+                {ccs.length > 0 && (
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1.5">💰 مراكز التكلفة</div>
+                    <div className="flex gap-1 flex-wrap">
+                      {ccs.map((c,i) => <span key={i} className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{c}</span>)}
+                    </div>
+                  </div>
+                )}
+                {projs.length > 0 && (
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1.5">📁 المشاريع</div>
+                    <div className="flex gap-1 flex-wrap">
+                      {projs.map((p,i) => <span key={i} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{p}</span>)}
+                    </div>
+                  </div>
+                )}
+                {exps.length > 0 && (
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1.5">🏷️ تصنيف المصروف</div>
+                    <div className="flex gap-1 flex-wrap">
+                      {exps.map((e,i) => <span key={i} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{e}</span>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* ── معلومات التدقيق ── */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
+            🔍 معلومات التدقيق
+          </div>
+          <div className="divide-y divide-slate-50">
+            <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
+              <span className="text-slate-400">📝 أُنشئ بواسطة</span>
+              <span className="col-span-2 font-medium text-slate-700">{je.created_by || '—'}</span>
+            </div>
+            {je.submitted_by && (
+              <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
+                <span className="text-slate-400">📤 أُرسل بواسطة</span>
+                <span className="col-span-2 font-medium text-slate-700">
+                  {je.submitted_by}
+                  {je.submitted_at && <span className="text-slate-400 mr-2">{new Date(je.submitted_at).toLocaleString('ar-SA')}</span>}
+                </span>
+              </div>
+            )}
+            {je.approved_by && (
+              <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
+                <span className="text-slate-400">✅ اعتُمد بواسطة</span>
+                <span className="col-span-2 font-medium text-emerald-700">
+                  {je.approved_by}
+                  {je.approved_at && <span className="text-slate-400 mr-2">{new Date(je.approved_at).toLocaleString('ar-SA')}</span>}
+                </span>
+              </div>
+            )}
+            {je.posted_by && (
+              <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
+                <span className="text-slate-400">🚀 رُحِّل بواسطة</span>
+                <span className="col-span-2 font-medium text-blue-700">
+                  {je.posted_by}
+                  {je.posted_at && <span className="text-slate-400 mr-2">{new Date(je.posted_at).toLocaleString('ar-SA')}</span>}
+                </span>
+              </div>
+            )}
+            {je.rejected_by && (
+              <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
+                <span className="text-slate-400">❌ رُفض بواسطة</span>
+                <span className="col-span-2 font-medium text-red-600">
+                  {je.rejected_by}
+                  {je.rejection_note && <span className="block text-red-400 mt-0.5">السبب: {je.rejection_note}</span>}
+                </span>
+              </div>
+            )}
+            <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
+              <span className="text-slate-400">📅 تاريخ الإنشاء</span>
+              <span className="col-span-2 font-medium text-slate-700">
+                {je.created_at ? new Date(je.created_at).toLocaleString('ar-SA') : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── ملاحظات ── */}
+        {je.notes && (
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
+              💬 ملاحظات
+            </div>
+            <div className="px-4 py-3 text-sm text-slate-600">{je.notes}</div>
+          </div>
+        )}
       </div>
     </SlideOver>
   )
