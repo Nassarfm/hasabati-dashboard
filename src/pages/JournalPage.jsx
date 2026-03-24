@@ -17,6 +17,16 @@ export default function JournalPage() {
   const [expClass,    setExpClass]    = useState([])
   const [loading,     setLoading]     = useState(true)
   const [viewJE,      setViewJE]      = useState(null)
+
+  const openJE = async (je) => {
+    // جلب تفاصيل القيد الكاملة مع الأسطر
+    try {
+      const d = await api.accounting.getJE(je.id)
+      setViewJE(d?.data || je)
+    } catch {
+      setViewJE(je)
+    }
+  }
   const [filters,     setFilters]     = useState({ status: '', date_from: '', date_to: '', je_type: '' })
 
   const load = () => {
@@ -128,7 +138,7 @@ export default function JournalPage() {
       </div>
 
       <div className="card p-0 overflow-hidden">
-        <DataTable columns={columns} data={jes} loading={loading} onRowClick={setViewJE} />
+        <DataTable columns={columns} data={jes} loading={loading} onRowClick={openJE} />
       </div>
 
       {viewJE && (
