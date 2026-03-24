@@ -43,6 +43,23 @@ export const api = {
     submitJE:        (id)                   => post(`/accounting/je/${id}/submit`, {}),
     approveJE:       (id)                   => post(`/accounting/je/${id}/approve`, {}),
     rejectJE:        (id, note)             => post(`/accounting/je/${id}/reject`, { note }),
+    // المرفقات
+    listAttachments:  (jeId)               => get(`/accounting/je/${jeId}/attachments`),
+    deleteAttachment: (jeId, attId)        => del(`/accounting/je/${jeId}/attachments/${attId}`),
+    uploadAttachment: async (jeId, file, notes = '') => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const fd = new FormData()
+      fd.append('file', file)
+      if (notes) fd.append('notes', notes)
+      const res = await fetch(`${BASE_URL}/accounting/je/${jeId}/attachments`, {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: fd,
+      })
+      if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d?.detail || 'خطأ في الرفع') }
+      return res.json()
+    },
     reverseJE:       (id, b)               => post(`/accounting/je/${id}/reverse`, b),
     getTrialBalance: (p={})                => get('/accounting/trial-balance', p),
     getLedger:       (code, p={})          => get(`/accounting/ledger/${code}`, p),

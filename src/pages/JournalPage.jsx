@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { PageHeader, DataTable, Field, toast, fmt, StatusBadge } from '../components/UI'
 import SlideOver from '../components/SlideOver'
 import api from '../api/client'
+import { AttachmentPanel, NarrativePanel } from './JEPanels'
 
 // ══════════════════════════════════════════════
 // الصفحة الرئيسية
@@ -174,8 +175,11 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
     je_type: jeTypes[0]?.code || 'JV',
   })
   const [lines,  setLines]  = useState([emptyLine(), emptyLine()])
-  const [saving, setSaving] = useState(false)
-  const [error,  setError]  = useState('')
+  const [saving,      setSaving]      = useState(false)
+  const [error,       setError]       = useState('')
+  const [savedJeId,   setSavedJeId]   = useState(null)
+  const [showAttach,  setShowAttach]  = useState(false)
+  const [narrative,   setNarrative]   = useState('')
 
   useEffect(() => {
     if (jeTypes.length && !form.je_type) {
@@ -212,9 +216,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
       if (acct.dim_exp_class_required && !l.expense_classification_code)  dimErrors.push(`${l.account_code} — ${name}: تصنيف المصروف مطلوب`)
     }
     if (dimErrors.length > 0) {
-      setError('⚡ أبعاد ناقصة:
-' + dimErrors.join('
-'))
+      setError('⚡ أبعاد ناقصة: ' + dimErrors.join(' | '))
       return
     }
 
@@ -222,7 +224,8 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
     try {
       const jeRes = await api.accounting.createJE({
         ...form,
-        lines: validLines.map(l => ({
+        notes: narrative || null,
+      lines: validLines.map(l => ({
           account_code: l.account_code,
           description:  l.description || form.description,
           debit:        parseFloat(l.debit)  || 0,
@@ -238,6 +241,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
         }))
       })
       const jeId = jeRes?.data?.id || jeRes?.id
+      setSavedJeId(jeId)
       if (andPost && jeId) {
         await new Promise(r => setTimeout(r, 400))
         await api.accounting.postJE(jeId)
@@ -271,6 +275,14 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
             )}
           </div>
         </div>
+        {/* أزرار الأدوات */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowAttach(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            📎 <span>المرفقات</span>
+          </button>
+        </div>
+
         {/* مؤشر التوازن */}
         <div className={`flex items-center gap-3 px-5 py-2.5 rounded-xl text-sm font-medium border
           ${balanced ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
@@ -508,6 +520,16 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
           </button>
         </div>
 
+        {/* ── Contextual Narrative Panel ── */}
+        <div className="col-span-12">
+          <NarrativePanel
+            value={narrative}
+            onChange={setNarrative}
+            createdBy={null}
+            createdAt={new Date().toISOString()}
+          />
+        </div>
+
         {/* ── رسالة الخطأ ── */}
         {error && (
           <div className="col-span-12">
@@ -539,6 +561,12 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
           </div>
         </div>
       </div>
+      {/* Attachment Panel */}
+      <AttachmentPanel
+        jeId={savedJeId}
+        open={showAttach}
+        onClose={() => setShowAttach(false)}
+      />
     </div>
   )
 }
