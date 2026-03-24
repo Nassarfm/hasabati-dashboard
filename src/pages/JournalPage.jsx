@@ -200,6 +200,24 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
     const validLines = lines.filter(l => l.account_code && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
     if (validLines.length < 2) { setError('يجب أن يحتوي القيد على سطرين على الأقل'); return }
     if (!balanced) { setError('القيد غير متوازن'); return }
+    // ── التحقق من الأبعاد قبل الحفظ ──
+    const dimErrors = []
+    for (const l of validLines) {
+      const acct = accounts.find(a => a.code === l.account_code)
+      if (!acct?.dimension_required) continue
+      const name = acct.name_ar || l.account_code
+      if (acct.dim_branch_required    && !l.branch_code)                  dimErrors.push(`${l.account_code} — ${name}: الفرع مطلوب`)
+      if (acct.dim_cc_required        && !l.cost_center)                  dimErrors.push(`${l.account_code} — ${name}: مركز التكلفة مطلوب`)
+      if (acct.dim_project_required   && !l.project_code)                 dimErrors.push(`${l.account_code} — ${name}: المشروع مطلوب`)
+      if (acct.dim_exp_class_required && !l.expense_classification_code)  dimErrors.push(`${l.account_code} — ${name}: تصنيف المصروف مطلوب`)
+    }
+    if (dimErrors.length > 0) {
+      setError('⚡ أبعاد ناقصة:
+' + dimErrors.join('
+'))
+      return
+    }
+
     setSaving(true); setError('')
     try {
       const jeRes = await api.accounting.createJE({

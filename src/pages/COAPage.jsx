@@ -449,11 +449,15 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
     postable:           account?.postable           ?? true,
     opening_balance:    account?.opening_balance    || 0,
     is_active:          account?.is_active          ?? true,
-    function_type:      account?.function_type      || 'BS',
-    grp:                account?.grp                || '',
-    sub_group:          account?.sub_group          || '',
-    cash_flow_type:     account?.cash_flow_type     || 'none',
-    dimension_required: account?.dimension_required ?? false,
+    function_type:         account?.function_type         || 'BS',
+    grp:                   account?.grp                   || '',
+    sub_group:             account?.sub_group             || '',
+    cash_flow_type:        account?.cash_flow_type        || 'none',
+    dimension_required:    account?.dimension_required    ?? false,
+    dim_branch_required:   account?.dim_branch_required   ?? false,
+    dim_cc_required:       account?.dim_cc_required       ?? false,
+    dim_project_required:  account?.dim_project_required  ?? false,
+    dim_exp_class_required:account?.dim_exp_class_required ?? false,
   })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
@@ -585,13 +589,42 @@ function AccountModal({ open, onClose, accounts, onSaved, account }) {
             <input className="input" value={form.sub_group} onChange={e => set('sub_group', e.target.value)} placeholder="مثال: Cash and Cash Equivalents" />
           </Field>
         </div>
-        <div className="mt-3">
+        <div className="mt-3 space-y-2">
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.dimension_required}
               onChange={e => set('dimension_required', e.target.checked)}
               className="w-4 h-4 rounded text-primary-600" />
-            <span className="text-sm text-slate-700">يتطلب بُعد عند الترحيل (Dimension Required)</span>
+            <span className="text-sm font-medium text-slate-700">يتطلب أبعاد عند الترحيل</span>
           </label>
+          {form.dimension_required && (
+            <div className="mr-6 grid grid-cols-2 gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
+              <div className="text-xs font-semibold text-amber-700 col-span-2 mb-1">حدد الأبعاد الإجبارية:</div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.dim_branch_required}
+                  onChange={e => set('dim_branch_required', e.target.checked)}
+                  className="w-4 h-4 rounded" />
+                <span className="text-xs text-slate-700">🏢 الفرع</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.dim_cc_required}
+                  onChange={e => set('dim_cc_required', e.target.checked)}
+                  className="w-4 h-4 rounded" />
+                <span className="text-xs text-slate-700">💰 مركز التكلفة</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.dim_project_required}
+                  onChange={e => set('dim_project_required', e.target.checked)}
+                  className="w-4 h-4 rounded" />
+                <span className="text-xs text-slate-700">📁 المشروع</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.dim_exp_class_required}
+                  onChange={e => set('dim_exp_class_required', e.target.checked)}
+                  className="w-4 h-4 rounded" />
+                <span className="text-xs text-slate-700">🏷️ تصنيف المصروف</span>
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
