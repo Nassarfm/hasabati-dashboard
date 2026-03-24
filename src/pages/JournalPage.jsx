@@ -8,7 +8,8 @@ import { AttachmentPanel, NarrativePanel } from './JEPanels'
 // الصفحة الرئيسية
 // ══════════════════════════════════════════════
 export default function JournalPage() {
-  const [mode, setMode] = useState('list') // list | new
+  const [mode, setMode] = useState('list') // list | new | edit
+  const [editJE, setEditJE] = useState(null)
   const [jes,         setJes]         = useState([])
   const [accounts,    setAccounts]    = useState([])
   const [jeTypes,     setJeTypes]     = useState([])
@@ -79,6 +80,19 @@ export default function JournalPage() {
     { key: 'status', label: 'الحالة', render: je => <StatusBadge status={je.status} /> },
   ]
 
+  // ── Full Page: تعديل القيد ──
+  if (mode === 'edit' && editJE) {
+    return (
+      <NewJEPage
+        accounts={accounts} jeTypes={jeTypes} branches={branches}
+        costCenters={costCenters} projects={projects} expClass={expClass}
+        editJE={editJE}
+        onBack={() => { setMode('list'); setEditJE(null) }}
+        onSaved={() => { setMode('list'); setEditJE(null); load() }}
+      />
+    )
+  }
+
   // ── Full Page: إنشاء القيد ──
   if (mode === 'new') {
     return (
@@ -148,6 +162,7 @@ export default function JournalPage() {
           jeTypes={jeTypes}
           onClose={() => setViewJE(null)}
           onPosted={() => { load(); setViewJE(null) }}
+          onEdit={(je) => { setViewJE(null); setEditJE(je); setMode('edit') }}
         />
       )}
     </div>
@@ -157,7 +172,7 @@ export default function JournalPage() {
 // ══════════════════════════════════════════════
 // Full Page — إنشاء قيد جديد
 // ══════════════════════════════════════════════
-function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, onBack, onSaved }) {
+function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, onBack, onSaved, editJE = null }) {
   const emptyLine = () => ({
     id: Math.random(),
     account_code: '', account_name: '', account: null,
@@ -169,12 +184,26 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
   })
 
   const [form, setForm] = useState({
-    description: '',
-    entry_date: new Date().toISOString().split('T')[0],
-    reference: '',
-    je_type: jeTypes[0]?.code || 'JV',
+    description: editJE?.description || '',
+    entry_date:  editJE?.entry_date  || new Date().toISOString().split('T')[0],
+    reference:   editJE?.reference   || '',
+    je_type:     editJE?.je_type     || jeTypes[0]?.code || 'JV',
   })
-  const [lines,  setLines]  = useState([emptyLine(), emptyLine()])
+  const [lines, setLines] = useState(() => {
+    if (editJE?.lines?.length > 0) {
+      return editJE.lines.map(l => ({
+        id: Math.random(),
+        account_code: l.account_code || '', account_name: l.account_name || '', account: null,
+        description: l.description || '', debit: l.debit || '', credit: l.credit || '',
+        branch_code: l.branch_code || '', branch_name: l.branch_name || '',
+        cost_center: l.cost_center || '', cost_center_name: l.cost_center_name || '',
+        project_code: l.project_code || '', project_name: l.project_name || '',
+        expense_classification_code: l.expense_classification_code || '',
+        expense_classification_name: l.expense_classification_name || '',
+      }))
+    }
+    return [emptyLine(), emptyLine()]
+  })
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState('')
   const [savedJeId,   setSavedJeId]   = useState(null)
@@ -240,9 +269,12 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
           expense_classification_code: l.expense_classification_code || null,
           expense_classification_name: l.expense_classification_name || null,
         }))
-      })
+      }
+      const jeRes = editJE
+        ? await api.accounting.updateJE(editJE.id, payload)
+        : await api.accounting.createJE(payload)
       const jeId = jeRes?.data?.id || jeRes?.id
-      setSavedJeId(jeId)
+      setSavedJeId(jeId || editJE?.id)
       // رفع الملفات المؤقتة بعد الحفظ
       if (jeId && pendingFiles.length > 0) {
         for (const pf of pendingFiles) {
@@ -275,7 +307,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
             ←
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">قيد محاسبي جديد</h1>
+            <h1 className="text-xl font-bold text-slate-800">{editJE ? `✏️ تعديل القيد — ${editJE.serial}` : 'قيد محاسبي جديد'}</h1>
             {selectedType && (
               <p className="text-sm text-slate-400 mt-0.5">
                 {selectedType.code} — {selectedType.name_ar || selectedType.name_en}
@@ -635,11 +667,21 @@ function AccountSearch({ accounts, value, onChange }) {
 // ══════════════════════════════════════════════
 // SlideOver تفاصيل القيد
 // ══════════════════════════════════════════════
-function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
+function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
   const [loading,     setLoading]     = useState(false)
   const [rejectModal, setRejectModal] = useState(false)
   const [rejectNote,  setRejectNote]  = useState('')
+  const [activeTab,   setActiveTab]   = useState('lines') // lines | attachments
+  const [attachments, setAttachments] = useState([])
   const jeType = jeTypes.find(t => t.code === je.je_type)
+
+  useEffect(() => {
+    if (activeTab === 'attachments' && je.id) {
+      api.accounting.listAttachments(je.id)
+        .then(d => setAttachments(d?.data || []))
+        .catch(() => {})
+    }
+  }, [activeTab, je.id])
 
   const doAction = async (action, successMsg) => {
     setLoading(true)
@@ -673,6 +715,13 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
         <div className="flex items-center justify-between">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إغلاق</button>
           <div className="flex gap-2">
+            {/* Draft → تعديل */}
+            {je.status === 'draft' && (
+              <button onClick={() => { onClose(); onEdit?.(je) }}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50">
+                ✏️ تعديل
+              </button>
+            )}
             {/* Draft → إرسال للمراجعة */}
             {je.status === 'draft' && (
               <button onClick={() => doAction(() => api.accounting.submitJE(je.id), 'تم إرسال القيد للمراجعة')}
@@ -802,9 +851,35 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
               <span className="font-mono font-bold text-emerald-700">{fmt(je.total_credit, 2)}</span>
             </div>
           </div>
-        </div>
+        </div>}
 
-        {/* ── ملخص التأثير ── */}
+        {/* ── المرفقات ── */}
+        {activeTab === 'attachments' && (
+          <div className="space-y-3">
+            {attachments.length === 0 ? (
+              <div className="text-center py-10 text-slate-400">
+                <div className="text-3xl mb-2">📂</div>
+                <div className="text-sm">لا توجد مرفقات لهذا القيد</div>
+              </div>
+            ) : attachments.map(att => (
+              <div key={att.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl hover:bg-blue-50">
+                <span className="text-2xl">{att.file_type?.includes('pdf') ? '📕' : att.file_type?.includes('image') ? '🖼️' : '📄'}</span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-slate-700">{att.file_name}</div>
+                  <div className="text-xs text-slate-400">{att.uploaded_by} · {new Date(att.uploaded_at).toLocaleDateString('ar-SA')}</div>
+                  {att.notes && <div className="text-xs text-amber-600 mt-0.5">{att.notes}</div>}
+                </div>
+                <a href={att.storage_url} target="_blank" rel="noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-xs hover:bg-blue-200">
+                  👁️ عرض
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── ملخص + تدقيق ── */}
+        {activeTab === 'audit' && <div className="space-y-4">
         <div className="rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
             📊 ملخص التأثير المالي
@@ -938,11 +1013,12 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
         {je.notes && (
           <div className="rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
-              💬 ملاحظات
+              💬 Contextual Narrative
             </div>
-            <div className="px-4 py-3 text-sm text-slate-600">{je.notes}</div>
+            <div className="px-4 py-3 text-sm text-slate-600 leading-relaxed">{je.notes}</div>
           </div>
         )}
+        </div>}
       </div>
     </SlideOver>
   )

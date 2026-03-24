@@ -38,6 +38,7 @@ export const api = {
     seedCOA:         ()                    => post('/accounting/coa/seed', {}),
     getJEs:          (p={})                => get('/accounting/je', p),
     getJE:           (id)                   => get(`/accounting/je/${id}`),
+    updateJE:        (id, b)               => put(`/accounting/je/${id}`, b),
     createJE:        (b)                   => post('/accounting/je', b),
     postJE:          (id, b={})            => post(`/accounting/je/${id}/post`, b),
     submitJE:        (id)                   => post(`/accounting/je/${id}/submit`, {}),
