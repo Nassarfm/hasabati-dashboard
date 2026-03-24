@@ -682,45 +682,88 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted }) {
           <div><div className="text-slate-400 text-xs mb-0.5">رُحِّل بواسطة</div><div className="text-xs font-medium">{je.posted_by || '—'}</div></div>
           <div className="col-span-2"><div className="text-slate-400 text-xs mb-0.5">البيان</div><div className="font-medium">{je.description}</div></div>
         </div>
-        <div className="border border-slate-200 rounded-xl overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="th w-8">#</th>
-                <th className="th">الحساب</th>
-                <th className="th">البيان</th>
-                <th className="th w-24">مدين</th>
-                <th className="th w-24">دائن</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(je.lines || []).map((l, i) => (
-                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="td text-center text-xs text-slate-400">{i + 1}</td>
-                  <td className="td">
-                    <span className="font-mono text-primary-600 text-xs font-semibold">{l.account_code}</span>
-                    {l.account_name && <div className="text-xs text-slate-400">{l.account_name}</div>}
-                    <div className="flex gap-1 flex-wrap mt-1">
-                      {l.branch_code && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">🏢 {l.branch_name || l.branch_code}</span>}
-                      {l.cost_center && <span className="text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">💰 {l.cost_center_name || l.cost_center}</span>}
-                      {l.project_code && <span className="text-xs bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">📁 {l.project_name || l.project_code}</span>}
-                      {l.expense_classification_code && <span className="text-xs bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">🏷️ {l.expense_classification_name || l.expense_classification_code}</span>}
-                    </div>
-                  </td>
-                  <td className="td text-xs text-slate-600">{l.description}</td>
-                  <td className="td num num-debit font-semibold text-xs">{parseFloat(l.debit) > 0 ? fmt(l.debit, 2) : ''}</td>
-                  <td className="td num num-credit font-semibold text-xs">{parseFloat(l.credit) > 0 ? fmt(l.credit, 2) : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-slate-50 border-t border-slate-200">
-              <tr>
-                <td colSpan={3} className="px-4 py-2.5 text-sm font-semibold text-slate-600">الإجمالي</td>
-                <td className="px-4 py-2.5 num num-debit text-center font-bold">{fmt(je.total_debit, 2)}</td>
-                <td className="px-4 py-2.5 num num-credit text-center font-bold">{fmt(je.total_credit, 2)}</td>
-              </tr>
-            </tfoot>
-          </table>
+        {/* أسطر القيد */}
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+          {/* Header */}
+          <div className="grid grid-cols-12 bg-slate-800 text-white text-xs font-semibold">
+            <div className="col-span-1 px-3 py-2.5 text-center">#</div>
+            <div className="col-span-2 px-3 py-2.5">كود الحساب</div>
+            <div className="col-span-3 px-3 py-2.5">اسم الحساب</div>
+            <div className="col-span-2 px-3 py-2.5">البيان</div>
+            <div className="col-span-2 px-3 py-2.5 text-center">مدين</div>
+            <div className="col-span-2 px-3 py-2.5 text-center">دائن</div>
+          </div>
+
+          {/* الأسطر */}
+          {(je.lines || []).map((l, i) => (
+            <div key={i} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+              {/* السطر الرئيسي */}
+              <div className="grid grid-cols-12 items-center">
+                <div className="col-span-1 px-3 py-3 text-center text-xs text-slate-400 font-mono">{i + 1}</div>
+                <div className="col-span-2 px-3 py-3">
+                  <span className="font-mono text-sm font-bold text-primary-600">{l.account_code}</span>
+                </div>
+                <div className="col-span-3 px-3 py-3">
+                  <span className="text-sm font-medium text-slate-700">{l.account_name || '—'}</span>
+                </div>
+                <div className="col-span-2 px-3 py-3">
+                  <span className="text-xs text-slate-500">{l.description}</span>
+                </div>
+                <div className="col-span-2 px-3 py-3 text-center">
+                  {parseFloat(l.debit) > 0 && (
+                    <span className="font-mono font-bold text-blue-700 text-sm">{fmt(l.debit, 2)}</span>
+                  )}
+                </div>
+                <div className="col-span-2 px-3 py-3 text-center">
+                  {parseFloat(l.credit) > 0 && (
+                    <span className="font-mono font-bold text-emerald-700 text-sm">{fmt(l.credit, 2)}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* صف الأبعاد */}
+              {(l.branch_code || l.cost_center || l.project_code || l.expense_classification_code) && (
+                <div className="grid grid-cols-12 bg-amber-50/50 border-t border-amber-100">
+                  <div className="col-span-1" />
+                  <div className="col-span-11 px-3 py-1.5 flex gap-2 flex-wrap">
+                    {l.branch_code && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        🏢 <span>{l.branch_name || l.branch_code}</span>
+                      </span>
+                    )}
+                    {l.cost_center && (
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        💰 <span>{l.cost_center_name || l.cost_center}</span>
+                      </span>
+                    )}
+                    {l.project_code && (
+                      <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        📁 <span>{l.project_name || l.project_code}</span>
+                      </span>
+                    )}
+                    {l.expense_classification_code && (
+                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        🏷️ <span>{l.expense_classification_name || l.expense_classification_code}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Footer الإجمالي */}
+          <div className="grid grid-cols-12 bg-slate-100 border-t-2 border-slate-300">
+            <div className="col-span-8 px-3 py-3 text-sm font-bold text-slate-700">
+              الإجمالي <span className="text-xs text-slate-400 font-normal mr-1">({(je.lines || []).length} سطر)</span>
+            </div>
+            <div className="col-span-2 px-3 py-3 text-center">
+              <span className="font-mono font-bold text-blue-700">{fmt(je.total_debit, 2)}</span>
+            </div>
+            <div className="col-span-2 px-3 py-3 text-center">
+              <span className="font-mono font-bold text-emerald-700">{fmt(je.total_credit, 2)}</span>
+            </div>
+          </div>
         </div>
       </div>
     </SlideOver>
