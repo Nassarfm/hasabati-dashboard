@@ -178,7 +178,8 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState('')
   const [savedJeId,   setSavedJeId]   = useState(null)
-  const [showAttach,  setShowAttach]  = useState(false)
+  const [showAttach,   setShowAttach]  = useState(false)
+  const [pendingFiles, setPendingFiles] = useState([]) // ملفات مؤقتة قبل الحفظ
   const [narrative,   setNarrative]   = useState('')
 
   useEffect(() => {
@@ -242,6 +243,13 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
       })
       const jeId = jeRes?.data?.id || jeRes?.id
       setSavedJeId(jeId)
+      // رفع الملفات المؤقتة بعد الحفظ
+      if (jeId && pendingFiles.length > 0) {
+        for (const pf of pendingFiles) {
+          try { await api.accounting.uploadAttachment(jeId, pf.file, pf.notes) } catch {}
+        }
+        setPendingFiles([])
+      }
       if (andPost && jeId) {
         await new Promise(r => setTimeout(r, 400))
         await api.accounting.postJE(jeId)
@@ -280,6 +288,9 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
           <button onClick={() => setShowAttach(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
             📎 <span>المرفقات</span>
+            {pendingFiles.length > 0 && (
+              <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-xs flex items-center justify-center">{pendingFiles.length}</span>
+            )}
           </button>
         </div>
 
@@ -566,6 +577,9 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
         jeId={savedJeId}
         open={showAttach}
         onClose={() => setShowAttach(false)}
+        pendingFiles={pendingFiles}
+        onAddPending={(file, notes) => setPendingFiles(p => [...p, { file, notes }])}
+        onRemovePending={(idx) => setPendingFiles(p => p.filter((_,i) => i !== idx))}
       />
     </div>
   )

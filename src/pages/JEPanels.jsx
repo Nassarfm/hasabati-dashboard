@@ -13,7 +13,7 @@ import api from '../api/client'
 // ══════════════════════════════════════════════
 // 1. Overlay Attachment Panel
 // ══════════════════════════════════════════════
-export function AttachmentPanel({ jeId, open, onClose }) {
+export function AttachmentPanel({ jeId, open, onClose, pendingFiles = [], onAddPending, onRemovePending }) {
   const [attachments, setAttachments] = useState([])
   const [uploading,   setUploading]   = useState(false)
   const [dragging,    setDragging]    = useState(false)
@@ -32,19 +32,25 @@ export function AttachmentPanel({ jeId, open, onClose }) {
   useEffect(() => { if (open && jeId) load() }, [open, jeId])
 
   const handleFiles = async (files) => {
-    if (!jeId) { toast('احفظ القيد أولاً قبل رفع المرفقات', 'error'); return }
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024) { toast(`${file.name} — الحجم يتجاوز 10MB`, 'error'); continue }
-      setUploading(true)
-      try {
-        await api.accounting.uploadAttachment(jeId, file, notes)
-        toast(`✅ تم رفع ${file.name}`, 'success')
+      if (!jeId) {
+        // حفظ مؤقت قبل إنشاء القيد
+        onAddPending?.(file, notes)
+        toast(`📎 ${file.name} — سيُرفع عند الحفظ`, 'success')
         setNotes('')
-        await load()
-      } catch (e) {
-        toast(e.message, 'error')
-      } finally {
-        setUploading(false)
+      } else {
+        setUploading(true)
+        try {
+          await api.accounting.uploadAttachment(jeId, file, notes)
+          toast(`✅ تم رفع ${file.name}`, 'success')
+          setNotes('')
+          await load()
+        } catch (e) {
+          toast(e.message, 'error')
+        } finally {
+          setUploading(false)
+        }
       }
     }
   }
@@ -124,9 +130,24 @@ export function AttachmentPanel({ jeId, open, onClose }) {
           </div>
         </div>
 
+        {/* ملفات مؤقتة */}
+        {pendingFiles.length > 0 && (
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
+            <div className="text-xs font-semibold text-amber-700 mb-2">⏳ في انتظار الحفظ ({pendingFiles.length})</div>
+            <div className="space-y-1">
+              {pendingFiles.map((pf, idx) => (
+                <div key={idx} className="flex items-center gap-2 text-xs text-amber-700">
+                  <span>📄 {pf.file.name}</span>
+                  <button onClick={() => onRemovePending?.(idx)} className="text-red-400 hover:text-red-600 mr-auto">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* قائمة المرفقات */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {attachments.length === 0 ? (
+          {attachments.length === 0 && pendingFiles.length === 0 ? (
             <div className="text-center py-8 text-slate-400 text-sm">لا توجد مرفقات</div>
           ) : attachments.map(att => (
             <div key={att.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl hover:bg-blue-50 transition-colors group">
