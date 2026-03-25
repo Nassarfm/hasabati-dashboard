@@ -74,9 +74,12 @@ function AppContent() {
             <span>/</span>
             <span className="text-slate-800 font-medium">{currentLabel}</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
-            متصل بـ Railway
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
+              متصل بـ Railway
+            </div>
           </div>
         </header>
         <div className="p-6" key={page}>
