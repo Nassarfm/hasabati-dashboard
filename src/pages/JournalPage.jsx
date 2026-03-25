@@ -3,6 +3,7 @@ import { PageHeader, DataTable, Field, toast, fmt, StatusBadge } from '../compon
 import SlideOver from '../components/SlideOver'
 import api from '../api/client'
 import { AttachmentPanel, NarrativePanel } from './JEPanels'
+import { printJE } from './JEPrint'
 
 // ══════════════════════════════════════════════
 // الصفحة الرئيسية
@@ -40,7 +41,7 @@ export default function JournalPage() {
       setViewJE(je)
     }
   }
-  const [filters,     setFilters]     = useState({ status: '', date_from: '', date_to: '', je_type: '' })
+  const [filters,     setFilters]     = useState({ status: '', date_from: '', date_to: '', je_type: '', created_by: '' })
 
   const load = () => {
     setLoading(true)
@@ -50,6 +51,16 @@ export default function JournalPage() {
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }
+
+  const [creators,    setCreators]    = useState([])
+  const [currentUser, setCurrentUser] = useState(null)
+
+  useEffect(() => {
+    // جلب اسم المستخدم الحالي
+    api.accounting.getDisplayName?.()
+      .then(d => setCurrentUser(d?.data?.display_name || d?.data?.email))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     load()
@@ -143,34 +154,75 @@ export default function JournalPage() {
         }
       />
 
-      <div className="card flex gap-3 flex-wrap">
-        <select className="select w-36" value={filters.status}
-          onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
-          <option value="">كل الحالات</option>
-          <option value="draft">مسودة</option>
-          <option value="posted">مرحَّل</option>
-          <option value="reversed">معكوس</option>
-        </select>
-        <select className="select w-48" value={filters.je_type}
-          onChange={e => setFilters(p => ({ ...p, je_type: e.target.value }))}>
-          <option value="">كل الأنواع</option>
-          {jeTypes.map(t => (
-            <option key={t.id || t.code} value={t.code}>{t.code} — {t.name_ar || t.name_en}</option>
-          ))}
-        </select>
-        <input type="date" className="input w-40" value={filters.date_from}
-          onChange={e => setFilters(p => ({ ...p, date_from: e.target.value }))} />
-        <input type="date" className="input w-40" value={filters.date_to}
-          onChange={e => setFilters(p => ({ ...p, date_to: e.target.value }))} />
-        <button onClick={load} className="btn-primary">🔍 بحث</button>
-        <button onClick={() => {
-          setFilters({ status: '', date_from: '', date_to: '', je_type: '' })
-          setLoading(true)
-          api.accounting.getJEs({ limit: 100 })
-            .then(d => setJes(d?.data || d?.items || []))
-            .catch(e => toast(e.message, 'error'))
-            .finally(() => setLoading(false))
-        }} className="btn-ghost">مسح</button>
+      <div className="card space-y-3">
+        <div className="flex gap-3 flex-wrap items-center">
+          {/* الحالة */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">الحالة</label>
+            <select className="select w-36" value={filters.status}
+              onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
+              <option value="">الكل</option>
+              <option value="draft">🟡 مسودة</option>
+              <option value="pending_review">🟠 قيد المراجعة</option>
+              <option value="posted">🟢 مرحَّل</option>
+              <option value="rejected">🔴 مرفوض</option>
+              <option value="reversed">🟣 معكوس</option>
+            </select>
+          </div>
+          {/* نوع القيد */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">نوع القيد</label>
+            <select className="select w-44" value={filters.je_type}
+              onChange={e => setFilters(p => ({ ...p, je_type: e.target.value }))}>
+              <option value="">كل الأنواع</option>
+              {jeTypes.map(t => (
+                <option key={t.id || t.code} value={t.code}>{t.code} — {t.name_ar || t.name_en}</option>
+              ))}
+            </select>
+          </div>
+          {/* المنشئ */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">المنشئ</label>
+            <select className="select w-40" value={filters.created_by}
+              onChange={e => setFilters(p => ({ ...p, created_by: e.target.value }))}>
+              <option value="">كل المستخدمين</option>
+              {creators.map(c => (
+                <option key={c} value={c}>{c.split('@')[0]}</option>
+              ))}
+            </select>
+          </div>
+          {/* التاريخ من */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">من تاريخ</label>
+            <input type="date" className="input w-36" value={filters.date_from}
+              onChange={e => setFilters(p => ({ ...p, date_from: e.target.value }))} />
+          </div>
+          {/* التاريخ إلى */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">إلى تاريخ</label>
+            <input type="date" className="input w-36" value={filters.date_to}
+              onChange={e => setFilters(p => ({ ...p, date_to: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button onClick={load} className="btn-primary">🔍 بحث</button>
+            <button onClick={() => {
+              setFilters({ status: '', date_from: '', date_to: '', je_type: '', created_by: '' })
+              setLoading(true)
+              api.accounting.getJEs({ limit: 100 })
+                .then(d => { const items = d?.data || d?.items || []; setJes(items); setCreators([...new Set(items.map(j=>j.created_by).filter(Boolean))]) })
+                .catch(e => toast(e.message, 'error'))
+                .finally(() => setLoading(false))
+            }} className="btn-ghost">↺ مسح</button>
+          </div>
+        </div>
+        {/* إحصائيات سريعة */}
+        <div className="flex gap-4 text-xs text-slate-500 pt-1 border-t border-slate-100">
+          <span>📋 الكل: <strong className="text-slate-700">{jes.length}</strong></span>
+          <span>🟢 مرحَّل: <strong className="text-emerald-600">{jes.filter(j=>j.status==='posted').length}</strong></span>
+          <span>🟡 مسودة: <strong className="text-amber-600">{jes.filter(j=>j.status==='draft').length}</strong></span>
+          <span>🟠 مراجعة: <strong className="text-orange-600">{jes.filter(j=>j.status==='pending_review').length}</strong></span>
+          {filters.created_by && <span>👤 {filters.created_by.split('@')[0]}: <strong className="text-primary-600">{jes.filter(j=>j.created_by===filters.created_by).length}</strong></span>}
+        </div>
       </div>
 
       <div className="card p-0 overflow-hidden">
@@ -181,6 +233,7 @@ export default function JournalPage() {
         <JEDetailSlideOver
           je={viewJE}
           jeTypes={jeTypes}
+          currentUser={currentUser}
           onClose={() => setViewJE(null)}
           onPosted={() => { load(); setViewJE(null) }}
           onEdit={(je) => { setViewJE(null); setEditJE(je); setMode('edit') }}
@@ -688,7 +741,7 @@ function AccountSearch({ accounts, value, onChange }) {
 // ══════════════════════════════════════════════
 // SlideOver تفاصيل القيد
 // ══════════════════════════════════════════════
-function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
+function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser }) {
   const [loading,     setLoading]     = useState(false)
   const [rejectModal, setRejectModal] = useState(false)
   const [rejectNote,  setRejectNote]  = useState('')
@@ -736,6 +789,12 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
         <div className="flex items-center justify-between">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إغلاق</button>
           <div className="flex gap-2">
+            {je.status === 'posted' && (
+              <button onClick={() => printJE(je, jeType?.name_ar || je.je_type, currentUser)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-blue-50 flex items-center gap-1">
+                🖨️ طباعة
+              </button>
+            )}
             {(je.status === 'draft' || je.status === 'rejected') && (
               <button onClick={() => { onClose(); onEdit?.(je) }}
                 className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50">
