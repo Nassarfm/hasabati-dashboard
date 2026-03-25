@@ -4,6 +4,7 @@ import SlideOver from '../components/SlideOver'
 import api from '../api/client'
 import { AttachmentPanel, NarrativePanel } from './JEPanels'
 import { printJE } from './JEPrint'
+import { JEActivityTimeline, RecentActivityPanel } from './ActivityLog'
 
 // ══════════════════════════════════════════════
 // الصفحة الرئيسية
@@ -227,6 +228,19 @@ export default function JournalPage() {
 
       <div className="card p-0 overflow-hidden">
         <DataTable columns={columns} data={jes} loading={loading} onRowClick={openJE} />
+      </div>
+
+      {/* Recent Activity Panel */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            📜 <span>سجل الأحداث الأخيرة</span>
+          </div>
+        </div>
+        <RecentActivityPanel onNavigate={(serial) => {
+          const je = jes.find(j => j.serial === serial)
+          if (je) openJE(je)
+        }} />
       </div>
 
       {viewJE && (
@@ -874,6 +888,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
           {[
             { id: 'lines',       label: '📋 أسطر القيد' },
             { id: 'attachments', label: '📎 المرفقات' },
+            { id: 'activity',    label: '📜 الأحداث' },
             { id: 'audit',       label: '🔍 التدقيق' },
           ].map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
@@ -951,6 +966,11 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
               </div>
             ))}
           </div>
+        )}
+
+        {/* Tab: الأحداث */}
+        {activeTab === 'activity' && (
+          <JEActivityTimeline jeId={je.id} />
         )}
 
         {/* Tab: التدقيق */}
