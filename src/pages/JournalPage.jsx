@@ -305,6 +305,22 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
     }
   }, [jeTypes])
 
+  const checkPeriod = async (dateStr) => {
+    if (!dateStr) return
+    try {
+      const d = await api.fiscal.getCurrentPeriod(dateStr)
+      if (!d?.data) {
+        setPeriodStatus('not_found')
+      } else if (d.data.status === 'closed') {
+        setPeriodStatus('closed')
+      } else {
+        setPeriodStatus('open')
+      }
+    } catch {
+      setPeriodStatus(null)
+    }
+  }
+
   const setLine = (id, updates) =>
     setLines(ls => ls.map(l => l.id === id ? { ...l, ...updates } : l))
   const addLine = () => setLines(ls => [...ls, emptyLine()])
@@ -678,7 +694,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
               ← رجوع
             </button>
             <div className="flex gap-3">
-              <button onClick={() => handleSave(false)} disabled={saving || !balanced}
+              <button onClick={() => handleSave(false)} disabled={saving || !balanced || periodStatus === 'closed' || periodStatus === 'not_found'}
                 className="px-5 py-2.5 rounded-xl text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-colors">
                 💾 حفظ كمسودة
               </button>
