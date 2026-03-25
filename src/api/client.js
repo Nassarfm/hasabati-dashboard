@@ -44,6 +44,9 @@ export const api = {
     submitJE:        (id)                   => post(`/accounting/je/${id}/submit`, {}),
     approveJE:       (id)                   => post(`/accounting/je/${id}/approve`, {}),
     rejectJE:        (id, note)             => post(`/accounting/je/${id}/reject`, { note }),
+    // سجل الأحداث
+    getActivity:      (jeId)          => get(`/accounting/je/${jeId}/activity`),
+    getRecentActivity:()              => get('/accounting/je/activity/recent'),
     // المرفقات
     listAttachments:  (jeId)               => get(`/accounting/je/${jeId}/attachments`),
     deleteAttachment: (jeId, attId)        => del(`/accounting/je/${jeId}/attachments/${attId}`),
