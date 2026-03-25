@@ -273,10 +273,10 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
 
     setSaving(true); setError('')
     try {
-      const jeRes = await api.accounting.createJE({
+      const payload = {
         ...form,
         notes: narrative || null,
-      lines: validLines.map(l => ({
+        lines: validLines.map(l => ({
           account_code: l.account_code,
           description:  l.description || form.description,
           debit:        parseFloat(l.debit)  || 0,
@@ -692,7 +692,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
   const [loading,     setLoading]     = useState(false)
   const [rejectModal, setRejectModal] = useState(false)
   const [rejectNote,  setRejectNote]  = useState('')
-  const [activeTab,   setActiveTab]   = useState('lines') // lines | attachments
+  const [activeTab,   setActiveTab]   = useState('lines')
   const [attachments, setAttachments] = useState([])
   const jeType = jeTypes.find(t => t.code === je.je_type)
 
@@ -718,12 +718,12 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
   }
 
   const STATUS_LABELS = {
-    draft:          { label: 'مسودة',         color: 'bg-slate-100 text-slate-600' },
-    pending_review: { label: 'قيد المراجعة',  color: 'bg-amber-100 text-amber-700' },
-    approved:       { label: 'معتمد',          color: 'bg-blue-100 text-blue-700' },
-    posted:         { label: 'مرحَّل',         color: 'bg-emerald-100 text-emerald-700' },
-    rejected:       { label: 'مرفوض',         color: 'bg-red-100 text-red-700' },
-    reversed:       { label: 'معكوس',          color: 'bg-purple-100 text-purple-700' },
+    draft:          { label: 'مسودة',        color: 'bg-slate-100 text-slate-600' },
+    pending_review: { label: 'قيد المراجعة', color: 'bg-amber-100 text-amber-700' },
+    approved:       { label: 'معتمد',         color: 'bg-blue-100 text-blue-700' },
+    posted:         { label: 'مرحَّل',        color: 'bg-emerald-100 text-emerald-700' },
+    rejected:       { label: 'مرفوض',        color: 'bg-red-100 text-red-700' },
+    reversed:       { label: 'معكوس',         color: 'bg-purple-100 text-purple-700' },
   }
   const statusInfo = STATUS_LABELS[je.status] || { label: je.status, color: 'bg-slate-100 text-slate-600' }
 
@@ -736,14 +736,12 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
         <div className="flex items-center justify-between">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إغلاق</button>
           <div className="flex gap-2">
-            {/* Draft → تعديل */}
-            {je.status === 'draft' && (
+            {(je.status === 'draft' || je.status === 'rejected') && (
               <button onClick={() => { onClose(); onEdit?.(je) }}
                 className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50">
                 ✏️ تعديل
               </button>
             )}
-            {/* Draft → إرسال للمراجعة */}
             {je.status === 'draft' && (
               <button onClick={() => doAction(() => api.accounting.submitJE(je.id), 'تم إرسال القيد للمراجعة')}
                 disabled={loading}
@@ -751,7 +749,6 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
                 📤 إرسال للمراجعة
               </button>
             )}
-            {/* Draft → ترحيل مباشر */}
             {je.status === 'draft' && (
               <button onClick={() => doAction(() => api.accounting.postJE(je.id), 'تم ترحيل القيد ✅')}
                 disabled={loading}
@@ -759,25 +756,23 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
                 ✅ ترحيل مباشر
               </button>
             )}
-            {/* Pending Review → موافقة أو رفض */}
             {je.status === 'pending_review' && (
-              <>
-                <button onClick={() => setRejectModal(true)} disabled={loading}
-                  className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50">
-                  ❌ رفض
-                </button>
-                <button onClick={() => doAction(() => api.accounting.approveJE(je.id), 'تمت الموافقة والترحيل ✅')}
-                  disabled={loading}
-                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
-                  ✅ موافقة وترحيل
-                </button>
-              </>
+              <button onClick={() => setRejectModal(true)} disabled={loading}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50">
+                ❌ رفض
+              </button>
+            )}
+            {je.status === 'pending_review' && (
+              <button onClick={() => doAction(() => api.accounting.approveJE(je.id), 'تمت الموافقة والترحيل ✅')}
+                disabled={loading}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+                ✅ موافقة وترحيل
+              </button>
             )}
           </div>
         </div>
       }>
 
-      {/* مودال الرفض */}
       {rejectModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setRejectModal(false)} />
@@ -790,7 +785,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
               <button onClick={() => setRejectModal(false)} className="btn-ghost">إلغاء</button>
               <button onClick={() => {
                 setRejectModal(false)
-                doAction(() => api.accounting.rejectJE(je.id, rejectNote), 'تم رفض القيد وإعادته للمسودة')
+                doAction(() => api.accounting.rejectJE(je.id, rejectNote), 'تم رفض القيد')
               }} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold">
                 تأكيد الرفض
               </button>
@@ -798,7 +793,9 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
           </div>
         </div>
       )}
-      <div className="space-y-5">
+
+      <div className="space-y-4">
+        {/* بيانات القيد */}
         <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-4 text-sm">
           <div><div className="text-slate-400 text-xs mb-0.5">رقم القيد</div><div className="font-mono font-bold text-primary-600">{je.serial}</div></div>
           <div>
@@ -812,69 +809,69 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
           <div><div className="text-slate-400 text-xs mb-0.5">رُحِّل بواسطة</div><div className="text-xs font-medium">{je.posted_by || '—'}</div></div>
           <div className="col-span-2"><div className="text-slate-400 text-xs mb-0.5">البيان</div><div className="font-medium">{je.description}</div></div>
         </div>
-        {/* ── أسطر القيد ── */}
-        <div className="overflow-hidden rounded-xl border border-slate-200">
-          <div className="grid grid-cols-12 text-white text-xs font-semibold" style={{background:'#1e3a5f'}}>
-            <div className="col-span-1 px-3 py-2.5 text-center">#</div>
-            <div className="col-span-2 px-3 py-2.5">كود الحساب</div>
-            <div className="col-span-3 px-3 py-2.5">اسم الحساب</div>
-            <div className="col-span-2 px-3 py-2.5">البيان</div>
-            <div className="col-span-2 px-3 py-2.5 text-center">مدين</div>
-            <div className="col-span-2 px-3 py-2.5 text-center">دائن</div>
-          </div>
 
-          {(je.lines || []).map((l, i) => (
-            <div key={i} className="border-b border-slate-100 last:border-0 hover:bg-blue-50/30 transition-colors">
-              <div className="grid grid-cols-12 items-center">
-                <div className="col-span-1 px-3 py-3 text-center text-xs text-slate-400 font-mono">{i + 1}</div>
-                <div className="col-span-2 px-3 py-3">
-                  <span className="font-mono text-sm font-bold text-blue-700">{l.account_code}</span>
-                </div>
-                <div className="col-span-3 px-3 py-3">
-                  <span className="text-sm font-medium text-slate-800">{l.account_name || '—'}</span>
-                </div>
-                <div className="col-span-2 px-3 py-3">
-                  <span className="text-xs text-slate-500">{l.description}</span>
-                </div>
-                <div className="col-span-2 px-3 py-3 text-center">
-                  {parseFloat(l.debit) > 0 && (
-                    <span className="font-mono font-bold text-blue-700 text-sm bg-blue-50 px-2 py-0.5 rounded">{fmt(l.debit, 2)}</span>
-                  )}
-                </div>
-                <div className="col-span-2 px-3 py-3 text-center">
-                  {parseFloat(l.credit) > 0 && (
-                    <span className="font-mono font-bold text-emerald-700 text-sm bg-emerald-50 px-2 py-0.5 rounded">{fmt(l.credit, 2)}</span>
-                  )}
-                </div>
-              </div>
-              {(l.branch_code || l.cost_center || l.project_code || l.expense_classification_code) && (
-                <div className="grid grid-cols-12 bg-amber-50/60 border-t border-amber-100">
-                  <div className="col-span-1" />
-                  <div className="col-span-11 px-3 py-1.5 flex gap-2 flex-wrap">
-                    {l.branch_code && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🏢 {l.branch_name || l.branch_code}</span>}
-                    {l.cost_center && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">💰 {l.cost_center_name || l.cost_center}</span>}
-                    {l.project_code && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">📁 {l.project_name || l.project_code}</span>}
-                    {l.expense_classification_code && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">🏷️ {l.expense_classification_name || l.expense_classification_code}</span>}
+        {/* Tabs */}
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+          {[
+            { id: 'lines',       label: '📋 أسطر القيد' },
+            { id: 'attachments', label: '📎 المرفقات' },
+            { id: 'audit',       label: '🔍 التدقيق' },
+          ].map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)}
+              className={"flex-1 py-1.5 rounded-lg text-xs font-medium transition-all " +
+                (activeTab === t.id ? "bg-white text-primary-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab: أسطر القيد */}
+        {activeTab === 'lines' && (
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <div className="grid grid-cols-12 text-white text-xs font-semibold" style={{background:'#1e3a5f'}}>
+              <div className="col-span-1 px-3 py-2.5 text-center">#</div>
+              <div className="col-span-2 px-3 py-2.5">كود الحساب</div>
+              <div className="col-span-3 px-3 py-2.5">اسم الحساب</div>
+              <div className="col-span-2 px-3 py-2.5">البيان</div>
+              <div className="col-span-2 px-3 py-2.5 text-center">مدين</div>
+              <div className="col-span-2 px-3 py-2.5 text-center">دائن</div>
+            </div>
+            {(je.lines || []).map((l, i) => (
+              <div key={i} className="border-b border-slate-100 last:border-0 hover:bg-blue-50/30 transition-colors">
+                <div className="grid grid-cols-12 items-center">
+                  <div className="col-span-1 px-3 py-3 text-center text-xs text-slate-400 font-mono">{i + 1}</div>
+                  <div className="col-span-2 px-3 py-3"><span className="font-mono text-sm font-bold text-blue-700">{l.account_code}</span></div>
+                  <div className="col-span-3 px-3 py-3"><span className="text-sm font-medium text-slate-800">{l.account_name || '—'}</span></div>
+                  <div className="col-span-2 px-3 py-3"><span className="text-xs text-slate-500">{l.description}</span></div>
+                  <div className="col-span-2 px-3 py-3 text-center">
+                    {parseFloat(l.debit) > 0 && <span className="font-mono font-bold text-blue-700 text-sm bg-blue-50 px-2 py-0.5 rounded">{fmt(l.debit, 2)}</span>}
+                  </div>
+                  <div className="col-span-2 px-3 py-3 text-center">
+                    {parseFloat(l.credit) > 0 && <span className="font-mono font-bold text-emerald-700 text-sm bg-emerald-50 px-2 py-0.5 rounded">{fmt(l.credit, 2)}</span>}
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
-
-          <div className="grid grid-cols-12 border-t-2 border-slate-300" style={{background:'#f0f4f8'}}>
-            <div className="col-span-8 px-3 py-3 text-sm font-bold text-slate-700">
-              الإجمالي <span className="text-xs text-slate-400 font-normal mr-1">({(je.lines||[]).length} سطر)</span>
-            </div>
-            <div className="col-span-2 px-3 py-3 text-center">
-              <span className="font-mono font-bold text-blue-700">{fmt(je.total_debit, 2)}</span>
-            </div>
-            <div className="col-span-2 px-3 py-3 text-center">
-              <span className="font-mono font-bold text-emerald-700">{fmt(je.total_credit, 2)}</span>
+                {(l.branch_code || l.cost_center || l.project_code || l.expense_classification_code) && (
+                  <div className="grid grid-cols-12 bg-amber-50/60 border-t border-amber-100">
+                    <div className="col-span-1" />
+                    <div className="col-span-11 px-3 py-1.5 flex gap-2 flex-wrap">
+                      {l.branch_code && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🏢 {l.branch_name || l.branch_code}</span>}
+                      {l.cost_center && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">💰 {l.cost_center_name || l.cost_center}</span>}
+                      {l.project_code && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">📁 {l.project_name || l.project_code}</span>}
+                      {l.expense_classification_code && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">🏷️ {l.expense_classification_name || l.expense_classification_code}</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="grid grid-cols-12 border-t-2 border-slate-300" style={{background:'#f0f4f8'}}>
+              <div className="col-span-8 px-3 py-3 text-sm font-bold text-slate-700">الإجمالي <span className="text-xs text-slate-400 font-normal mr-1">({(je.lines||[]).length} سطر)</span></div>
+              <div className="col-span-2 px-3 py-3 text-center"><span className="font-mono font-bold text-blue-700">{fmt(je.total_debit, 2)}</span></div>
+              <div className="col-span-2 px-3 py-3 text-center"><span className="font-mono font-bold text-emerald-700">{fmt(je.total_credit, 2)}</span></div>
             </div>
           </div>
-        </div>}
+        )}
 
-        {/* ── المرفقات ── */}
+        {/* Tab: المرفقات */}
         {activeTab === 'attachments' && (
           <div className="space-y-3">
             {attachments.length === 0 ? (
@@ -891,155 +888,54 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit }) {
                   {att.notes && <div className="text-xs text-amber-600 mt-0.5">{att.notes}</div>}
                 </div>
                 <a href={att.storage_url} target="_blank" rel="noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-xs hover:bg-blue-200">
-                  👁️ عرض
-                </a>
+                  className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-xs hover:bg-blue-200">👁️ عرض</a>
               </div>
             ))}
           </div>
         )}
 
-        {/* ── ملخص + تدقيق ── */}
-        {activeTab === 'audit' && <div className="space-y-4">
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
-            📊 ملخص التأثير المالي
-          </div>
-          <div className="grid grid-cols-3 divide-x divide-slate-100">
-            <div className="px-4 py-3 text-center">
-              <div className="text-xs text-slate-400 mb-1">إجمالي المدين</div>
-              <div className="font-mono font-bold text-blue-700 text-base">{fmt(je.total_debit, 2)}</div>
-            </div>
-            <div className="px-4 py-3 text-center">
-              <div className="text-xs text-slate-400 mb-1">إجمالي الدائن</div>
-              <div className="font-mono font-bold text-emerald-700 text-base">{fmt(je.total_credit, 2)}</div>
-            </div>
-            <div className="px-4 py-3 text-center">
-              <div className="text-xs text-slate-400 mb-1">الفرق</div>
-              <div className={`font-mono font-bold text-base ${Math.abs(je.total_debit - je.total_credit) < 0.01 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {fmt(Math.abs(je.total_debit - je.total_credit), 2)}
-                {Math.abs(je.total_debit - je.total_credit) < 0.01 && <span className="text-xs mr-1">✅</span>}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── الأبعاد المطبقة ── */}
-        {(() => {
-          const allDims = (je.lines || []).filter(l => l.branch_code || l.cost_center || l.project_code || l.expense_classification_code)
-          if (!allDims.length) return null
-          const branches   = [...new Set(allDims.filter(l=>l.branch_code).map(l=>l.branch_name||l.branch_code))]
-          const ccs        = [...new Set(allDims.filter(l=>l.cost_center).map(l=>l.cost_center_name||l.cost_center))]
-          const projs      = [...new Set(allDims.filter(l=>l.project_code).map(l=>l.project_name||l.project_code))]
-          const exps       = [...new Set(allDims.filter(l=>l.expense_classification_code).map(l=>l.expense_classification_name||l.expense_classification_code))]
-          return (
+        {/* Tab: التدقيق */}
+        {activeTab === 'audit' && (
+          <div className="space-y-4">
             <div className="rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
-                🎯 الأبعاد المطبقة
-              </div>
-              <div className="p-4 grid grid-cols-2 gap-3">
-                {branches.length > 0 && (
-                  <div>
-                    <div className="text-xs text-slate-400 mb-1.5">🏢 الفروع</div>
-                    <div className="flex gap-1 flex-wrap">
-                      {branches.map((b,i) => <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{b}</span>)}
-                    </div>
+              <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>📊 ملخص التأثير المالي</div>
+              <div className="grid grid-cols-3 divide-x divide-slate-100">
+                <div className="px-4 py-3 text-center">
+                  <div className="text-xs text-slate-400 mb-1">إجمالي المدين</div>
+                  <div className="font-mono font-bold text-blue-700">{fmt(je.total_debit, 2)}</div>
+                </div>
+                <div className="px-4 py-3 text-center">
+                  <div className="text-xs text-slate-400 mb-1">إجمالي الدائن</div>
+                  <div className="font-mono font-bold text-emerald-700">{fmt(je.total_credit, 2)}</div>
+                </div>
+                <div className="px-4 py-3 text-center">
+                  <div className="text-xs text-slate-400 mb-1">الفرق</div>
+                  <div className="font-mono font-bold text-emerald-600">
+                    {fmt(Math.abs(je.total_debit - je.total_credit), 2)} {Math.abs(je.total_debit - je.total_credit) < 0.01 && '✅'}
                   </div>
-                )}
-                {ccs.length > 0 && (
-                  <div>
-                    <div className="text-xs text-slate-400 mb-1.5">💰 مراكز التكلفة</div>
-                    <div className="flex gap-1 flex-wrap">
-                      {ccs.map((c,i) => <span key={i} className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{c}</span>)}
-                    </div>
-                  </div>
-                )}
-                {projs.length > 0 && (
-                  <div>
-                    <div className="text-xs text-slate-400 mb-1.5">📁 المشاريع</div>
-                    <div className="flex gap-1 flex-wrap">
-                      {projs.map((p,i) => <span key={i} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{p}</span>)}
-                    </div>
-                  </div>
-                )}
-                {exps.length > 0 && (
-                  <div>
-                    <div className="text-xs text-slate-400 mb-1.5">🏷️ تصنيف المصروف</div>
-                    <div className="flex gap-1 flex-wrap">
-                      {exps.map((e,i) => <span key={i} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{e}</span>)}
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             </div>
-          )
-        })()}
 
-        {/* ── معلومات التدقيق ── */}
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
-            🔍 معلومات التدقيق
-          </div>
-          <div className="divide-y divide-slate-50">
-            <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
-              <span className="text-slate-400">📝 أُنشئ بواسطة</span>
-              <span className="col-span-2 font-medium text-slate-700">{je.created_by || '—'}</span>
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>🔍 معلومات التدقيق</div>
+              <div className="divide-y divide-slate-50">
+                <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">📝 أُنشئ بواسطة</span><span className="col-span-2 font-medium">{je.created_by || '—'}</span></div>
+                {je.submitted_by && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">📤 أُرسل بواسطة</span><span className="col-span-2 font-medium">{je.submitted_by}</span></div>}
+                {je.approved_by && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">✅ اعتُمد بواسطة</span><span className="col-span-2 font-medium text-emerald-700">{je.approved_by}</span></div>}
+                {je.posted_by && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">🚀 رُحِّل بواسطة</span><span className="col-span-2 font-medium text-blue-700">{je.posted_by}</span></div>}
+                {je.rejected_by && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">❌ رُفض بواسطة</span><span className="col-span-2 font-medium text-red-600">{je.rejected_by}{je.rejection_note && <span className="block text-red-400">السبب: {je.rejection_note}</span>}</span></div>}
+              </div>
             </div>
-            {je.submitted_by && (
-              <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
-                <span className="text-slate-400">📤 أُرسل بواسطة</span>
-                <span className="col-span-2 font-medium text-slate-700">
-                  {je.submitted_by}
-                  {je.submitted_at && <span className="text-slate-400 mr-2">{new Date(je.submitted_at).toLocaleString('ar-SA')}</span>}
-                </span>
-              </div>
-            )}
-            {je.approved_by && (
-              <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
-                <span className="text-slate-400">✅ اعتُمد بواسطة</span>
-                <span className="col-span-2 font-medium text-emerald-700">
-                  {je.approved_by}
-                  {je.approved_at && <span className="text-slate-400 mr-2">{new Date(je.approved_at).toLocaleString('ar-SA')}</span>}
-                </span>
-              </div>
-            )}
-            {je.posted_by && (
-              <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
-                <span className="text-slate-400">🚀 رُحِّل بواسطة</span>
-                <span className="col-span-2 font-medium text-blue-700">
-                  {je.posted_by}
-                  {je.posted_at && <span className="text-slate-400 mr-2">{new Date(je.posted_at).toLocaleString('ar-SA')}</span>}
-                </span>
-              </div>
-            )}
-            {je.rejected_by && (
-              <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
-                <span className="text-slate-400">❌ رُفض بواسطة</span>
-                <span className="col-span-2 font-medium text-red-600">
-                  {je.rejected_by}
-                  {je.rejection_note && <span className="block text-red-400 mt-0.5">السبب: {je.rejection_note}</span>}
-                </span>
-              </div>
-            )}
-            <div className="grid grid-cols-3 px-4 py-2.5 text-xs">
-              <span className="text-slate-400">📅 تاريخ الإنشاء</span>
-              <span className="col-span-2 font-medium text-slate-700">
-                {je.created_at ? new Date(je.created_at).toLocaleString('ar-SA') : '—'}
-              </span>
-            </div>
-          </div>
-        </div>
 
-        {/* ── ملاحظات ── */}
-        {je.notes && (
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>
-              💬 Contextual Narrative
-            </div>
-            <div className="px-4 py-3 text-sm text-slate-600 leading-relaxed">{je.notes}</div>
+            {je.notes && (
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>📝 Contextual Narrative</div>
+                <div className="px-4 py-3 text-sm text-slate-600 leading-relaxed">{je.notes}</div>
+              </div>
+            )}
           </div>
         )}
-        </div>}
       </div>
     </SlideOver>
   )
