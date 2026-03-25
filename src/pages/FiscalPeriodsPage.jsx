@@ -1,0 +1,364 @@
+import { useEffect, useState } from 'react'
+import { PageHeader, Field, toast } from '../components/UI'
+import SlideOver, { SlideOverFooter } from '../components/SlideOver'
+import api from '../api/client'
+
+const STATUS_CONFIG = {
+  open:   { label: 'مفتوحة',  color: 'bg-emerald-100 text-emerald-700', icon: '🟢' },
+  closed: { label: 'مغلقة',   color: 'bg-red-100 text-red-700',         icon: '🔴' },
+}
+
+const MONTHS_AR = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو',
+                    'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+
+export default function FiscalPeriodsPage() {
+  const [years,      setYears]      = useState([])
+  const [selected,   setSelected]   = useState(null)
+  const [periods,    setPeriods]     = useState([])
+  const [loading,    setLoading]     = useState(true)
+  const [showNew,    setShowNew]     = useState(false)
+  const [auditPeriod,setAuditPeriod] = useState(null)
+  const [auditLog,   setAuditLog]    = useState([])
+  const [reopenItem, setReopenItem]  = useState(null)
+  const [reopenNote, setReopenNote]  = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+
+  const loadYears = async () => {
+    setLoading(true)
+    try {
+      const d = await api.fiscal.listYears()
+      setYears(d?.data || [])
+      if (!selected && d?.data?.length > 0) {
+        setSelected(d.data[0])
+      }
+    } catch (e) { toast(e.message, 'error') }
+    finally { setLoading(false) }
+  }
+
+  const loadPeriods = async (fy) => {
+    if (!fy) return
+    try {
+      const d = await api.fiscal.listPeriods(fy.id)
+      setPeriods(d?.data || [])
+    } catch (e) { toast(e.message, 'error') }
+  }
+
+  useEffect(() => { loadYears() }, [])
+  useEffect(() => { if (selected) loadPeriods(selected) }, [selected])
+
+  const handleClose = async (period) => {
+    if (!confirm(`هل تريد إغلاق الفترة "${period.period_name}"؟\nلن يمكن الترحيل عليها بعد الإغلاق.`)) return
+    setActionLoading(true)
+    try {
+      await api.fiscal.closePeriod(period.id, {})
+      toast(`تم إغلاق ${period.period_name}`, 'success')
+      loadPeriods(selected)
+    } catch (e) { toast(e.message, 'error') }
+    finally { setActionLoading(false) }
+  }
+
+  const handleReopen = async () => {
+    if (!reopenNote.trim()) { toast('يجب إدخال سبب إعادة الفتح', 'error'); return }
+    setActionLoading(true)
+    try {
+      await api.fiscal.reopenPeriod(reopenItem.id, { reason: reopenNote })
+      toast(`تم إعادة فتح ${reopenItem.period_name}`, 'success')
+      setReopenItem(null); setReopenNote('')
+      loadPeriods(selected)
+    } catch (e) { toast(e.message, 'error') }
+    finally { setActionLoading(false) }
+  }
+
+  const handleViewAudit = async (period) => {
+    setAuditPeriod(period)
+    try {
+      const d = await api.fiscal.getPeriodAudit(period.id)
+      setAuditLog(d?.data || [])
+    } catch {}
+  }
+
+  // إحصائيات السنة المختارة
+  const stats = {
+    total:  periods.length,
+    open:   periods.filter(p => p.status === 'open').length,
+    closed: periods.filter(p => p.status === 'closed').length,
+    adj:    periods.filter(p => p.is_adjustment_period).length,
+  }
+
+  return (
+    <div className="page-enter space-y-5">
+      <PageHeader
+        title="الفترات المالية"
+        subtitle="إدارة السنوات والفترات المالية والتحكم بالإغلاق"
+        actions={
+          <button onClick={() => setShowNew(true)} className="btn-primary">
+            + سنة مالية جديدة
+          </button>
+        }
+      />
+
+      <div className="grid grid-cols-12 gap-5">
+        {/* ── قائمة السنوات ── */}
+        <div className="col-span-3">
+          <div className="card p-0 overflow-hidden">
+            <div className="px-4 py-3 border-b text-xs font-bold text-slate-500 uppercase tracking-wide"
+              style={{background:'#f8fafc'}}>
+              السنوات المالية
+            </div>
+            {loading ? (
+              <div className="text-center py-6 text-slate-400 text-sm">جارٍ التحميل...</div>
+            ) : years.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                <div className="text-3xl mb-2">📅</div>
+                لا توجد سنوات مالية
+              </div>
+            ) : years.map(fy => (
+              <div key={fy.id}
+                onClick={() => setSelected(fy)}
+                className={`px-4 py-3 cursor-pointer border-b border-slate-50 hover:bg-blue-50 transition-colors
+                  ${selected?.id === fy.id ? 'bg-primary-50 border-r-4 border-r-primary-500' : ''}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">{fy.year_name}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      {fy.period_count} فترة · {fy.open_count} مفتوحة
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_CONFIG[fy.status]?.color || 'bg-slate-100 text-slate-600'}`}>
+                      {STATUS_CONFIG[fy.status]?.label || fy.status}
+                    </span>
+                    {fy.is_current && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">الحالية</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── الفترات ── */}
+        <div className="col-span-9 space-y-4">
+          {selected && (
+            <>
+              {/* إحصائيات */}
+              <div className="grid grid-cols-4 gap-3">
+                {[
+                  { label: 'إجمالي الفترات', value: stats.total, color: 'text-slate-700', bg: 'bg-slate-50' },
+                  { label: 'مفتوحة', value: stats.open, color: 'text-emerald-700', bg: 'bg-emerald-50' },
+                  { label: 'مغلقة', value: stats.closed, color: 'text-red-700', bg: 'bg-red-50' },
+                  { label: 'فترة تسوية', value: stats.adj, color: 'text-amber-700', bg: 'bg-amber-50' },
+                ].map(s => (
+                  <div key={s.label} className={`card ${s.bg} text-center py-3`}>
+                    <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                    <div className="text-xs text-slate-500 mt-1">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* جدول الفترات */}
+              <div className="card p-0 overflow-hidden">
+                <div className="grid grid-cols-12 text-white text-xs font-semibold" style={{background:'#1e3a5f'}}>
+                  <div className="col-span-1 px-3 py-3 text-center">#</div>
+                  <div className="col-span-3 px-3 py-3">الفترة</div>
+                  <div className="col-span-2 px-3 py-3">من تاريخ</div>
+                  <div className="col-span-2 px-3 py-3">إلى تاريخ</div>
+                  <div className="col-span-2 px-3 py-3 text-center">الحالة</div>
+                  <div className="col-span-2 px-3 py-3 text-center">إجراء</div>
+                </div>
+
+                {periods.map(p => {
+                  const cfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.open
+                  return (
+                    <div key={p.id}
+                      className={`grid grid-cols-12 items-center border-b border-slate-50 hover:bg-slate-50 transition-colors
+                        ${p.is_adjustment_period ? 'bg-amber-50/40' : ''}`}>
+                      <div className="col-span-1 px-3 py-3 text-center">
+                        <span className="text-xs font-mono text-slate-400">{p.period_number}</span>
+                      </div>
+                      <div className="col-span-3 px-3 py-3">
+                        <div className="text-sm font-medium text-slate-800">{p.period_name_ar}</div>
+                        {p.is_adjustment_period && (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">فترة تسوية</span>
+                        )}
+                      </div>
+                      <div className="col-span-2 px-3 py-3 text-sm text-slate-600 font-mono">{p.start_date}</div>
+                      <div className="col-span-2 px-3 py-3 text-sm text-slate-600 font-mono">{p.end_date}</div>
+                      <div className="col-span-2 px-3 py-3 text-center">
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${cfg.color}`}>
+                          {cfg.icon} {cfg.label}
+                        </span>
+                        {p.status === 'closed' && p.locked_by && (
+                          <div className="text-xs text-slate-400 mt-0.5">{p.locked_by.split('@')[0]}</div>
+                        )}
+                      </div>
+                      <div className="col-span-2 px-3 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          {/* زر الإغلاق */}
+                          {p.status === 'open' && (
+                            <button onClick={() => handleClose(p)} disabled={actionLoading}
+                              className="text-xs px-2 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50">
+                              🔒 إغلاق
+                            </button>
+                          )}
+                          {/* زر إعادة الفتح */}
+                          {p.status === 'closed' && (
+                            <button onClick={() => setReopenItem(p)}
+                              className="text-xs px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
+                              🔓 فتح
+                            </button>
+                          )}
+                          {/* زر السجل */}
+                          <button onClick={() => handleViewAudit(p)}
+                            className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">
+                            📋
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── إنشاء سنة مالية ── */}
+      {showNew && (
+        <NewFiscalYearSlideOver
+          onClose={() => setShowNew(false)}
+          onSaved={() => { loadYears(); setShowNew(false) }}
+        />
+      )}
+
+      {/* ── إعادة فتح فترة ── */}
+      {reopenItem && (
+        <SlideOver open onClose={() => { setReopenItem(null); setReopenNote('') }}
+          title={`🔓 إعادة فتح — ${reopenItem.period_name_ar}`}
+          subtitle="هذا الإجراء يتطلب صلاحية مدير النظام"
+          size="sm"
+          footer={
+            <div className="flex justify-between">
+              <button onClick={() => { setReopenItem(null); setReopenNote('') }} className="btn-ghost">إلغاء</button>
+              <button onClick={handleReopen} disabled={actionLoading}
+                className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                {actionLoading ? '⏳...' : '🔓 تأكيد إعادة الفتح'}
+              </button>
+            </div>
+          }>
+          <div className="space-y-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+              ⚠️ إعادة فتح الفترة تسمح بالترحيل عليها مجدداً. يجب توثيق السبب.
+            </div>
+            <Field label="سبب إعادة الفتح" required>
+              <textarea className="input w-full" rows={4}
+                value={reopenNote} onChange={e => setReopenNote(e.target.value)}
+                placeholder="مثال: تصحيح قيد خاطئ بناءً على طلب المراجع الخارجي..." />
+            </Field>
+          </div>
+        </SlideOver>
+      )}
+
+      {/* ── سجل أحداث الفترة ── */}
+      {auditPeriod && (
+        <SlideOver open onClose={() => { setAuditPeriod(null); setAuditLog([]) }}
+          title={`📋 سجل أحداث — ${auditPeriod.period_name_ar}`}
+          size="md">
+          <div className="space-y-3">
+            {auditLog.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">لا توجد أحداث مسجّلة</div>
+            ) : auditLog.map((log, i) => (
+              <div key={i} className="flex gap-3 p-3 bg-slate-50 rounded-xl">
+                <span>{log.action === 'closed' ? '🔒' : log.action === 'reopened' ? '🔓' : '📋'}</span>
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{log.action_ar}</div>
+                  <div className="text-xs text-slate-500">{log.performed_by?.split('@')[0]}</div>
+                  {log.notes && <div className="text-xs text-amber-600 mt-1">{log.notes}</div>}
+                  <div className="text-xs text-slate-300 mt-1">{new Date(log.created_at).toLocaleString('ar-SA')}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SlideOver>
+      )}
+    </div>
+  )
+}
+
+// ── إنشاء سنة مالية جديدة ──────────────────────────────
+function NewFiscalYearSlideOver({ onClose, onSaved }) {
+  const [form, setForm] = useState({
+    start_year: new Date().getFullYear(),
+    start_month: 1,
+    has_adjustment_period: false,
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  // حساب تواريخ السنة للمعاينة
+  const endMonth = form.start_month === 1 ? 12 : form.start_month - 1
+  const endYear  = form.start_month === 1 ? form.start_year : form.start_year + 1
+
+  const handleSave = async () => {
+    setSaving(true); setError('')
+    try {
+      await api.fiscal.createYear(form)
+      toast('تم إنشاء السنة المالية مع فتراتها', 'success')
+      onSaved()
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <SlideOver open onClose={onClose}
+      title="إنشاء سنة مالية جديدة"
+      subtitle="سيتم توليد الفترات الشهرية تلقائياً"
+      size="md"
+      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel="إنشاء السنة المالية" />}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="السنة" required>
+            <input type="number" className="input" value={form.start_year}
+              onChange={e => set('start_year', parseInt(e.target.value))}
+              min={2020} max={2035} />
+          </Field>
+          <Field label="شهر البداية" required>
+            <select className="select" value={form.start_month}
+              onChange={e => set('start_month', parseInt(e.target.value))}>
+              {Array.from({length:12},(_,i)=>i+1).map(m => (
+                <option key={m} value={m}>{m} — {['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][m]}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        {/* معاينة */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="text-xs font-semibold text-blue-700 mb-2">📅 معاينة السنة المالية</div>
+          <div className="text-sm text-blue-800">
+            من <strong>{['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][form.start_month]} {form.start_year}</strong>
+            {' '}إلى <strong>{['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][endMonth]} {endYear}</strong>
+          </div>
+          <div className="text-xs text-blue-600 mt-1">
+            سيتم توليد {form.has_adjustment_period ? 13 : 12} فترة تلقائياً
+          </div>
+        </div>
+
+        <label className="flex items-center gap-3 cursor-pointer p-3 bg-amber-50 rounded-xl border border-amber-200">
+          <input type="checkbox" checked={form.has_adjustment_period}
+            onChange={e => set('has_adjustment_period', e.target.checked)}
+            className="w-4 h-4 rounded" />
+          <div>
+            <div className="text-sm font-medium text-amber-800">إضافة فترة تسوية (الفترة 13)</div>
+            <div className="text-xs text-amber-600">فترة إضافية لقيود التسوية والإغلاق</div>
+          </div>
+        </label>
+
+        {error && <div className="text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
+      </div>
+    </SlideOver>
+  )
+}

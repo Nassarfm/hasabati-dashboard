@@ -11,6 +11,7 @@ import DimensionsPage from './pages/DimensionsPage'
 import BranchesPage from './pages/BranchesPage'
 import CostCentersPage from './pages/CostCentersPage'
 import ProjectsPage from './pages/ProjectsPage'
+import FiscalPeriodsPage from './pages/FiscalPeriodsPage'
 import {
   SalesPage, PurchasesPage, InventoryPage, HRPage,
   TrialBalancePage, ReportsPage, VATPage, AssetsPage, TreasuryPage
@@ -23,6 +24,7 @@ const PAGES = {
   branches:     { component: BranchesPage,     label: 'الفروع' },
   costcenters:  { component: CostCentersPage,  label: 'مراكز التكلفة' },
   projects:     { component: ProjectsPage,     label: 'المشاريع' },
+  fiscal:       { component: FiscalPeriodsPage, label: 'الفترات المالية' },
   journal:    { component: JournalPage,      label: 'القيود اليومية' },
   trialbal:   { component: TrialBalancePage, label: 'ميزان المراجعة' },
   sales:      { component: SalesPage,        label: 'المبيعات' },

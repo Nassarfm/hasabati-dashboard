@@ -10,6 +10,7 @@ const modules = [
     { id: 'branches',     label: 'الفروع',               icon: '🏢' },
     { id: 'costcenters',  label: 'مراكز التكلفة',         icon: '💰' },
     { id: 'projects',     label: 'المشاريع',              icon: '📁' },
+    { id: 'fiscal',       label: 'الفترات المالية',       icon: '📅' },
     { id: 'journal',    label: 'القيود اليومية',     icon: '📝' },
     { id: 'trialbal',   label: 'ميزان المراجعة',    icon: '⚖️' },
   ]},

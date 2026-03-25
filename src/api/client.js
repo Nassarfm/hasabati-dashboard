@@ -122,6 +122,16 @@ export const api = {
     updateProject:     (id, b)         => put(`/settings/projects/${id}`, b),
   },
 
+  fiscal: {
+    listYears:       ()           => get('/accounting/fiscal/years'),
+    createYear:      (b)          => post('/accounting/fiscal/years', b),
+    listPeriods:     (fyId)       => get(`/accounting/fiscal/years/${fyId}/periods`),
+    closePeriod:     (id, b)      => post(`/accounting/fiscal/periods/${id}/close`, b),
+    reopenPeriod:    (id, b)      => post(`/accounting/fiscal/periods/${id}/reopen`, b),
+    getPeriodAudit:  (id)         => get(`/accounting/fiscal/periods/${id}/audit`),
+    getCurrentPeriod:(date)       => get(`/accounting/fiscal/current-period?entry_date=${date}`),
+  },
+
   notifications: {
     list:        ()    => get('/notifications'),
     unreadCount: ()    => get('/notifications/unread-count'),
