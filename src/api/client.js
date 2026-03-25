@@ -119,6 +119,13 @@ export const api = {
     updateProject:     (id, b)         => put(`/settings/projects/${id}`, b),
   },
 
+  notifications: {
+    list:        ()    => get('/notifications'),
+    unreadCount: ()    => get('/notifications/unread-count'),
+    markRead:    (id)  => post(`/notifications/mark-read/${id}`, {}),
+    markAllRead: ()    => post('/notifications/mark-all-read', {}),
+  },
+
   dimensions: {
     list:        ()                        => get('/dimensions'),
     get:         (id)                      => get(`/dimensions/${id}`),

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
 import Sidebar from './components/Sidebar'
+import NotificationBell from './components/NotificationBell'
 import { ToastProvider } from './components/UI'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
