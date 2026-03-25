@@ -20,6 +20,17 @@ export default function JournalPage() {
   const [loading,     setLoading]     = useState(true)
   const [viewJE,      setViewJE]      = useState(null)
 
+  const handleEditFromList = async (je) => {
+    try {
+      const d = await api.accounting.getJE(je.id)
+      setEditJE(d?.data || je)
+      setMode('edit')
+    } catch {
+      setEditJE(je)
+      setMode('edit')
+    }
+  }
+
   const openJE = async (je) => {
     // جلب تفاصيل القيد الكاملة مع الأسطر
     try {
@@ -78,6 +89,16 @@ export default function JournalPage() {
     { key: 'total_credit', label: 'الدائن',
       render: je => <span className="num num-credit font-semibold">{fmt(je.total_credit, 2)}</span> },
     { key: 'status', label: 'الحالة', render: je => <StatusBadge status={je.status} /> },
+    { key: 'actions', label: '', render: je => (
+      <div className="flex gap-1">
+        {(je.status === 'draft' || je.status === 'rejected') && (
+          <button onClick={e => { e.stopPropagation(); handleEditFromList(je) }}
+            className="text-xs bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-1 rounded-lg">
+            ✏️
+          </button>
+        )}
+      </div>
+    )},
   ]
 
   // ── Full Page: تعديل القيد ──
