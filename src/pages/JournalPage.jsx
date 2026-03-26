@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useRef } from 'react'
 import { PageHeader, DataTable, Field, toast, fmt, StatusBadge } from '../components/UI'
 import SlideOver from '../components/SlideOver'
@@ -277,6 +278,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
     reference:   editJE?.reference   || '',
     je_type:     editJE?.je_type     || jeTypes[0]?.code || 'JV',
   })
+
   const [lines, setLines] = useState(() => {
     if (editJE?.lines?.length > 0) {
       return editJE.lines.map(l => ({
@@ -292,12 +294,13 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
     }
     return [emptyLine(), emptyLine()]
   })
-  const [saving,      setSaving]      = useState(false)
-  const [error,       setError]       = useState('')
-  const [savedJeId,   setSavedJeId]   = useState(null)
-  const [showAttach,   setShowAttach]  = useState(false)
-  const [pendingFiles, setPendingFiles] = useState([]) // ملفات مؤقتة قبل الحفظ
-  const [narrative,   setNarrative]   = useState('')
+
+  const [saving,       setSaving]       = useState(false)
+  const [error,        setError]        = useState('')
+  const [savedJeId,    setSavedJeId]    = useState(null)
+  const [showAttach,   setShowAttach]   = useState(false)
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [narrative,    setNarrative]    = useState('')
 
   useEffect(() => {
     if (jeTypes.length && !form.je_type) {
@@ -305,39 +308,25 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
     }
   }, [jeTypes])
 
-  const checkPeriod = async (dateStr) => {
-    if (!dateStr) return
-    try {
-      const d = await api.fiscal.getCurrentPeriod(dateStr)
-      if (!d?.data) {
-        setPeriodStatus('not_found')
-      } else if (d.data.status === 'closed') {
-        setPeriodStatus('closed')
-      } else {
-        setPeriodStatus('open')
-      }
-    } catch {
-      setPeriodStatus(null)
-    }
-  }
-
   const setLine = (id, updates) =>
     setLines(ls => ls.map(l => l.id === id ? { ...l, ...updates } : l))
-  const addLine = () => setLines(ls => [...ls, emptyLine()])
-  const removeLine = (id) => {
-    if (lines.length > 2) setLines(ls => ls.filter(l => l.id !== id))
-  }
+  const addLine    = () => setLines(ls => [...ls, emptyLine()])
+  const removeLine = (id) => { if (lines.length > 2) setLines(ls => ls.filter(l => l.id !== id)) }
 
   const totalD   = lines.reduce((s, l) => s + (parseFloat(l.debit)  || 0), 0)
   const totalC   = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0)
   const balanced = Math.abs(totalD - totalC) < 0.01
   const selectedType = jeTypes.find(t => t.code === form.je_type)
 
+
   const handleSave = async (andPost = false) => {
     if (!form.description || !form.entry_date) { setError('أدخل التاريخ والبيان'); return }
+
+
     const validLines = lines.filter(l => l.account_code && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
     if (validLines.length < 2) { setError('يجب أن يحتوي القيد على سطرين على الأقل'); return }
     if (!balanced) { setError('القيد غير متوازن'); return }
+
     // ── التحقق من الأبعاد قبل الحفظ ──
     const dimErrors = []
     for (const l of validLines) {
@@ -379,13 +368,14 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
         : await api.accounting.createJE(payload)
       const jeId = jeRes?.data?.id || jeRes?.id
       setSavedJeId(jeId || editJE?.id)
-      // رفع الملفات المؤقتة بعد الحفظ
+
       if (jeId && pendingFiles.length > 0) {
         for (const pf of pendingFiles) {
           try { await api.accounting.uploadAttachment(jeId, pf.file, pf.notes) } catch {}
         }
         setPendingFiles([])
       }
+
       if (andPost && jeId) {
         await new Promise(r => setTimeout(r, 400))
         await api.accounting.postJE(jeId)
@@ -411,16 +401,16 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
             ←
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">{editJE ? `✏️ تعديل القيد — ${editJE.serial}` : 'قيد محاسبي جديد'}</h1>
+            <h1 className="text-xl font-bold text-slate-800">
+              {editJE ? `✏️ تعديل القيد — ${editJE.serial}` : 'قيد محاسبي جديد'}
+            </h1>
             {selectedType && (
-              <p className="text-sm text-slate-400 mt-0.5">
-                {selectedType.code} — {selectedType.name_ar || selectedType.name_en}
-              </p>
+              <p className="text-sm text-slate-400 mt-0.5">{selectedType.code} — {selectedType.name_ar || selectedType.name_en}</p>
             )}
           </div>
         </div>
-        {/* أزرار الأدوات */}
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-3">
           <button onClick={() => setShowAttach(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
             📎 <span>المرفقات</span>
@@ -428,15 +418,15 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
               <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-xs flex items-center justify-center">{pendingFiles.length}</span>
             )}
           </button>
-        </div>
 
-        {/* مؤشر التوازن */}
-        <div className={`flex items-center gap-3 px-5 py-2.5 rounded-xl text-sm font-medium border
-          ${balanced ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-          <span>{balanced ? '✅ القيد متوازن' : '⚠️ غير متوازن'}</span>
-          <div className="flex gap-3 font-mono text-xs border-r border-current/20 pr-3 mr-1">
-            <span className="text-blue-600">م: {fmt(totalD, 2)}</span>
-            <span className="text-emerald-600">د: {fmt(totalC, 2)}</span>
+          {/* مؤشر التوازن */}
+          <div className={`flex items-center gap-3 px-5 py-2.5 rounded-xl text-sm font-medium border
+            ${balanced ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+            <span>{balanced ? '✅ متوازن' : '⚠️ غير متوازن'}</span>
+            <div className="flex gap-3 font-mono text-xs border-r border-current/20 pr-3 mr-1">
+              <span className="text-blue-600">م: {fmt(totalD, 2)}</span>
+              <span className="text-emerald-600">د: {fmt(totalC, 2)}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -451,16 +441,18 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
                 <select className="select" value={form.je_type}
                   onChange={e => setForm(p => ({ ...p, je_type: e.target.value }))}>
                   {jeTypes.map(t => (
-                    <option key={t.id || t.code} value={t.code}>
-                      {t.code} — {t.name_ar || t.name_en}
-                    </option>
+                    <option key={t.id || t.code} value={t.code}>{t.code} — {t.name_ar || t.name_en}</option>
                   ))}
                 </select>
               </Field>
+
               <Field label="التاريخ" required>
-                <input type="date" className="input" value={form.entry_date}
+                <input type="date"
+                  className="input w-full"
+                  value={form.entry_date}
                   onChange={e => setForm(p => ({ ...p, entry_date: e.target.value }))} />
               </Field>
+
               <Field label="المرجع">
                 <input className="input" placeholder="رقم المستند" value={form.reference}
                   onChange={e => setForm(p => ({ ...p, reference: e.target.value }))} />
@@ -476,212 +468,138 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
         {/* ── أسطر القيد ── */}
         <div className="col-span-12">
           <div className="card p-0 overflow-hidden">
-            {/* header الجدول */}
-            <div className="bg-slate-800 text-white">
-              <div className="grid grid-cols-12 gap-0 text-xs font-semibold uppercase tracking-wide">
-                <div className="col-span-1 px-4 py-3 text-center">#</div>
-                <div className="col-span-3 px-3 py-3">الحساب</div>
-                <div className="col-span-2 px-3 py-3">البيان</div>
-                <div className="col-span-1 px-3 py-3 text-center">مدين</div>
-                <div className="col-span-1 px-3 py-3 text-center">دائن</div>
-                <div className="col-span-2 px-3 py-3">الفرع</div>
-                <div className="col-span-1 px-3 py-3">مركز التكلفة</div>
-                <div className="col-span-1 px-3 py-3 text-center">إجراء</div>
-              </div>
+            {/* header الجدول - أزرق primary */}
+            <div className="grid grid-cols-12 gap-0 bg-primary-600 text-white text-xs font-semibold">
+              <div className="col-span-1 px-3 py-3 text-center">#</div>
+              <div className="col-span-2 px-3 py-3">كود الحساب</div>
+              <div className="col-span-2 px-3 py-3">اسم الحساب</div>
+              <div className="col-span-1 px-3 py-3">البيان</div>
+              <div className="col-span-1 px-3 py-3 text-center">مدين</div>
+              <div className="col-span-1 px-3 py-3 text-center">دائن</div>
+              <div className="col-span-1 px-3 py-3">الفرع</div>
+              <div className="col-span-1 px-3 py-3">CC</div>
+              <div className="col-span-1 px-3 py-3">تصنيف</div>
+              <div className="col-span-1 px-3 py-3">مشروع</div>
             </div>
 
             {/* أسطر */}
             <div className="divide-y divide-slate-100">
               {lines.map((line, idx) => {
-                const acct = accounts.find(a => a.code === line.account_code)
+                const acct     = accounts.find(a => a.code === line.account_code)
                 const needsDim = acct?.dimension_required || false
                 const isExpense = acct?.account_type === 'expense'
 
                 return (
-                  <div key={line.id}
-                    className={`${needsDim ? 'bg-amber-50/40' : 'bg-white'} hover:bg-slate-50/80 transition-colors`}>
-
-                    {/* السطر الرئيسي */}
-                    <div className="grid grid-cols-12 gap-0 items-center">
-                      <div className="col-span-1 px-4 py-3 text-center">
-                        <span className="text-xs text-slate-400 font-mono">{idx + 1}</span>
-                      </div>
-                      <div className="col-span-3 px-3 py-2">
-                        <AccountSearch
-                          accounts={accounts}
-                          value={line.account_code}
-                          onChange={a => setLine(line.id, {
-                            account_code: a.code,
-                            account_name: a.name_ar,
-                            account: a,
-                          })}
-                        />
-                        {line.account_name && (
-                          <div className="text-xs text-slate-400 mt-0.5 truncate">{line.account_name}</div>
-                        )}
-                      </div>
-                      <div className="col-span-2 px-3 py-2">
-                        <input className="input text-xs" placeholder="البيان"
-                          value={line.description}
-                          onChange={e => setLine(line.id, { description: e.target.value })} />
-                      </div>
-                      <div className="col-span-1 px-3 py-2">
-                        <input type="number" className="input text-xs num text-center" placeholder="0.00"
-                          value={line.debit}
-                          onChange={e => {
-                            setLine(line.id, { debit: e.target.value })
-                            if (e.target.value) setLine(line.id, { credit: '' })
-                          }} />
-                      </div>
-                      <div className="col-span-1 px-3 py-2">
-                        <input type="number" className="input text-xs num text-center" placeholder="0.00"
-                          value={line.credit}
-                          onChange={e => {
-                            setLine(line.id, { credit: e.target.value })
-                            if (e.target.value) setLine(line.id, { debit: '' })
-                          }} />
-                      </div>
-                      {/* الفرع - مباشرة في السطر */}
-                      <div className="col-span-2 px-3 py-2">
-                        {needsDim ? (
-                          <select className="select text-xs"
-                            value={line.branch_code}
-                            onChange={e => {
-                              const b = branches.find(b => b.code === e.target.value)
-                              setLine(line.id, { branch_code: e.target.value, branch_name: b?.name_ar || '' })
-                            }}>
-                            <option value="">— الفرع —</option>
-                            {branches.map(b => (
-                              <option key={b.id} value={b.code}>{b.code} {b.name_ar}</option>
-                            ))}
-                          </select>
-                        ) : <span className="text-xs text-slate-300">—</span>}
-                      </div>
-                      {/* مركز التكلفة - مباشرة في السطر */}
-                      <div className="col-span-1 px-3 py-2">
-                        {needsDim ? (
-                          <select className="select text-xs"
-                            value={line.cost_center}
-                            onChange={e => {
-                              const cc = costCenters.find(c => c.code === e.target.value)
-                              setLine(line.id, { cost_center: e.target.value, cost_center_name: cc?.name_en || '' })
-                            }}>
-                            <option value="">— CC —</option>
-                            {costCenters.map(c => (
-                              <option key={c.id} value={c.code}>{c.code}</option>
-                            ))}
-                          </select>
-                        ) : <span className="text-xs text-slate-300">—</span>}
-                      </div>
-                      <div className="col-span-1 px-3 py-2 text-center">
-                        {lines.length > 2 && (
-                          <button onClick={() => removeLine(line.id)}
-                            className="w-6 h-6 rounded-full bg-red-100 text-red-500 hover:bg-red-200 text-xs font-bold mx-auto flex items-center justify-center">
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* صف الأبعاد الإضافية */}
-                    {needsDim && (
-                      <div className="grid grid-cols-12 gap-0 border-t border-amber-100 bg-amber-50/60">
-                        <div className="col-span-1" />
-                        <div className="col-span-11 px-3 py-2 flex gap-3 items-center flex-wrap">
-                          <span className="text-xs font-semibold text-amber-600 shrink-0">🎯 أبعاد:</span>
-                          {/* المشروع */}
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-slate-500 shrink-0">مشروع:</span>
-                            <select className="select text-xs w-40"
-                              value={line.project_code}
-                              onChange={e => {
-                                const p = projects.find(p => String(p.code) === e.target.value)
-                                setLine(line.id, { project_code: e.target.value, project_name: p?.name || '' })
-                              }}>
-                              <option value="">— اختر —</option>
-                              {projects.map(p => (
-                                <option key={p.id} value={String(p.code)}>{p.code} — {p.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                          {/* تصنيف المصروف */}
-                          {isExpense && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-slate-500 shrink-0">تصنيف:</span>
-                              <select className="select text-xs w-48"
-                                value={line.expense_classification_code}
-                                onChange={e => {
-                                  const ec = expClass.find(ec => ec.code === e.target.value)
-                                  setLine(line.id, {
-                                    expense_classification_code: e.target.value,
-                                    expense_classification_name: ec?.name_ar || ''
-                                  })
-                                }}>
-                                <option value="">— اختر التصنيف —</option>
-                                {expClass.map(ec => (
-                                  <option key={ec.id || ec.code} value={ec.code}>
-                                    {ec.code} — {ec.name_ar}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                  <div key={line.id} className={`${needsDim ? 'bg-amber-50/40' : 'bg-white'} hover:bg-slate-50/80 transition-colors`}>
+                    <div className="grid grid-cols-12 items-center">
+                      <div className="col-span-1 px-2 py-2 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-xs text-slate-400 font-mono">{idx + 1}</span>
+                          {lines.length > 2 && (
+                            <button onClick={() => removeLine(line.id)}
+                              className="w-5 h-5 rounded-full bg-red-100 text-red-500 hover:bg-red-200 text-xs flex items-center justify-center">✕</button>
                           )}
-                          {/* ملخص */}
-                          <div className="flex gap-1 mr-auto flex-wrap">
-                            {line.branch_code && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🏢 {line.branch_name || line.branch_code}</span>}
-                            {line.cost_center && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">💰 {line.cost_center_name || line.cost_center}</span>}
-                            {line.project_code && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">📁 {line.project_name || line.project_code}</span>}
-                            {line.expense_classification_code && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">🏷️ {line.expense_classification_name || line.expense_classification_code}</span>}
-                          </div>
                         </div>
                       </div>
-                    )}
+                      <div className="col-span-2 px-2 py-2">
+                        <AccountSearch accounts={accounts} value={line.account_code}
+                          onChange={a => setLine(line.id, { account_code: a.code, account_name: a.name_ar, account: a })} />
+                      </div>
+                      <div className="col-span-2 px-2 py-2">
+                        <span className="text-xs text-slate-600 truncate block">{line.account_name || '—'}</span>
+                        {needsDim && <span className="text-xs text-amber-500">⚡ أبعاد</span>}
+                      </div>
+                      <div className="col-span-1 px-2 py-2">
+                        <input className="input text-xs" placeholder="البيان" value={line.description}
+                          onChange={e => setLine(line.id, { description: e.target.value })} />
+                      </div>
+                      <div className="col-span-1 px-2 py-2">
+                        <input type="number" className="input text-xs num text-center" placeholder="0.00"
+                          value={line.debit}
+                          onChange={e => { setLine(line.id, { debit: e.target.value }); if(e.target.value) setLine(line.id, { credit: '' }) }} />
+                      </div>
+                      <div className="col-span-1 px-2 py-2">
+                        <input type="number" className="input text-xs num text-center" placeholder="0.00"
+                          value={line.credit}
+                          onChange={e => { setLine(line.id, { credit: e.target.value }); if(e.target.value) setLine(line.id, { debit: '' }) }} />
+                      </div>
+                      <div className="col-span-1 px-2 py-2">
+                        <select className="select text-xs" value={line.branch_code}
+                          onChange={e => { const b = branches.find(b => b.code === e.target.value); setLine(line.id, { branch_code: e.target.value, branch_name: b?.name_ar || '' }) }}>
+                          <option value="">—</option>
+                          {branches.map(b => <option key={b.id} value={b.code}>{b.code}</option>)}
+                        </select>
+                        {line.branch_name && <div className="text-xs text-blue-600 truncate mt-0.5">{line.branch_name}</div>}
+                      </div>
+                      <div className="col-span-1 px-2 py-2">
+                        <select className="select text-xs" value={line.cost_center}
+                          onChange={e => { const cc = costCenters.find(c => c.code === e.target.value); setLine(line.id, { cost_center: e.target.value, cost_center_name: cc?.name_en || '' }) }}>
+                          <option value="">—</option>
+                          {costCenters.map(c => <option key={c.id} value={c.code}>{c.code}</option>)}
+                        </select>
+                        {line.cost_center_name && <div className="text-xs text-purple-600 truncate mt-0.5">{line.cost_center_name}</div>}
+                      </div>
+                      <div className="col-span-1 px-2 py-2">
+                        {isExpense ? (
+                          <>
+                            <select className="select text-xs" value={line.expense_classification_code}
+                              onChange={e => { const ec = expClass.find(ec => ec.code === e.target.value); setLine(line.id, { expense_classification_code: e.target.value, expense_classification_name: ec?.name_ar || '' }) }}>
+                              <option value="">—</option>
+                              {expClass.map(ec => <option key={ec.id||ec.code} value={ec.code}>{ec.code}</option>)}
+                            </select>
+                            {line.expense_classification_name && <div className="text-xs text-amber-600 truncate mt-0.5">{line.expense_classification_name}</div>}
+                          </>
+                        ) : <span className="text-xs text-slate-300">—</span>}
+                      </div>
+                      <div className="col-span-1 px-2 py-2">
+                        <select className="select text-xs" value={line.project_code}
+                          onChange={e => { const p = projects.find(p => String(p.code) === e.target.value); setLine(line.id, { project_code: e.target.value, project_name: p?.name || '' }) }}>
+                          <option value="">—</option>
+                          {projects.map(p => <option key={p.id} value={String(p.code)}>{p.code}</option>)}
+                        </select>
+                        {line.project_name && <div className="text-xs text-emerald-600 truncate mt-0.5">{line.project_name}</div>}
+                      </div>
+                    </div>
                   </div>
                 )
               })}
             </div>
 
-            {/* footer الجدول */}
-            <div className="bg-slate-50 border-t border-slate-200">
-              <div className="grid grid-cols-12 gap-0">
-                <div className="col-span-1 px-4 py-3 text-center">
-                  <button onClick={addLine}
-                    className="w-7 h-7 rounded-lg bg-primary-600 text-white text-base font-bold hover:bg-primary-700 flex items-center justify-center mx-auto">+</button>
-                </div>
-                <div className="col-span-5 px-3 py-3 text-sm font-semibold text-slate-600">
-                  الإجمالي <span className="text-xs text-slate-400 mr-1">({lines.length} سطر)</span>
-                </div>
-                <div className="col-span-1 px-3 py-3 num num-debit text-center font-bold text-sm">{fmt(totalD, 2)}</div>
-                <div className="col-span-1 px-3 py-3 num num-credit text-center font-bold text-sm">{fmt(totalC, 2)}</div>
-                <div className="col-span-4 px-3 py-3 text-center text-lg">
-                  {balanced ? '✅' : <span className="text-red-500 text-sm">⚠️ فرق: {fmt(Math.abs(totalD - totalC), 2)}</span>}
-                </div>
+            {/* footer */}
+            <div className="grid grid-cols-12 bg-slate-100 border-t-2 border-slate-300">
+              <div className="col-span-1 px-2 py-3 text-center">
+                <button onClick={addLine}
+                  className="w-7 h-7 rounded-lg bg-primary-600 text-white text-base font-bold hover:bg-primary-700 flex items-center justify-center mx-auto">+</button>
+              </div>
+              <div className="col-span-4 px-2 py-3 text-sm font-semibold text-slate-600">
+                الإجمالي <span className="text-xs text-slate-400 font-normal mr-1">({lines.length} سطر)</span>
+              </div>
+              <div className="col-span-1 px-2 py-3 num num-debit text-center font-bold text-sm">{fmt(totalD, 2)}</div>
+              <div className="col-span-1 px-2 py-3 num num-credit text-center font-bold text-sm">{fmt(totalC, 2)}</div>
+              <div className="col-span-5 px-2 py-3 text-center">
+                {balanced
+                  ? <span className="text-emerald-600 text-sm font-semibold">✅ متوازن</span>
+                  : <span className="text-red-500 text-sm">⚠️ فرق: {fmt(Math.abs(totalD - totalC), 2)}</span>}
               </div>
             </div>
           </div>
 
-          {/* زر إضافة سطر */}
           <button onClick={addLine}
             className="w-full mt-3 py-3 border-2 border-dashed border-primary-300 rounded-xl text-primary-600 text-sm font-medium hover:bg-primary-50 transition-colors">
             + إضافة سطر جديد
           </button>
         </div>
 
-        {/* ── Contextual Narrative Panel ── */}
+        {/* ── Narrative Panel ── */}
         <div className="col-span-12">
-          <NarrativePanel
-            value={narrative}
-            onChange={setNarrative}
-            createdBy={null}
-            createdAt={new Date().toISOString()}
-          />
+          <NarrativePanel value={narrative} onChange={setNarrative} createdAt={new Date().toISOString()} />
         </div>
 
         {/* ── رسالة الخطأ ── */}
         {error && (
           <div className="col-span-12">
-            <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl p-4">
-              ⚠️ {error}
+            <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl p-4 font-medium">
+              {error}
             </div>
           </div>
         )}
@@ -694,7 +612,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
               ← رجوع
             </button>
             <div className="flex gap-3">
-              <button onClick={() => handleSave(false)} disabled={saving || !balanced || periodStatus === 'closed' || periodStatus === 'not_found'}
+              <button onClick={() => handleSave(false)} disabled={saving || !balanced}
                 className="px-5 py-2.5 rounded-xl text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-colors">
                 💾 حفظ كمسودة
               </button>
@@ -708,7 +626,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
           </div>
         </div>
       </div>
-      {/* Attachment Panel */}
+
       <AttachmentPanel
         jeId={savedJeId}
         open={showAttach}
@@ -721,9 +639,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
   )
 }
 
-// ══════════════════════════════════════════════
-// بحث الحساب
-// ══════════════════════════════════════════════
+
 function AccountSearch({ accounts, value, onChange }) {
   const [search, setSearch] = useState('')
   const [open,   setOpen]   = useState(false)
