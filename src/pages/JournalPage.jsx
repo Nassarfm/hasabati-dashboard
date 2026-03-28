@@ -553,14 +553,13 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
                   : 'اختر التاريخ أولاً'}
               </div>
               <div className={`text-sm ${isBlocked ? 'text-red-500' : 'text-slate-400'}`}>
-                {isBlocked
-                  {periodState.status === 'closed'
-                    ? 'لا يمكن إدخال أي بيانات في فترة مالية مغلقة. راجع مدير النظام.'
-                    : periodState.status === 'not_found'
-                    ? 'أنشئ السنة المالية من صفحة الفترات المالية أولاً.'
-                    : periodState.status === 'error'
-                    ? 'تحقق من اتصالك بالشبكة ثم أعد اختيار التاريخ.'
-                    : 'يجب تحديد تاريخ القيد قبل إدخال البيانات'}
+                {periodState.status === 'closed'
+                  ? 'لا يمكن إدخال أي بيانات في فترة مالية مغلقة. راجع مدير النظام.'
+                  : periodState.status === 'not_found'
+                  ? 'أنشئ السنة المالية من صفحة الفترات المالية أولاً.'
+                  : periodState.status === 'error'
+                  ? 'تحقق من اتصالك بالشبكة ثم أعد اختيار التاريخ.'
+                  : 'يجب تحديد تاريخ القيد قبل إدخال البيانات'}
             </div>
           </div>
         )}
