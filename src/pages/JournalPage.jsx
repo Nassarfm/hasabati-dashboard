@@ -347,15 +347,15 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
         })
       }
     } catch {
-      // إذا فشل الاتصال — نسمح بالإدخال ونعتمد على Backend
-      setPeriodState({ status: 'open', periodName: '', yearName: '' })
+      // إذا فشل الاتصال — نمنع الإدخال حتى يُؤكد التحقق
+      setPeriodState({ status: 'error', periodName: '', yearName: '' })
     }
   }
 
   // هل النموذج مفعّل؟
   const isFormOpen   = periodState.status === 'open'
   const isChecking   = periodState.status === 'checking'
-  const isBlocked    = periodState.status === 'closed' || periodState.status === 'not_found'
+  const isBlocked    = periodState.status === 'closed' || periodState.status === 'not_found' || periodState.status === 'error'
   const isIdle       = periodState.status === 'idle'
 
   const setLine = (id, updates) =>
@@ -448,8 +448,10 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => setShowAttach(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+          <button onClick={() => isFormOpen && setShowAttach(true)}
+            disabled={!isFormOpen}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors
+              ${isFormOpen ? 'border-slate-200 text-slate-600 hover:bg-slate-50' : 'border-slate-100 text-slate-300 cursor-not-allowed'}`}>
             📎 <span>المرفقات</span>
             {pendingFiles.length > 0 && <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-xs flex items-center justify-center">{pendingFiles.length}</span>}
           </button>
@@ -552,11 +554,13 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
               </div>
               <div className={`text-sm ${isBlocked ? 'text-red-500' : 'text-slate-400'}`}>
                 {isBlocked
-                  ? (periodState.status === 'closed'
+                  {periodState.status === 'closed'
                     ? 'لا يمكن إدخال أي بيانات في فترة مالية مغلقة. راجع مدير النظام.'
-                    : 'أنشئ السنة المالية من صفحة الفترات المالية.')
-                  : 'يجب تحديد تاريخ القيد قبل إدخال البيانات'}
-              </div>
+                    : periodState.status === 'not_found'
+                    ? 'أنشئ السنة المالية من صفحة الفترات المالية أولاً.'
+                    : periodState.status === 'error'
+                    ? 'تحقق من اتصالك بالشبكة ثم أعد اختيار التاريخ.'
+                    : 'يجب تحديد تاريخ القيد قبل إدخال البيانات'}
             </div>
           </div>
         )}
