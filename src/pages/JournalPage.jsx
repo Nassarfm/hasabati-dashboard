@@ -560,6 +560,7 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
                   : periodState.status === 'error'
                   ? 'تحقق من اتصالك بالشبكة ثم أعد اختيار التاريخ.'
                   : 'يجب تحديد تاريخ القيد قبل إدخال البيانات'}
+              </div>
             </div>
           </div>
         )}
