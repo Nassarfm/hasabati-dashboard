@@ -1,5 +1,6 @@
+/* hasabati-journal-v3 */
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { PageHeader, DataTable, Field, toast, fmt, StatusBadge } from '../components/UI'
 import SlideOver from '../components/SlideOver'
 import api from '../api/client'
