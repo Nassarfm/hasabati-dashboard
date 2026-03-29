@@ -12,8 +12,8 @@ import { JEActivityTimeline, RecentActivityPanel } from './ActivityLog'
 // الصفحة الرئيسية
 // ══════════════════════════════════════════════
 export default function JournalPage() {
-  const [mode, setMode] = useState('list') // list | new | edit
-  const [editJE, setEditJE] = useState(null)
+  const [mode,        setMode]        = useState('list')
+  const [editJE,      setEditJE]      = useState(null)
   const [jes,         setJes]         = useState([])
   const [accounts,    setAccounts]    = useState([])
   const [jeTypes,     setJeTypes]     = useState([])
@@ -23,50 +23,55 @@ export default function JournalPage() {
   const [expClass,    setExpClass]    = useState([])
   const [loading,     setLoading]     = useState(true)
   const [viewJE,      setViewJE]      = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [showActivity,setShowActivity]= useState(false)
+  const [page,        setPage]        = useState(1)
+  const [totalCount,  setTotalCount]  = useState(0)
+  const PAGE_SIZE = 50
+
+  const [filters, setFilters] = useState({
+    status: '', date_from: '', date_to: '',
+    je_type: '', search: '', amount_min: '', amount_max: ''
+  })
 
   const handleEditFromList = async (je) => {
     try {
       const d = await api.accounting.getJE(je.id)
-      setEditJE(d?.data || je)
-      setMode('edit')
-    } catch {
-      setEditJE(je)
-      setMode('edit')
-    }
+      setEditJE(d?.data || je); setMode('edit')
+    } catch { setEditJE(je); setMode('edit') }
   }
 
   const openJE = async (je) => {
-    // جلب تفاصيل القيد الكاملة مع الأسطر
     try {
       const d = await api.accounting.getJE(je.id)
       setViewJE(d?.data || je)
-    } catch {
-      setViewJE(je)
-    }
+    } catch { setViewJE(je) }
   }
-  const [filters,     setFilters]     = useState({ status: '', date_from: '', date_to: '', je_type: '', created_by: '' })
 
-  const load = () => {
+  const load = (p = page) => {
     setLoading(true)
-    const params = { limit: 100, ...Object.fromEntries(Object.entries(filters).filter(([,v]) => v)) }
+    const params = {
+      limit: PAGE_SIZE,
+      offset: (p - 1) * PAGE_SIZE,
+      ...Object.fromEntries(Object.entries(filters).filter(([,v]) => v))
+    }
     api.accounting.getJEs(params)
-      .then(d => setJes(d?.data || d?.items || []))
+      .then(d => {
+        setJes(d?.data || d?.items || [])
+        setTotalCount(d?.total || d?.count || 0)
+      })
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }
 
-  const [creators,    setCreators]    = useState([])
-  const [currentUser, setCurrentUser] = useState(null)
-
   useEffect(() => {
-    // جلب اسم المستخدم الحالي
     api.accounting.getDisplayName?.()
       .then(d => setCurrentUser(d?.data?.display_name || d?.data?.email))
       .catch(() => {})
   }, [])
 
   useEffect(() => {
-    load()
+    load(1); setPage(1)
     Promise.all([
       api.accounting.getCOA({ limit: 500 }),
       api.settings.listJETypes(),
@@ -85,37 +90,28 @@ export default function JournalPage() {
     }).catch(() => {})
   }, [])
 
-  const columns = [
-    { key: 'serial', label: 'رقم القيد',
-      render: je => <span className="font-mono text-primary-600 font-semibold text-sm">{je.serial}</span> },
-    { key: 'entry_date', label: 'التاريخ' },
-    { key: 'je_type', label: 'النوع',
-      render: je => {
-        const t = jeTypes.find(t => t.code === je.je_type)
-        return <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono">
-          {t ? `${t.code} — ${t.name_ar || t.name_en}` : je.je_type}
-        </span>
-      }},
-    { key: 'description', label: 'البيان',
-      render: je => <span className="max-w-[220px] block truncate text-sm">{je.description}</span> },
-    { key: 'total_debit',  label: 'المدين',
-      render: je => <span className="num num-debit font-semibold">{fmt(je.total_debit, 2)}</span> },
-    { key: 'total_credit', label: 'الدائن',
-      render: je => <span className="num num-credit font-semibold">{fmt(je.total_credit, 2)}</span> },
-    { key: 'status', label: 'الحالة', render: je => <StatusBadge status={je.status} /> },
-    { key: 'actions', label: '', render: je => (
-      <div className="flex gap-1">
-        {(je.status === 'draft' || je.status === 'rejected') && (
-          <button onClick={e => { e.stopPropagation(); handleEditFromList(je) }}
-            className="text-xs bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-1 rounded-lg">
-            ✏️
-          </button>
-        )}
-      </div>
-    )},
-  ]
+  // KPIs
+  const kpis = {
+    total:   jes.length,
+    posted:  jes.filter(j => j.status === 'posted').length,
+    pending: jes.filter(j => j.status === 'pending_review').length,
+    draft:   jes.filter(j => j.status === 'draft').length,
+    totalDR: jes.reduce((s, j) => s + (parseFloat(j.total_debit)  || 0), 0),
+    totalCR: jes.reduce((s, j) => s + (parseFloat(j.total_credit) || 0), 0),
+  }
+  const balanced = Math.abs(kpis.totalDR - kpis.totalCR) < 0.01
 
-  // ── Full Page: تعديل القيد ──
+  const STATUS_CONFIG = {
+    draft:          { label: 'مسودة',        bg: 'bg-slate-100',  text: 'text-slate-600',  dot: '⚪' },
+    pending_review: { label: 'قيد المراجعة', bg: 'bg-amber-100',  text: 'text-amber-700',  dot: '🟠' },
+    approved:       { label: 'معتمد',         bg: 'bg-blue-100',   text: 'text-blue-700',   dot: '🔵' },
+    posted:         { label: 'مرحَّل',        bg: 'bg-emerald-100',text: 'text-emerald-700',dot: '🟢' },
+    rejected:       { label: 'مرفوض',        bg: 'bg-red-100',    text: 'text-red-700',    dot: '🔴' },
+    reversed:       { label: 'معكوس',         bg: 'bg-purple-100', text: 'text-purple-700', dot: '🟣' },
+  }
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1
+
   if (mode === 'edit' && editJE) {
     return (
       <NewJEPage
@@ -127,129 +123,294 @@ export default function JournalPage() {
       />
     )
   }
-
-  // ── Full Page: إنشاء القيد ──
   if (mode === 'new') {
     return (
       <NewJEPage
-        accounts={accounts}
-        jeTypes={jeTypes}
-        branches={branches}
-        costCenters={costCenters}
-        projects={projects}
-        expClass={expClass}
+        accounts={accounts} jeTypes={jeTypes} branches={branches}
+        costCenters={costCenters} projects={projects} expClass={expClass}
         onBack={() => setMode('list')}
         onSaved={() => { setMode('list'); load() }}
       />
     )
   }
 
-  // ── قائمة القيود ──
   return (
-    <div className="page-enter space-y-5">
-      <PageHeader
-        title="القيود المحاسبية"
-        subtitle={`${jes.length} قيد`}
-        actions={
+    <div className="page-enter space-y-4">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">القيود المحاسبية</h1>
+          <p className="text-sm text-slate-400 mt-0.5">إدارة ومتابعة جميع القيود اليومية</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowActivity(v => !v)}
+            className="px-4 py-2.5 rounded-xl text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            📜 سجل الأحداث
+          </button>
           <button onClick={() => setMode('new')} className="btn-primary">
             + قيد جديد
           </button>
-        }
-      />
+        </div>
+      </div>
 
-      <div className="card space-y-3">
-        <div className="flex gap-3 flex-wrap items-center">
-          {/* الحالة */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-slate-400">الحالة</label>
-            <select className="select w-36" value={filters.status}
-              onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}>
-              <option value="">الكل</option>
-              <option value="draft">🟡 مسودة</option>
-              <option value="pending_review">🟠 قيد المراجعة</option>
-              <option value="posted">🟢 مرحَّل</option>
-              <option value="rejected">🔴 مرفوض</option>
-              <option value="reversed">🟣 معكوس</option>
-            </select>
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-6 gap-3">
+        {[
+          { label: 'إجمالي القيود', value: totalCount || jes.length, icon: '📋', color: 'text-slate-700', bg: 'bg-white' },
+          { label: 'مرحَّل',        value: kpis.posted,  icon: '🟢', color: 'text-emerald-700', bg: 'bg-emerald-50' },
+          { label: 'قيد المراجعة', value: kpis.pending, icon: '🟠', color: 'text-amber-700',   bg: 'bg-amber-50' },
+          { label: 'مسودة',        value: kpis.draft,   icon: '⚪', color: 'text-slate-600',   bg: 'bg-slate-50' },
+          { label: 'إجمالي المدين', value: fmt(kpis.totalDR, 2), icon: '📈', color: 'text-blue-700', bg: 'bg-blue-50' },
+          { label: 'إجمالي الدائن', value: fmt(kpis.totalCR, 2), icon: '📉', color: 'text-emerald-700', bg: 'bg-emerald-50' },
+        ].map(k => (
+          <div key={k.label} className={`card ${k.bg} py-3 px-4`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-slate-400">{k.label}</span>
+              <span>{k.icon}</span>
+            </div>
+            <div className={`text-lg font-bold ${k.color}`}>{k.value}</div>
           </div>
-          {/* نوع القيد */}
+        ))}
+      </div>
+
+      {/* ── Balance Check ── */}
+      {jes.length > 0 && (
+        <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium border
+          ${balanced ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {balanced ? '✅ الصفحة الحالية متوازنة' : '⚠️ الصفحة الحالية غير متوازنة'}
+          <span className="font-mono text-xs mr-2">
+            م: {fmt(kpis.totalDR, 2)} | د: {fmt(kpis.totalCR, 2)}
+            {!balanced && ` | فرق: ${fmt(Math.abs(kpis.totalDR - kpis.totalCR), 2)}`}
+          </span>
+        </div>
+      )}
+
+      {/* ── Filters ── */}
+      <div className="card space-y-3">
+        {/* Row 1: Quick filters */}
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { label: 'الكل', val: '' },
+            { label: '🟢 مرحَّل', val: 'posted' },
+            { label: '🟠 مراجعة', val: 'pending_review' },
+            { label: '⚪ مسودة', val: 'draft' },
+            { label: '🔴 مرفوض', val: 'rejected' },
+          ].map(f => (
+            <button key={f.val}
+              onClick={() => { setFilters(p => ({ ...p, status: f.val })); load(1) }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+                ${filters.status === f.val ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              {f.label}
+            </button>
+          ))}
+          <div className="flex gap-1 mr-auto">
+            <button onClick={() => { setFilters(p => ({ ...p, date_from: new Date().toISOString().split('T')[0], date_to: new Date().toISOString().split('T')[0] })); load(1) }}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200">
+              📅 اليوم
+            </button>
+            <button onClick={() => {
+              const now = new Date()
+              const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+              setFilters(p => ({ ...p, date_from: from, date_to: now.toISOString().split('T')[0] })); load(1)
+            }} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200">
+              📅 هذا الشهر
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Advanced filters */}
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">بحث (رقم / بيان)</label>
+            <input className="input w-52" placeholder="JV-2026-..." value={filters.search}
+              onChange={e => setFilters(p => ({ ...p, search: e.target.value }))} />
+          </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">نوع القيد</label>
-            <select className="select w-44" value={filters.je_type}
+            <select className="select w-40" value={filters.je_type}
               onChange={e => setFilters(p => ({ ...p, je_type: e.target.value }))}>
               <option value="">كل الأنواع</option>
-              {jeTypes.map(t => (
-                <option key={t.id || t.code} value={t.code}>{t.code} — {t.name_ar || t.name_en}</option>
-              ))}
+              {jeTypes.map(t => <option key={t.id||t.code} value={t.code}>{t.code} — {t.name_ar||t.name_en}</option>)}
             </select>
           </div>
-          {/* المنشئ */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-slate-400">المنشئ</label>
-            <select className="select w-40" value={filters.created_by}
-              onChange={e => setFilters(p => ({ ...p, created_by: e.target.value }))}>
-              <option value="">كل المستخدمين</option>
-              {creators.map(c => (
-                <option key={c} value={c}>{c.split('@')[0]}</option>
-              ))}
-            </select>
-          </div>
-          {/* التاريخ من */}
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">من تاريخ</label>
             <input type="date" className="input w-36" value={filters.date_from}
               onChange={e => setFilters(p => ({ ...p, date_from: e.target.value }))} />
           </div>
-          {/* التاريخ إلى */}
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">إلى تاريخ</label>
             <input type="date" className="input w-36" value={filters.date_to}
               onChange={e => setFilters(p => ({ ...p, date_to: e.target.value }))} />
           </div>
-          <div className="flex gap-2 mt-4">
-            <button onClick={load} className="btn-primary">🔍 بحث</button>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">مبلغ من</label>
+            <input type="number" className="input w-28" placeholder="0.00" value={filters.amount_min}
+              onChange={e => setFilters(p => ({ ...p, amount_min: e.target.value }))} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">مبلغ إلى</label>
+            <input type="number" className="input w-28" placeholder="0.00" value={filters.amount_max}
+              onChange={e => setFilters(p => ({ ...p, amount_max: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pb-0.5">
+            <button onClick={() => { load(1); setPage(1) }} className="btn-primary">🔍 بحث</button>
             <button onClick={() => {
-              setFilters({ status: '', date_from: '', date_to: '', je_type: '', created_by: '' })
-              setLoading(true)
-              api.accounting.getJEs({ limit: 100 })
-                .then(d => { const items = d?.data || d?.items || []; setJes(items); setCreators([...new Set(items.map(j=>j.created_by).filter(Boolean))]) })
-                .catch(e => toast(e.message, 'error'))
-                .finally(() => setLoading(false))
+              setFilters({ status:'',date_from:'',date_to:'',je_type:'',search:'',amount_min:'',amount_max:'' })
+              setPage(1)
+              setTimeout(() => load(1), 0)
             }} className="btn-ghost">↺ مسح</button>
           </div>
         </div>
-        {/* إحصائيات سريعة */}
-        <div className="flex gap-4 text-xs text-slate-500 pt-1 border-t border-slate-100">
-          <span>📋 الكل: <strong className="text-slate-700">{jes.length}</strong></span>
-          <span>🟢 مرحَّل: <strong className="text-emerald-600">{jes.filter(j=>j.status==='posted').length}</strong></span>
-          <span>🟡 مسودة: <strong className="text-amber-600">{jes.filter(j=>j.status==='draft').length}</strong></span>
-          <span>🟠 مراجعة: <strong className="text-orange-600">{jes.filter(j=>j.status==='pending_review').length}</strong></span>
-          {filters.created_by && <span>👤 {filters.created_by.split('@')[0]}: <strong className="text-primary-600">{jes.filter(j=>j.created_by===filters.created_by).length}</strong></span>}
-        </div>
       </div>
 
+      {/* ── Table ── */}
       <div className="card p-0 overflow-hidden">
-        <DataTable columns={columns} data={jes} loading={loading} onRowClick={openJE} />
+        {/* Header */}
+        <div className="grid grid-cols-12 text-white text-xs font-semibold" style={{background:'#1e3a5f'}}>
+          <div className="col-span-2 px-4 py-3">رقم القيد</div>
+          <div className="col-span-1 px-3 py-3">التاريخ</div>
+          <div className="col-span-1 px-3 py-3">النوع</div>
+          <div className="col-span-3 px-3 py-3">البيان</div>
+          <div className="col-span-1 px-3 py-3 text-center">المدين</div>
+          <div className="col-span-1 px-3 py-3 text-center">الدائن</div>
+          <div className="col-span-1 px-3 py-3 text-center">توازن</div>
+          <div className="col-span-1 px-3 py-3 text-center">الحالة</div>
+          <div className="col-span-1 px-3 py-3 text-center">إجراء</div>
+        </div>
+
+        {/* Rows */}
+        {loading ? (
+          <div className="text-center py-12 text-slate-400">
+            <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mx-auto mb-3" />
+            جارٍ التحميل...
+          </div>
+        ) : jes.length === 0 ? (
+          <div className="text-center py-12 text-slate-400">
+            <div className="text-4xl mb-2">📋</div>
+            <div>لا توجد قيود</div>
+          </div>
+        ) : jes.map(je => {
+          const sc = STATUS_CONFIG[je.status] || STATUS_CONFIG.draft
+          const dr = parseFloat(je.total_debit)  || 0
+          const cr = parseFloat(je.total_credit) || 0
+          const isBalanced = Math.abs(dr - cr) < 0.01
+          const jeType = jeTypes.find(t => t.code === je.je_type)
+          return (
+            <div key={je.id}
+              onClick={() => openJE(je)}
+              className="grid grid-cols-12 items-center border-b border-slate-50 hover:bg-blue-50/40 cursor-pointer transition-colors">
+              <div className="col-span-2 px-4 py-3">
+                <span className="font-mono text-primary-600 font-bold text-sm">{je.serial}</span>
+                <div className="text-xs text-slate-400">{je.created_by?.split('@')[0]}</div>
+              </div>
+              <div className="col-span-1 px-3 py-3 text-xs text-slate-600 font-mono">{je.entry_date}</div>
+              <div className="col-span-1 px-3 py-3">
+                <span className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">{je.je_type}</span>
+              </div>
+              <div className="col-span-3 px-3 py-3">
+                <div className="text-sm text-slate-700 truncate max-w-[200px]">{je.description}</div>
+                {je.reference && <div className="text-xs text-slate-400">{je.reference}</div>}
+              </div>
+              <div className="col-span-1 px-3 py-3 text-center">
+                <span className="num num-debit text-sm font-semibold">{fmt(dr, 2)}</span>
+              </div>
+              <div className="col-span-1 px-3 py-3 text-center">
+                <span className="num num-credit text-sm font-semibold">{fmt(cr, 2)}</span>
+              </div>
+              <div className="col-span-1 px-3 py-3 text-center">
+                {isBalanced
+                  ? <span className="text-emerald-500 text-base">✅</span>
+                  : <span className="text-red-500 text-base" title={`فرق: ${fmt(Math.abs(dr-cr),2)}`}>⚠️</span>}
+              </div>
+              <div className="col-span-1 px-3 py-3 text-center">
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${sc.bg} ${sc.text}`}>
+                  {sc.dot} {sc.label}
+                </span>
+              </div>
+              <div className="col-span-1 px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                {(je.status === 'draft' || je.status === 'rejected') && (
+                  <button onClick={() => handleEditFromList(je)}
+                    className="text-xs bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 px-2 py-1 rounded-lg">
+                    ✏️
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Footer totals */}
+        {jes.length > 0 && (
+          <div className="grid grid-cols-12 bg-slate-100 border-t-2 border-slate-300 text-sm font-semibold">
+            <div className="col-span-7 px-4 py-3 text-slate-600">
+              المجموع ({jes.length} قيد)
+            </div>
+            <div className="col-span-1 px-3 py-3 text-center num num-debit">{fmt(kpis.totalDR, 2)}</div>
+            <div className="col-span-1 px-3 py-3 text-center num num-credit">{fmt(kpis.totalCR, 2)}</div>
+            <div className="col-span-1 px-3 py-3 text-center">
+              {balanced ? <span className="text-emerald-600">✅</span> : <span className="text-red-500">⚠️</span>}
+            </div>
+            <div className="col-span-2" />
+          </div>
+        )}
       </div>
 
-      {/* Recent Activity Panel */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-            📜 <span>سجل الأحداث الأخيرة</span>
+      {/* ── Pagination ── */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-slate-500">
+            صفحة {page} من {totalPages} — {totalCount} قيد
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { const p = page-1; setPage(p); load(p) }} disabled={page === 1}
+              className="px-3 py-1.5 rounded-lg text-sm border border-slate-200 disabled:opacity-40 hover:bg-slate-50">
+              ← السابق
+            </button>
+            {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
+              const p = Math.max(1, page - 2) + i
+              if (p > totalPages) return null
+              return (
+                <button key={p} onClick={() => { setPage(p); load(p) }}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors
+                    ${p === page ? 'bg-primary-600 text-white' : 'border border-slate-200 hover:bg-slate-50'}`}>
+                  {p}
+                </button>
+              )
+            })}
+            <button onClick={() => { const p = page+1; setPage(p); load(p) }} disabled={page === totalPages}
+              className="px-3 py-1.5 rounded-lg text-sm border border-slate-200 disabled:opacity-40 hover:bg-slate-50">
+              التالي →
+            </button>
           </div>
         </div>
-        <RecentActivityPanel onNavigate={(serial) => {
-          const je = jes.find(j => j.serial === serial)
-          if (je) openJE(je)
-        }} />
-      </div>
+      )}
 
+      {/* ── سجل الأحداث — نافذة منفصلة ── */}
+      {showActivity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setShowActivity(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <div className="font-bold text-slate-800">📜 سجل الأحداث الأخيرة</div>
+              <button onClick={() => setShowActivity(false)}
+                className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center">✕</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              <RecentActivityPanel onNavigate={(serial) => {
+                const je = jes.find(j => j.serial === serial)
+                if (je) { openJE(je); setShowActivity(false) }
+              }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Detail SlideOver ── */}
       {viewJE && (
         <JEDetailSlideOver
-          je={viewJE}
-          jeTypes={jeTypes}
-          currentUser={currentUser}
+          je={viewJE} jeTypes={jeTypes} currentUser={currentUser}
           onClose={() => setViewJE(null)}
           onPosted={() => { load(); setViewJE(null) }}
           onEdit={(je) => { setViewJE(null); setEditJE(je); setMode('edit') }}
@@ -259,9 +420,7 @@ export default function JournalPage() {
   )
 }
 
-// ══════════════════════════════════════════════
-// Full Page — إنشاء قيد جديد
-// ══════════════════════════════════════════════
+
 function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, onBack, onSaved, editJE = null }) {
   const emptyLine = () => ({
     id: Math.random(),
