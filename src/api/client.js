@@ -6,6 +6,10 @@ async function request(method, path, body = null) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
 
+  if (!token) {
+    console.warn('API: No auth token — request may fail:', method, path)
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
@@ -17,7 +21,10 @@ async function request(method, path, body = null) {
   })
   if (res.status === 204) return null
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data?.detail || `خطأ ${res.status}`)
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.detail || data?.message || `خطأ ${res.status}`
+    throw new Error(msg)
+  }
   return data
 }
 
@@ -129,7 +136,7 @@ export const api = {
     closePeriod:     (id, b)      => post(`/accounting/fiscal/periods/${id}/close`, b),
     reopenPeriod:    (id, b)      => post(`/accounting/fiscal/periods/${id}/reopen`, b),
     getPeriodAudit:  (id)         => get(`/accounting/fiscal/periods/${id}/audit`),
-    getCurrentPeriod:(date)       => get(`/accounting/fiscal/current-period?entry_date=${date}`),
+    getCurrentPeriod:(date)       => get('/accounting/fiscal/current-period', { entry_date: date }),
   },
 
   notifications: {

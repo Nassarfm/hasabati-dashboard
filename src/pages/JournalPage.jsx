@@ -542,15 +542,25 @@ function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClas
         {(isIdle || isBlocked) && (
           <div className="col-span-12">
             <div className={`rounded-2xl border-2 p-8 text-center ${
-              isBlocked
-                ? 'bg-red-50/50 border-red-200'
-                : 'bg-slate-50 border-dashed border-slate-200'
+              periodState.status === 'closed'    ? 'bg-red-50/50 border-red-200' :
+              periodState.status === 'error'     ? 'bg-orange-50/50 border-orange-200' :
+              periodState.status === 'not_found' ? 'bg-amber-50/50 border-amber-200' :
+              'bg-slate-50 border-dashed border-slate-200'
             }`}>
-              <div className="text-4xl mb-3">{isBlocked ? '🔒' : '📅'}</div>
-              <div className={`text-base font-semibold mb-1 ${isBlocked ? 'text-red-700' : 'text-slate-600'}`}>
-                {isBlocked
-                  ? (periodState.status === 'closed' ? 'الفترة المالية مغلقة' : 'لا توجد سنة مالية')
-                  : 'اختر التاريخ أولاً'}
+              <div className="text-4xl mb-3">
+                {periodState.status === 'closed'    ? '🔒' :
+                 periodState.status === 'not_found' ? '📋' :
+                 periodState.status === 'error'     ? '⚠️' : '📅'}
+              </div>
+              <div className={`text-base font-semibold mb-1 ${
+                periodState.status === 'closed'    ? 'text-red-700' :
+                periodState.status === 'error'     ? 'text-orange-700' :
+                periodState.status === 'not_found' ? 'text-amber-700' : 'text-slate-600'
+              }`}>
+                {periodState.status === 'closed'    ? 'الفترة المالية مغلقة' :
+                 periodState.status === 'not_found' ? 'لا توجد سنة مالية' :
+                 periodState.status === 'error'     ? 'تعذّر التحقق من الفترة المالية' :
+                 'اختر التاريخ أولاً'}
               </div>
               <div className={`text-sm ${isBlocked ? 'text-red-500' : 'text-slate-400'}`}>
                 {periodState.status === 'closed'
