@@ -7,7 +7,7 @@ import { Field, toast, fmt } from '../components/UI'
 import { AttachmentPanel, NarrativePanel } from './JEPanels'
 import api from '../api/client'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://hasabati-backend-final-production.up.railway.app'
+const API_BASE = import.meta.env.VITE_API_URL || 'https://hasabati-erp-production.up.railway.app'
 
 const ACCOUNT_TYPE_CONFIG = {
   asset:     { label: 'أصول',     color: 'bg-blue-100 text-blue-700',      dot: '🔵' },
