@@ -1,6 +1,6 @@
 import { supabase } from '../AuthContext'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://hasabati-erp-production.up.railway.app/api/v1'
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://hasabati-backend-final-production.up.railway.app/api/v1'
 
 async function request(method, path, body = null) {
   const { data: { session } } = await supabase.auth.getSession()
@@ -51,10 +51,8 @@ export const api = {
     submitJE:        (id)                   => post(`/accounting/je/${id}/submit`, {}),
     approveJE:       (id)                   => post(`/accounting/je/${id}/approve`, {}),
     rejectJE:        (id, note)             => post(`/accounting/je/${id}/reject`, { note }),
-    // سجل الأحداث
     getActivity:      (jeId)          => get(`/accounting/je/${jeId}/activity`),
     getRecentActivity:()              => get('/accounting/je/activity/recent'),
-    // المرفقات
     listAttachments:  (jeId)               => get(`/accounting/je/${jeId}/attachments`),
     deleteAttachment: (jeId, attId)        => del(`/accounting/je/${jeId}/attachments/${attId}`),
     uploadAttachment: async (jeId, file, notes = '') => {
@@ -81,24 +79,20 @@ export const api = {
   },
 
   settings: {
-    // Regions
     listRegions:       ()              => get('/settings/regions'),
     createRegion:      (b)             => post('/settings/regions', b),
     updateRegion:      (id, b)         => put(`/settings/regions/${id}`, b),
     deleteRegion:      (id)            => del(`/settings/regions/${id}`),
-    // Cities
     suggestRegionCode: ()              => get('/settings/regions/suggest-code'),
     suggestCityCode:   (regionId)      => get(`/settings/cities/suggest-code?region_id=${regionId}`),
     listCities:        (regionId)      => get('/settings/cities' + (regionId ? `?region_id=${regionId}` : '')),
     createCity:        (regionId, b)   => post(`/settings/cities?region_id=${regionId}`, b),
     updateCity:        (id, b)         => put(`/settings/cities/${id}`, b),
     deleteCity:        (id)            => del(`/settings/cities/${id}`),
-    // Branch Types
     listBranchTypes:   ()              => get('/settings/branch-types'),
     createBranchType:  (b)             => post('/settings/branch-types', b),
     updateBranchType:  (id, b)         => put(`/settings/branch-types/${id}`, b),
     deleteBranchType:  (id)            => del(`/settings/branch-types/${id}`),
-    // Branches
     listBranches:      ()              => get('/settings/branches'),
     createBranch:      (b)             => post('/settings/branches', b),
     updateBranch:      (id, b)         => put(`/settings/branches/${id}`, b),
@@ -106,12 +100,10 @@ export const api = {
     deactivateBranch:  (id, b={})      => post(`/settings/branches/${id}/deactivate`, b),
     activateBranch:    (id)            => post(`/settings/branches/${id}/activate`, {}),
     suggestBranchCode: (rc, cc)        => get(`/settings/branches/suggest-code?region_code=${rc}&city_code=${cc}`),
-    // Cost Center Types
     listCCTypes:       ()              => get('/settings/cost-center-types'),
     createCCType:      (b)             => post('/settings/cost-center-types', b),
     updateCCType:      (id, b)         => put(`/settings/cost-center-types/${id}`, b),
     deleteCCType:      (id)            => del(`/settings/cost-center-types/${id}`),
-    // Cost Centers
     listCostCenters:   ()              => get('/settings/cost-centers'),
     createCostCenter:  (b)             => post('/settings/cost-centers', b),
     updateCostCenter:  (id, b)         => put(`/settings/cost-centers/${id}`, b),
@@ -119,11 +111,9 @@ export const api = {
     deactivateCostCenter: (id, b={})   => post(`/settings/cost-centers/${id}/deactivate`, b),
     activateCostCenter:   (id)         => post(`/settings/cost-centers/${id}/activate`, {}),
     suggestCCCode:     (parentCode)    => get(`/settings/cost-centers/suggest-code?parent_code=${parentCode}`),
-    // JE Types
     listJETypes:       ()              => get('/settings/je-types'),
     createJEType:      (b)             => post('/settings/je-types', b),
     updateJEType:      (id, b)         => put(`/settings/je-types/${id}`, b),
-    // Projects
     listProjects:      ()              => get('/settings/projects'),
     createProject:     (b)             => post('/settings/projects', b),
     updateProject:     (id, b)         => put(`/settings/projects/${id}`, b),

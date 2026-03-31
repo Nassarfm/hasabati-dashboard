@@ -27,7 +27,7 @@ export default function JournalPage() {
   const PAGE_SIZE = 50
 
   const [filters, setFilters] = useState({
-    status:'', date_from:'', date_to:'', je_type:'', search:'', amount_min:'', amount_max:''
+    status:'', date_from:'', date_to:'', je_type:'', search:'', min_amount:'', max_amount:''
   })
 
   const handleEditFromList = async (je) => {
@@ -40,17 +40,29 @@ export default function JournalPage() {
     catch { setViewJE(je) }
   }
 
-  // T3: total_count من backend
+  // T3: total_count — يقرأ من جميع المسارات الممكنة في الـ response
   const load = (p = page) => {
     setLoading(true)
     const params = {
       limit: PAGE_SIZE, offset: (p-1)*PAGE_SIZE,
-      ...Object.fromEntries(Object.entries(filters).filter(([,v]) => v))
+      ...Object.fromEntries(Object.entries(filters).filter(([,v]) => v !== ''))
     }
     api.accounting.getJEs(params)
       .then(d => {
-        setJes(d?.data||d?.items||[])
-        setTotalCount(d?.total_count||d?.total||d?.count||0)
+        // الـ items تأتي من data (array) أو items
+        const items = Array.isArray(d?.data) ? d.data : (d?.items || d?.data?.items || [])
+        setJes(items)
+        // الـ total يأتي من عدة مسارات حسب الـ backend
+        const total =
+          d?.total_count ||          // total_count في الـ root
+          d?.total ||                // total في الـ root
+          d?.meta?.total ||          // meta.total
+          d?.data?.total ||          // data.total
+          d?.data?.total_count ||    // data.total_count
+          d?.data?.count ||          // data.count (كما رأينا في Network)
+          d?.count ||                // count في الـ root
+          items.length               // fallback: طول المصفوفة
+        setTotalCount(total)
       })
       .catch(e => toast(e.message,'error'))
       .finally(() => setLoading(false))
@@ -197,13 +209,13 @@ export default function JournalPage() {
           <div className="flex flex-col gap-1"><label className="text-xs text-slate-400">إلى تاريخ</label>
             <input type="date" className="input w-36" value={filters.date_to} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/></div>
           <div className="flex flex-col gap-1"><label className="text-xs text-slate-400">مبلغ من</label>
-            <input type="number" className="input w-28" placeholder="0.00" value={filters.amount_min} onChange={e=>setFilters(p=>({...p,amount_min:e.target.value}))}/></div>
+            <input type="number" className="input w-28" placeholder="0.00" value={filters.min_amount} onChange={e=>setFilters(p=>({...p,min_amount:e.target.value}))}/></div>
           <div className="flex flex-col gap-1"><label className="text-xs text-slate-400">مبلغ إلى</label>
-            <input type="number" className="input w-28" placeholder="0.00" value={filters.amount_max} onChange={e=>setFilters(p=>({...p,amount_max:e.target.value}))}/></div>
+            <input type="number" className="input w-28" placeholder="0.00" value={filters.max_amount} onChange={e=>setFilters(p=>({...p,max_amount:e.target.value}))}/></div>
           <div className="flex gap-2 pb-0.5">
             <button onClick={() => { load(1); setPage(1) }} className="btn-primary">🔍 بحث</button>
             <button onClick={() => {
-              setFilters({status:'',date_from:'',date_to:'',je_type:'',search:'',amount_min:'',amount_max:''})
+              setFilters({status:'',date_from:'',date_to:'',je_type:'',search:'',min_amount:'',max_amount:''})
               setPage(1); setTimeout(()=>load(1),0)
             }} className="btn-ghost">↺ مسح</button>
           </div>
@@ -355,7 +367,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
 
   return (
     <SlideOver open={!!je} onClose={onClose}
-      title={je.serial} subtitle={`${jeType?.name_ar||je.je_type} — ${je.entry_date}`} size="xl"
+      title={je.serial} subtitle={`${jeType?.name_ar||je.je_type} — ${je.entry_date}`} size="2xl"
       footer={
         <div className="flex items-center justify-between">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إغلاق</button>
@@ -522,7 +534,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
         </div>
 
         {/* T5: Right Panel */}
-        <div className="w-60 shrink-0 space-y-3 sticky top-0 self-start">
+        <div className="w-72 shrink-0 space-y-3 sticky top-0 self-start">
 
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
             <div className="px-3 py-2 text-xs font-bold text-white" style={{background:'#1e3a5f'}}>📊 ملخص</div>
