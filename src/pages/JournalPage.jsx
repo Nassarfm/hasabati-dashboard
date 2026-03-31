@@ -1,8 +1,8 @@
-/* hasabati-journal-v3 */
+/* hasabati-journal-v4 */
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import NewJEPage from './NewJEPage'
-import { PageHeader, DataTable, Field, toast, fmt, StatusBadge } from '../components/UI'
+import { Field, toast, fmt } from '../components/UI'
 import SlideOver from '../components/SlideOver'
 import api from '../api/client'
 import { AttachmentPanel, NarrativePanel } from './JEPanels'
@@ -65,10 +65,11 @@ export default function JournalPage() {
       .finally(() => setLoading(false))
   }
 
+  // FIX 1: optional chaining على getDisplayName
   useEffect(() => {
     api.accounting.getDisplayName?.()
-      .then(d => setCurrentUser(d?.data?.display_name || d?.data?.email))
-      .catch(() => {})
+      .then(d => setCurrentUser(d?.data?.display_name || d?.data?.email || null))
+      .catch(() => setCurrentUser(null))
   }, [])
 
   useEffect(() => {
@@ -79,7 +80,8 @@ export default function JournalPage() {
       api.settings.listBranches(),
       api.settings.listCostCenters(),
       api.settings.listProjects(),
-      api.dimensions.list(),
+      // FIX 2: optional chaining على api.dimensions لمنع انهيار الصفحة
+      api.dimensions?.list?.() ?? Promise.resolve({ data: [] }),
     ]).then(([coa, jt, br, cc, pr, dims]) => {
       setAccounts((coa?.data || coa?.items || []).filter(a => a.postable))
       setJeTypes(jt?.data || [])
@@ -206,8 +208,10 @@ export default function JournalPage() {
             </button>
           ))}
           <div className="flex gap-1 mr-auto">
-            <button onClick={() => { setFilters(p => ({ ...p, date_from: new Date().toISOString().split('T')[0], date_to: new Date().toISOString().split('T')[0] })); load(1) }}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200">
+            <button onClick={() => {
+              const today = new Date().toISOString().split('T')[0]
+              setFilters(p => ({ ...p, date_from: today, date_to: today })); load(1)
+            }} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200">
               📅 اليوم
             </button>
             <button onClick={() => {
@@ -388,7 +392,7 @@ export default function JournalPage() {
         </div>
       )}
 
-      {/* ── سجل الأحداث — نافذة منفصلة ── */}
+      {/* ── سجل الأحداث ── */}
       {showActivity && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setShowActivity(false)} />
@@ -416,54 +420,6 @@ export default function JournalPage() {
           onPosted={() => { load(); setViewJE(null) }}
           onEdit={(je) => { setViewJE(null); setEditJE(je); setMode('edit') }}
         />
-      )}
-    </div>
-  )
-}
-
-
-// NewJEPage — imported from dedicated component file
-// See NewJEPage.jsx for full implementation
-
-function AccountSearch({ accounts, value, onChange }) {
-  const [search, setSearch] = useState('')
-  const [open,   setOpen]   = useState(false)
-  const ref = useRef(null)
-  const selected = accounts.find(a => a.code === value)
-  const filtered = accounts.filter(a =>
-    !search || a.code.includes(search) || a.name_ar.includes(search)
-  ).slice(0, 25)
-
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-
-  return (
-    <div className="relative" ref={ref}>
-      <input className="input text-xs w-full" placeholder="ابحث عن حساب..." autoComplete="off"
-        value={open ? search : (selected ? `${selected.code} — ${selected.name_ar}` : '')}
-        onFocus={() => { setOpen(true); setSearch('') }}
-        onChange={e => { setSearch(e.target.value); setOpen(true) }}
-      />
-      {open && (
-        <div className="absolute z-[200] top-full right-0 left-0 bg-white border border-slate-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
-          {filtered.length === 0
-            ? <div className="px-3 py-2 text-xs text-slate-400">لا توجد نتائج</div>
-            : filtered.map(a => (
-              <div key={a.id}
-                className="px-3 py-2 text-xs hover:bg-primary-50 cursor-pointer flex gap-2 items-center border-b border-slate-50 last:border-0"
-                onMouseDown={() => { onChange(a); setOpen(false); setSearch('') }}>
-                <span className="font-mono text-primary-600 font-semibold w-16 shrink-0">{a.code}</span>
-                <span className="text-slate-700 truncate flex-1">{a.name_ar}</span>
-                {a.dimension_required && (
-                  <span className="shrink-0 text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full">⚡أبعاد</span>
-                )}
-              </div>
-            ))
-          }
-        </div>
       )}
     </div>
   )
@@ -718,9 +674,9 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
               <div className="divide-y divide-slate-50">
                 <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">📝 أُنشئ بواسطة</span><span className="col-span-2 font-medium">{je.created_by || '—'}</span></div>
                 {je.submitted_by && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">📤 أُرسل بواسطة</span><span className="col-span-2 font-medium">{je.submitted_by}</span></div>}
-                {je.approved_by && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">✅ اعتُمد بواسطة</span><span className="col-span-2 font-medium text-emerald-700">{je.approved_by}</span></div>}
-                {je.posted_by && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">🚀 رُحِّل بواسطة</span><span className="col-span-2 font-medium text-blue-700">{je.posted_by}</span></div>}
-                {je.rejected_by && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">❌ رُفض بواسطة</span><span className="col-span-2 font-medium text-red-600">{je.rejected_by}{je.rejection_note && <span className="block text-red-400">السبب: {je.rejection_note}</span>}</span></div>}
+                {je.approved_by  && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">✅ اعتُمد بواسطة</span><span className="col-span-2 font-medium text-emerald-700">{je.approved_by}</span></div>}
+                {je.posted_by    && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">🚀 رُحِّل بواسطة</span><span className="col-span-2 font-medium text-blue-700">{je.posted_by}</span></div>}
+                {je.rejected_by  && <div className="grid grid-cols-3 px-4 py-2.5 text-xs"><span className="text-slate-400">❌ رُفض بواسطة</span><span className="col-span-2 font-medium text-red-600">{je.rejected_by}{je.rejection_note && <span className="block text-red-400">السبب: {je.rejection_note}</span>}</span></div>}
               </div>
             </div>
 
