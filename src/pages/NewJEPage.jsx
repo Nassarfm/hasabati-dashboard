@@ -266,9 +266,9 @@ function AIPanel({ lines, form, accounts }) {
           🤖 <span>السرد المحاسبي الذكي</span>
           <span className="text-xs text-slate-400 font-normal">• يعمل عبر Backend آمن</span>
         </div>
-        <button id="ai-generate-btn" onClick={generate} disabled={loading}
+        <button id="ai-generate-btn" disabled={true}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-600 text-white text-xs font-semibold hover:bg-primary-700 disabled:opacity-50">
-          {loading ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ التحليل...</> : '✨ توليد السرد (Alt+N)'}
+          {loading ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ التحليل...</> : '🔜 قريباً'}
         </button>
       </div>
       <textarea className="input w-full text-sm" rows={2} placeholder="ملاحظات إضافية للمحاسب (اختياري)..."
