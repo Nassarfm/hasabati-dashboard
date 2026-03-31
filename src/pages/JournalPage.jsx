@@ -493,7 +493,7 @@ export default function JournalPage() {
 }
 
 // ══════════════════════════════════════════════
-// SLIDE OVER
+// SLIDE OVER — تصميم واضح ومنظم
 // ══════════════════════════════════════════════
 function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser }) {
   const [loading,     setLoading]     = useState(false)
@@ -517,39 +517,62 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
 
   const sc = STATUS_CONFIG[je.status]||{label:je.status,bg:'bg-slate-100',text:'text-slate-600',dot:''}
   const isBalJE = Math.abs((parseFloat(je.total_debit)||0)-(parseFloat(je.total_credit)||0))<0.01
-  const allBranches = [...new Set((je.lines||[]).map(l=>l.branch_code).filter(Boolean))]
-  const allCCs      = [...new Set((je.lines||[]).map(l=>l.cost_center||l.cost_center_code).filter(Boolean))]
-  const allProjects = [...new Set((je.lines||[]).map(l=>l.project_code).filter(Boolean))]
+  const dr = parseFloat(je.total_debit)||0
+  const cr = parseFloat(je.total_credit)||0
 
   return (
     <SlideOver open={!!je} onClose={onClose}
-      title={je.serial} subtitle={`${jeType?.name_ar||je.je_type} — ${je.entry_date}`} size="2xl"
+      title={je.serial}
+      subtitle={`${jeType?.name_ar||je.je_type} — ${je.entry_date}`}
+      size="2xl"
       footer={
         <div className="flex items-center justify-between">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100">إغلاق</button>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-slate-600 hover:bg-slate-100 border border-slate-200">إغلاق</button>
           <div className="flex gap-2">
-            {je.status==='posted'&&<button onClick={() => printJE(je,jeType?.name_ar||je.je_type,currentUser)}
-              className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50">🖨️ طباعة</button>}
-            {(je.status==='draft'||je.status==='rejected')&&<button onClick={() => {onClose();onEdit?.(je)}}
-              className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50">✏️ تعديل</button>}
-            {je.status==='draft'&&<button onClick={() => doAction(()=>api.accounting.submitJE(je.id),'تم الإرسال للمراجعة')} disabled={loading}
-              className="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50">📤 إرسال للمراجعة</button>}
-            {je.status==='pending_review'&&<>
+            {je.status==='posted'&&(
+              <button onClick={() => printJE(je,jeType?.name_ar||je.je_type,currentUser)}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
+                🖨️ طباعة
+              </button>
+            )}
+            {(je.status==='draft'||je.status==='rejected')&&(
+              <button onClick={() => {onClose();onEdit?.(je)}}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold border border-blue-300 text-blue-700 hover:bg-blue-50 flex items-center gap-1.5">
+                ✏️ تعديل
+              </button>
+            )}
+            {je.status==='draft'&&(
+              <button onClick={() => doAction(()=>api.accounting.submitJE(je.id),'تم الإرسال للمراجعة')}
+                disabled={loading}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 flex items-center gap-1.5">
+                📤 إرسال للمراجعة
+              </button>
+            )}
+            {je.status==='pending_review'&&(
               <button onClick={() => setRejectModal(true)} disabled={loading}
-                className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50">❌ رفض</button>
-              <button onClick={() => doAction(()=>api.accounting.approveJE(je.id),'تمت الموافقة والترحيل ✅')} disabled={loading}
-                className="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">✅ موافقة وترحيل</button>
-            </>}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50">
+                ❌ رفض
+              </button>
+            )}
+            {je.status==='pending_review'&&(
+              <button onClick={() => doAction(()=>api.accounting.approveJE(je.id),'تمت الموافقة والترحيل ✅')}
+                disabled={loading}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5">
+                ✅ موافقة وترحيل
+              </button>
+            )}
           </div>
         </div>
       }>
 
+      {/* Reject Modal */}
       {rejectModal&&(
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setRejectModal(false)}/>
           <div className="relative bg-white rounded-2xl p-6 w-96 shadow-2xl">
             <h3 className="font-bold text-slate-800 mb-3">❌ سبب الرفض</h3>
-            <textarea className="input w-full" rows={4} value={rejectNote} onChange={e => setRejectNote(e.target.value)} placeholder="أدخل سبب الرفض..."/>
+            <textarea className="input w-full" rows={4} value={rejectNote}
+              onChange={e => setRejectNote(e.target.value)} placeholder="أدخل سبب الرفض..."/>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setRejectModal(false)} className="px-4 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100">إلغاء</button>
               <button onClick={() => {setRejectModal(false);doAction(()=>api.accounting.rejectJE(je.id,rejectNote),'تم رفض القيد')}}
@@ -559,160 +582,243 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
         </div>
       )}
 
-      <div className="flex gap-4">
-        <div className="flex-1 space-y-4 min-w-0">
-          <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-4 text-sm">
-            <div><div className="text-slate-400 text-xs mb-0.5">رقم القيد</div><div className="font-mono font-bold text-blue-700">{je.serial}</div></div>
-            <div><div className="text-slate-400 text-xs mb-0.5">الحالة</div><span className={`text-xs px-2 py-1 rounded-full font-medium ${sc.bg} ${sc.text}`}>{sc.dot} {sc.label}</span>
-              {je.rejection_note&&<div className="text-xs text-red-500 mt-1">سبب الرفض: {je.rejection_note}</div>}</div>
-            <div><div className="text-slate-400 text-xs mb-0.5">النوع</div><div className="font-medium">{jeType?`${jeType.code} — ${jeType.name_ar}`:je.je_type}</div></div>
-            <div><div className="text-slate-400 text-xs mb-0.5">التاريخ</div><div className="font-medium font-mono">{je.entry_date}</div></div>
-            <div><div className="text-slate-400 text-xs mb-0.5">المرجع</div><div className="font-medium">{je.reference||'—'}</div></div>
-            <div><div className="text-slate-400 text-xs mb-0.5">رُحِّل بواسطة</div><div className="text-xs font-medium">{je.posted_by||'—'}</div></div>
-            <div className="col-span-2"><div className="text-slate-400 text-xs mb-0.5">البيان</div><div className="font-medium">{je.description}</div></div>
-          </div>
+      <div className="space-y-5">
 
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-            {[{id:'lines',label:'📋 الأسطر'},{id:'attachments',label:'📎 المرفقات'},{id:'activity',label:'📜 الأحداث'},{id:'audit',label:'🔍 التدقيق'}
-            ].map(t => (
-              <button key={t.id} onClick={() => setActiveTab(t.id)}
-                className={"flex-1 py-1.5 rounded-lg text-xs font-medium transition-all "+(activeTab===t.id?"bg-white text-blue-700 shadow-sm":"text-slate-500 hover:text-slate-700")}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {activeTab==='lines'&&(
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <div className="grid grid-cols-12 text-white text-xs font-semibold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
-                <div className="col-span-1 px-3 py-2.5 text-center">#</div>
-                <div className="col-span-2 px-3 py-2.5">كود</div>
-                <div className="col-span-3 px-3 py-2.5">الحساب</div>
-                <div className="col-span-2 px-3 py-2.5">البيان</div>
-                <div className="col-span-2 px-3 py-2.5 text-center">مدين</div>
-                <div className="col-span-2 px-3 py-2.5 text-center">دائن</div>
+        {/* ── 1: شريط الحالة والملخص المالي ── */}
+        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+          {/* Header Strip */}
+          <div className="px-5 py-4 flex items-center justify-between"
+            style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+            <div className="flex items-center gap-4">
+              <div>
+                <div className="text-blue-200 text-xs mb-0.5">رقم القيد</div>
+                <div className="text-white font-mono font-bold text-xl tracking-wide">{je.serial}</div>
               </div>
-              {(je.lines||[]).map((l,i) => (
-                <div key={i} className="border-b border-slate-100 last:border-0">
-                  <div className="grid grid-cols-12 items-center hover:bg-blue-50/30">
-                    <div className="col-span-1 px-3 py-3 text-center text-xs text-slate-400 font-mono bg-slate-50">{i+1}</div>
-                    <div className="col-span-2 px-3 py-3"><span className="font-mono text-sm font-bold text-blue-700">{l.account_code}</span></div>
-                    <div className="col-span-3 px-3 py-3"><span className="text-sm font-medium">{l.account_name||'—'}</span></div>
-                    <div className="col-span-2 px-3 py-3"><span className="text-xs text-slate-500">{l.description}</span></div>
-                    <div className="col-span-2 px-3 py-3 text-center">{parseFloat(l.debit)>0&&<span className="font-mono font-bold text-blue-700 text-sm bg-blue-50 px-2 py-0.5 rounded-lg">{fmt(l.debit,2)}</span>}</div>
-                    <div className="col-span-2 px-3 py-3 text-center">{parseFloat(l.credit)>0&&<span className="font-mono font-bold text-emerald-700 text-sm bg-emerald-50 px-2 py-0.5 rounded-lg">{fmt(l.credit,2)}</span>}</div>
+              <div className="w-px h-10 bg-blue-400/40"/>
+              <div>
+                <div className="text-blue-200 text-xs mb-0.5">النوع</div>
+                <div className="text-white font-medium text-sm">{jeType?.name_ar||je.je_type}</div>
+              </div>
+              <div className="w-px h-10 bg-blue-400/40"/>
+              <div>
+                <div className="text-blue-200 text-xs mb-0.5">التاريخ</div>
+                <div className="text-white font-mono text-sm">{je.entry_date}</div>
+              </div>
+              {je.reference&&(
+                <>
+                  <div className="w-px h-10 bg-blue-400/40"/>
+                  <div>
+                    <div className="text-blue-200 text-xs mb-0.5">المرجع</div>
+                    <div className="text-white text-sm">{je.reference}</div>
                   </div>
-                  {(l.branch_code||l.cost_center||l.project_code)&&(
-                    <div className="bg-amber-50/60 border-t border-amber-100 px-4 py-1.5 flex gap-2 flex-wrap">
-                      {l.branch_code&&<span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🏢 {l.branch_name||l.branch_code}</span>}
-                      {l.cost_center&&<span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">💰 {l.cost_center_name||l.cost_center}</span>}
-                      {l.project_code&&<span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">📁 {l.project_name||l.project_code}</span>}
-                      {l.expense_classification_code&&<span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">🏷️ {l.expense_classification_name||l.expense_classification_code}</span>}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div className="grid grid-cols-12 border-t-2 border-slate-200" style={{background:'#f0f4f8'}}>
-                <div className="col-span-8 px-3 py-3 text-sm font-bold text-slate-700">الإجمالي ({(je.lines||[]).length} سطر)</div>
-                <div className="col-span-2 px-3 py-3 text-center"><span className="font-mono font-bold text-blue-700">{fmt(je.total_debit,2)}</span></div>
-                <div className="col-span-2 px-3 py-3 text-center"><span className="font-mono font-bold text-emerald-700">{fmt(je.total_credit,2)}</span></div>
+                </>
+              )}
+            </div>
+            <div>
+              <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${sc.bg} ${sc.text}`}>
+                {sc.dot} {sc.label}
+              </span>
+            </div>
+          </div>
+
+          {/* Balance Summary */}
+          <div className="grid grid-cols-4 divide-x divide-slate-100 bg-white">
+            <div className="px-5 py-4">
+              <div className="text-xs text-slate-400 mb-1">إجمالي المدين</div>
+              <div className="text-xl font-mono font-bold text-blue-700">{fmt(dr,2)}</div>
+            </div>
+            <div className="px-5 py-4">
+              <div className="text-xs text-slate-400 mb-1">إجمالي الدائن</div>
+              <div className="text-xl font-mono font-bold text-emerald-700">{fmt(cr,2)}</div>
+            </div>
+            <div className="px-5 py-4">
+              <div className="text-xs text-slate-400 mb-1">الفرق</div>
+              <div className={`text-xl font-mono font-bold ${isBalJE?'text-emerald-600':'text-red-500'}`}>
+                {fmt(Math.abs(dr-cr),2)}
               </div>
             </div>
-          )}
-
-          {activeTab==='attachments'&&(
-            <div className="space-y-3">
-              {attachments.length===0
-                ?<div className="text-center py-10 text-slate-400"><div className="text-3xl mb-2">📂</div><div className="text-sm">لا توجد مرفقات</div></div>
-                :attachments.map(att=>(
-                    <div key={att.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl hover:bg-blue-50">
-                      <span className="text-2xl">{att.file_type?.includes('pdf')?'📕':att.file_type?.includes('image')?'🖼️':'📄'}</span>
-                      <div className="flex-1"><div className="text-sm font-medium">{att.file_name}</div><div className="text-xs text-slate-400">{att.uploaded_by}</div></div>
-                      <a href={att.storage_url} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-xs hover:bg-blue-200">👁️ عرض</a>
-                    </div>
-                  ))
-              }
-            </div>
-          )}
-
-          {activeTab==='activity'&&<JEActivityTimeline jeId={je.id}/>}
-
-          {activeTab==='audit'&&(
-            <div className="space-y-3">
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
-                <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>📊 ملخص التأثير</div>
-                <div className="grid grid-cols-3 divide-x divide-slate-100">
-                  <div className="px-4 py-3 text-center"><div className="text-xs text-slate-400 mb-1">مدين</div><div className="font-mono font-bold text-blue-700">{fmt(je.total_debit,2)}</div></div>
-                  <div className="px-4 py-3 text-center"><div className="text-xs text-slate-400 mb-1">دائن</div><div className="font-mono font-bold text-emerald-700">{fmt(je.total_credit,2)}</div></div>
-                  <div className="px-4 py-3 text-center"><div className="text-xs text-slate-400 mb-1">الفرق</div><div className={`font-mono font-bold ${isBalJE?'text-emerald-600':'text-red-500'}`}>{fmt(Math.abs(je.total_debit-je.total_credit),2)}{isBalJE&&' ✅'}</div></div>
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
-                <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>🔍 معلومات التدقيق</div>
-                <div className="divide-y divide-slate-50">
-                  {[['📝 أُنشئ بواسطة',je.created_by],je.submitted_by&&['📤 أُرسل',je.submitted_by],
-                    je.approved_by&&['✅ اعتُمد',je.approved_by],je.posted_by&&['🚀 رُحِّل',je.posted_by],
-                    je.rejected_by&&['❌ رُفض',je.rejected_by]
-                  ].filter(Boolean).map(([lbl,val])=>(
-                    <div key={lbl} className="grid grid-cols-3 px-4 py-2.5 text-xs">
-                      <span className="text-slate-400">{lbl}</span>
-                      <span className="col-span-2 font-medium">{val||'—'}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Panel */}
-        <div className="w-64 shrink-0 space-y-3 sticky top-0 self-start">
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="px-3 py-2.5 text-xs font-bold text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>📊 ملخص</div>
-            <div className="p-3 space-y-3">
-              <div className={`flex items-center justify-center p-2.5 rounded-xl text-xs font-semibold ${isBalJE?'bg-emerald-50 text-emerald-700 border border-emerald-200':'bg-red-50 text-red-600 border border-red-200'}`}>
-                {isBalJE?'✅ Entry is Balanced':'⚠️ Unbalanced'}
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between"><span className="text-slate-400">Total Debit</span><span className="font-mono font-bold text-blue-700">{fmt(je.total_debit,2)}</span></div>
-                <div className="flex justify-between"><span className="text-slate-400">Total Credit</span><span className="font-mono font-bold text-emerald-700">{fmt(je.total_credit,2)}</span></div>
+            <div className="px-5 py-4 flex items-center justify-center">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border-2
+                ${isBalJE
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                  : 'bg-red-50 text-red-600 border-red-300'}`}>
+                {isBalJE ? '✅ متوازن' : '⚠️ غير متوازن'}
               </div>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="px-3 py-2.5 text-xs font-bold text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>📈 تمييزات</div>
-            <div className="p-3 space-y-1.5 max-h-44 overflow-y-auto">
-              {(je.lines||[]).filter(l=>parseFloat(l.debit)>0||parseFloat(l.credit)>0).map((l,i)=>{
-                const dr=parseFloat(l.debit)||0,cr=parseFloat(l.credit)||0
-                return(<div key={i} className="flex items-center justify-between text-xs gap-1">
-                  <span className="text-slate-600 truncate flex-1">{l.account_name||l.account_code}</span>
-                  {dr>0&&<span className="font-mono text-blue-600">+{fmt(dr,2)}</span>}
-                  {cr>0&&<span className="font-mono text-emerald-600">+{fmt(cr,2)}</span>}
-                </div>)
-              })}
-            </div>
-          </div>
-
-          {(allBranches.length>0||allCCs.length>0||allProjects.length>0)&&(
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="px-3 py-2.5 text-xs font-bold text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>🏷️ الأبعاد</div>
-              <div className="p-3 space-y-1.5">
-                {allBranches.map(b=><div key={b} className="flex items-center gap-1.5 text-xs"><span className="text-slate-400">Branch</span><span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{b}</span></div>)}
-                {allCCs.map(c=><div key={c} className="flex items-center gap-1.5 text-xs"><span className="text-slate-400">CC</span><span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{c}</span></div>)}
-                {allProjects.map(p=><div key={p} className="flex items-center gap-1.5 text-xs"><span className="text-slate-400">Project</span><span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">{p}</span></div>)}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="px-3 py-2.5 text-xs font-bold text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>🔍 التدقيق</div>
-            <div className="p-3 space-y-2 text-xs">
-              {je.created_by&&<div><div className="text-slate-400 mb-0.5">Created by</div><div className="font-medium truncate">{je.created_by}</div>{je.created_at&&<div className="text-slate-400">{new Date(je.created_at).toLocaleString('ar-SA')}</div>}</div>}
-              {je.posted_by&&<div className="border-t border-slate-100 pt-2"><div className="text-slate-400 mb-0.5">Posted by</div><div className="font-medium text-blue-700 truncate">{je.posted_by}</div>{je.posted_at&&<div className="text-slate-400">{new Date(je.posted_at).toLocaleString('ar-SA')}</div>}</div>}
-            </div>
+          {/* البيان */}
+          <div className="px-5 py-3 bg-slate-50 border-t border-slate-100">
+            <span className="text-xs text-slate-400 ml-2">البيان:</span>
+            <span className="text-sm font-medium text-slate-800">{je.description}</span>
           </div>
         </div>
+
+        {/* ── 2: معلومات التدقيق ── */}
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            {label:'أُنشئ بواسطة', value:je.created_by?.split('@')[0]||'—', icon:'👤', color:'text-slate-700'},
+            {label:'أُرسل للمراجعة', value:je.submitted_by?.split('@')[0]||'—', icon:'📤', color:'text-amber-600'},
+            {label:'اعتُمد بواسطة', value:je.approved_by?.split('@')[0]||'—', icon:'✅', color:'text-blue-700'},
+            {label:'رُحِّل بواسطة', value:je.posted_by?.split('@')[0]||'—', icon:'🚀', color:'text-emerald-700'},
+          ].map(item => (
+            <div key={item.label} className="bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-sm">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-sm">{item.icon}</span>
+                <span className="text-xs text-slate-400">{item.label}</span>
+              </div>
+              <div className={`text-sm font-semibold truncate ${item.color}`}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── 3: Tabs ── */}
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+          {[
+            {id:'lines',      label:'📋 أسطر القيد',  count:(je.lines||[]).length},
+            {id:'dimensions', label:'🏷️ الأبعاد',     count:null},
+            {id:'attachments',label:'📎 المرفقات',    count:attachments.length||null},
+            {id:'activity',   label:'📜 الأحداث',     count:null},
+          ].map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)}
+              className={"flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 " +
+                (activeTab===t.id?"bg-white text-blue-700 shadow-sm font-semibold":"text-slate-500 hover:text-slate-700")}>
+              {t.label}
+              {t.count!==null&&<span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab===t.id?'bg-blue-100 text-blue-700':'bg-slate-200 text-slate-500'}`}>{t.count}</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab: أسطر القيد ── */}
+        {activeTab==='lines'&&(
+          <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+            <div className="grid text-white text-xs font-semibold"
+              style={{gridTemplateColumns:'40px 120px 1fr 140px 130px 130px', background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+              <div className="px-3 py-3 text-center">#</div>
+              <div className="px-3 py-3">كود الحساب</div>
+              <div className="px-3 py-3">اسم الحساب / البيان</div>
+              <div className="px-3 py-3">الأبعاد</div>
+              <div className="px-3 py-3 text-center">مدين</div>
+              <div className="px-3 py-3 text-center">دائن</div>
+            </div>
+
+            {(je.lines||[]).map((l,i) => {
+              const ldr = parseFloat(l.debit)||0
+              const lcr = parseFloat(l.credit)||0
+              const hasDims = l.branch_code||l.cost_center||l.project_code||l.expense_classification_code
+              return (
+                <div key={i} className={`grid border-b border-slate-100 last:border-0 items-center hover:bg-blue-50/30 transition-colors
+                  ${i%2===0?'bg-white':'bg-slate-50/50'}`}
+                  style={{gridTemplateColumns:'40px 120px 1fr 140px 130px 130px'}}>
+                  {/* # */}
+                  <div className="px-3 py-4 text-center">
+                    <span className="text-xs text-slate-400 bg-slate-100 rounded-lg px-2 py-1 font-mono">{i+1}</span>
+                  </div>
+                  {/* كود */}
+                  <div className="px-3 py-4">
+                    <span className="font-mono font-bold text-blue-700 text-sm bg-blue-50 px-2 py-1 rounded-lg">{l.account_code}</span>
+                  </div>
+                  {/* الاسم + البيان */}
+                  <div className="px-3 py-4">
+                    <div className="font-semibold text-slate-800 text-sm">{l.account_name||'—'}</div>
+                    {l.description&&<div className="text-xs text-slate-400 mt-0.5">{l.description}</div>}
+                  </div>
+                  {/* الأبعاد */}
+                  <div className="px-3 py-4">
+                    {hasDims ? (
+                      <div className="flex flex-col gap-1">
+                        {l.branch_code&&<span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full w-fit">🏢 {l.branch_name||l.branch_code}</span>}
+                        {l.cost_center&&<span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full w-fit">💰 {l.cost_center_name||l.cost_center}</span>}
+                        {l.project_code&&<span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full w-fit">📁 {l.project_name||l.project_code}</span>}
+                        {l.expense_classification_code&&<span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full w-fit">🏷️ {l.expense_classification_name||l.expense_classification_code}</span>}
+                      </div>
+                    ) : <span className="text-slate-300 text-xs">—</span>}
+                  </div>
+                  {/* مدين */}
+                  <div className="px-3 py-4 text-center">
+                    {ldr>0
+                      ? <span className="font-mono font-bold text-blue-700 text-base">{fmt(ldr,2)}</span>
+                      : <span className="text-slate-200">—</span>}
+                  </div>
+                  {/* دائن */}
+                  <div className="px-3 py-4 text-center">
+                    {lcr>0
+                      ? <span className="font-mono font-bold text-emerald-700 text-base">{fmt(lcr,2)}</span>
+                      : <span className="text-slate-200">—</span>}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Footer */}
+            <div className="grid border-t-2 border-slate-300 font-bold"
+              style={{gridTemplateColumns:'40px 120px 1fr 140px 130px 130px', background:'#f0f4f8'}}>
+              <div className="col-span-4 px-4 py-3 text-slate-600 text-sm">
+                الإجمالي <span className="text-slate-400 font-normal mr-1 text-xs">({(je.lines||[]).length} سطر)</span>
+              </div>
+              <div className="px-3 py-3 text-center">
+                <div className="font-mono font-bold text-blue-700 text-base">{fmt(dr,2)}</div>
+                <div className="text-xs text-blue-400">مدين</div>
+              </div>
+              <div className="px-3 py-3 text-center">
+                <div className="font-mono font-bold text-emerald-700 text-base">{fmt(cr,2)}</div>
+                <div className="text-xs text-emerald-400">دائن</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: الأبعاد ── */}
+        {activeTab==='dimensions'&&(
+          <div className="space-y-3">
+            {(je.lines||[]).filter(l=>l.branch_code||l.cost_center||l.project_code||l.expense_classification_code).length===0
+              ? <div className="text-center py-10 text-slate-400"><div className="text-3xl mb-2">🏷️</div><div className="text-sm">لا توجد أبعاد مطبقة على هذا القيد</div></div>
+              : (je.lines||[]).filter(l=>l.branch_code||l.cost_center||l.project_code).map((l,i) => (
+                  <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="font-mono text-blue-700 font-bold text-sm bg-blue-50 px-2 py-0.5 rounded">{l.account_code}</span>
+                      <span className="text-sm font-medium text-slate-700">{l.account_name}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {l.branch_code&&<span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-xl text-sm font-medium">🏢 <span className="font-bold">{l.branch_code}</span>{l.branch_name&&<span className="text-blue-500">— {l.branch_name}</span>}</span>}
+                      {l.cost_center&&<span className="flex items-center gap-1.5 bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1.5 rounded-xl text-sm font-medium">💰 <span className="font-bold">{l.cost_center}</span>{l.cost_center_name&&<span className="text-purple-500">— {l.cost_center_name}</span>}</span>}
+                      {l.project_code&&<span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-xl text-sm font-medium">📁 <span className="font-bold">{l.project_code}</span>{l.project_name&&<span className="text-emerald-500">— {l.project_name}</span>}</span>}
+                      {l.expense_classification_code&&<span className="flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-xl text-sm font-medium">🏷️ <span className="font-bold">{l.expense_classification_code}</span>{l.expense_classification_name&&<span className="text-amber-500">— {l.expense_classification_name}</span>}</span>}
+                    </div>
+                  </div>
+                ))
+            }
+          </div>
+        )}
+
+        {/* ── Tab: المرفقات ── */}
+        {activeTab==='attachments'&&(
+          <div className="space-y-3">
+            {attachments.length===0
+              ?<div className="text-center py-12 text-slate-400"><div className="text-4xl mb-3">📂</div><div className="text-sm font-medium">لا توجد مرفقات لهذا القيد</div></div>
+              :attachments.map(att=>(
+                  <div key={att.id} className="flex items-center gap-4 p-4 bg-white rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/30 transition-all shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-xl">
+                      {att.file_type?.includes('pdf')?'📕':att.file_type?.includes('image')?'🖼️':'📄'}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-slate-800">{att.file_name}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">{att.uploaded_by} · {new Date(att.uploaded_at).toLocaleDateString('ar-SA')}</div>
+                      {att.notes&&<div className="text-xs text-amber-600 mt-0.5">{att.notes}</div>}
+                    </div>
+                    <a href={att.storage_url} target="_blank" rel="noreferrer"
+                      className="px-4 py-2 rounded-xl bg-blue-100 text-blue-700 text-sm font-medium hover:bg-blue-200 transition-colors">
+                      👁️ عرض
+                    </a>
+                  </div>
+                ))
+            }
+          </div>
+        )}
+
+        {/* ── Tab: الأحداث ── */}
+        {activeTab==='activity'&&<JEActivityTimeline jeId={je.id}/>}
+
       </div>
     </SlideOver>
   )
