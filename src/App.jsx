@@ -12,83 +12,140 @@ import BranchesPage from './pages/BranchesPage'
 import CostCentersPage from './pages/CostCentersPage'
 import ProjectsPage from './pages/ProjectsPage'
 import FiscalPeriodsPage from './pages/FiscalPeriodsPage'
+import TrialBalancePage from './pages/TrialBalancePage'
+import LedgerPage from './pages/LedgerPage'
 import {
   SalesPage, PurchasesPage, InventoryPage, HRPage,
-  TrialBalancePage, ReportsPage, VATPage, AssetsPage, TreasuryPage
+  ReportsPage, VATPage, AssetsPage, TreasuryPage
 } from './pages/OtherPages'
-
-const PAGES = {
-  dashboard:  { component: DashboardPage,    label: 'لوحة التحكم' },
-  coa:        { component: COAPage,          label: 'دليل الحسابات' },
-  dimensions:   { component: DimensionsPage,   label: 'الأبعاد المحاسبية' },
-  branches:     { component: BranchesPage,     label: 'الفروع' },
-  costcenters:  { component: CostCentersPage,  label: 'مراكز التكلفة' },
-  projects:     { component: ProjectsPage,     label: 'المشاريع' },
-  fiscal:       { component: FiscalPeriodsPage, label: 'الفترات المالية' },
-  journal:    { component: JournalPage,      label: 'القيود اليومية' },
-  trialbal:   { component: TrialBalancePage, label: 'ميزان المراجعة' },
-  sales:      { component: SalesPage,        label: 'المبيعات' },
-  purchases:  { component: PurchasesPage,    label: 'المشتريات' },
-  inventory:  { component: InventoryPage,    label: 'المخزون' },
-  hr:         { component: HRPage,           label: 'الموارد البشرية' },
-  assets:     { component: AssetsPage,       label: 'الأصول الثابتة' },
-  treasury:   { component: TreasuryPage,     label: 'الخزينة' },
-  reports:    { component: ReportsPage,      label: 'التقارير المالية' },
-  vat:        { component: VATPage,          label: 'ضريبة القيمة المضافة' },
-}
 
 function AppContent() {
   const { user, loading } = useAuth()
   const [page,      setPage]      = useState('dashboard')
   const [collapsed, setCollapsed] = useState(false)
 
+  // للـ Drill-down من ميزان المراجعة → الأستاذ العام
+  const [ledgerAccount, setLedgerAccount] = useState({ code:'', name:'' })
+
+  const navigateToLedger = (code, name) => {
+    setLedgerAccount({ code, name })
+    setPage('ledger')
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <span className="text-white text-2xl font-bold">ح</span>
           </div>
-          <div className="spinner mx-auto" />
+          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/>
         </div>
       </div>
     )
   }
 
-  if (!user) return <LoginPage />
+  if (!user) return <LoginPage/>
 
   const sideWidth = collapsed ? 64 : 240
-  const CurrentPage = PAGES[page]?.component || DashboardPage
-  const currentLabel = PAGES[page]?.label || 'لوحة التحكم'
+
+  const PAGE_LABELS = {
+    dashboard:  'لوحة التحكم',
+    coa:        'دليل الحسابات',
+    dimensions: 'الأبعاد المحاسبية',
+    branches:   'الفروع',
+    costcenters:'مراكز التكلفة',
+    projects:   'المشاريع',
+    fiscal:     'الفترات المالية',
+    journal:    'القيود اليومية',
+    trialbal:   'ميزان المراجعة',
+    ledger:     'الأستاذ العام',
+    sales:      'المبيعات',
+    purchases:  'المشتريات',
+    inventory:  'المخزون',
+    hr:         'الموارد البشرية',
+    assets:     'الأصول الثابتة',
+    treasury:   'الخزينة',
+    reports:    'التقارير المالية',
+    vat:        'ضريبة القيمة المضافة',
+  }
+
+  const renderPage = () => {
+    switch(page) {
+      case 'dashboard':   return <DashboardPage/>
+      case 'coa':         return <COAPage/>
+      case 'dimensions':  return <DimensionsPage/>
+      case 'branches':    return <BranchesPage/>
+      case 'costcenters': return <CostCentersPage/>
+      case 'projects':    return <ProjectsPage/>
+      case 'fiscal':      return <FiscalPeriodsPage/>
+      case 'journal':     return <JournalPage/>
+      case 'trialbal':
+        return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
+      case 'ledger':
+        return <LedgerPage
+          initialAccountCode={ledgerAccount.code}
+          initialAccountName={ledgerAccount.name}/>
+      case 'sales':       return <SalesPage/>
+      case 'purchases':   return <PurchasesPage/>
+      case 'inventory':   return <InventoryPage/>
+      case 'hr':          return <HRPage/>
+      case 'assets':      return <AssetsPage/>
+      case 'treasury':    return <TreasuryPage/>
+      case 'reports':     return <ReportsPage/>
+      case 'vat':         return <VATPage/>
+      default:            return <DashboardPage/>
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
       <Sidebar
         activePage={page}
-        onNavigate={setPage}
+        onNavigate={(p) => {
+          // إذا انتقل لغير الأستاذ العام، امسح الحساب المختار
+          if (p !== 'ledger') setLedgerAccount({ code:'', name:'' })
+          setPage(p)
+        }}
         collapsed={collapsed}
         onToggle={() => setCollapsed(p => !p)}
       />
       <main className="min-h-screen transition-all duration-300" style={{ marginRight: sideWidth }}>
         <header className="bg-white border-b border-slate-100 sticky top-0 z-20 px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-slate-500">
-            <span>حساباتي ERP</span>
-            <span>/</span>
-            <span className="text-slate-800 font-medium">{currentLabel}</span>
+            <span className="font-semibold text-slate-800">حساباتي</span>
+            <span className="text-slate-300">ERP v2.0</span>
+            <span className="text-slate-300">/</span>
+            <span className="text-slate-800 font-medium">{PAGE_LABELS[page]||page}</span>
+            {/* Breadcrumb للأستاذ العام */}
+            {page==='ledger' && ledgerAccount.code && (
+              <>
+                <span className="text-slate-300">/</span>
+                <span className="text-blue-700 font-mono font-bold">{ledgerAccount.code}</span>
+                <span className="text-slate-500">{ledgerAccount.name}</span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-3">
-            <NotificationBell />
+            {/* زر الرجوع من الأستاذ العام */}
+            {page==='ledger' && (
+              <button onClick={() => setPage('trialbal')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+                ← ميزان المراجعة
+              </button>
+            )}
+            <NotificationBell/>
             <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"/>
               متصل بـ Railway
             </div>
           </div>
         </header>
         <div className="p-6" key={page}>
-          <CurrentPage />
+          {renderPage()}
         </div>
       </main>
-      <ToastProvider />
+      <ToastProvider/>
     </div>
   )
 }
@@ -96,8 +153,7 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <AppContent/>
     </AuthProvider>
   )
 }
- 
