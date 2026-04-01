@@ -50,6 +50,7 @@ export default function JournalPage() {
   const [statusCounts, setStatusCounts] = useState({})
   const [filters,      setFilters]      = useState(EMPTY_FILTERS)
   const [exporting,    setExporting]    = useState(false)
+  const [allUsers,     setAllUsers]     = useState([]) // قائمة المنشئين
 
   // ── الإصلاح الجوهري: تمرير الفلاتر مباشرة لتجنب stale closure ──
   const load = useCallback((p = 1, f = EMPTY_FILTERS) => {
@@ -63,23 +64,38 @@ export default function JournalPage() {
         const total = d?.total_count || d?.total || d?.meta?.total ||
                       d?.data?.total || d?.data?.count || d?.count || items.length
         setTotalCount(total)
+        // استخرج المنشئين من القيود لعرضهم في الـ dropdown
+        setAllUsers(prev => {
+          const existing = new Set(prev)
+          items.forEach(j => { if(j.created_by) existing.add(j.created_by) })
+          return [...existing]
+        })
       })
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }, [])
 
-  // ── عدد كل حالة من backend بشكل مستقل ──
+  // ── عدد كل حالة — limit كبير لضمان قراءة الـ total بشكل صحيح ──
   const loadStatusCounts = useCallback(async () => {
     try {
       const statuses = ['draft','pending_review','approved','posted','rejected','reversed']
       const results = await Promise.allSettled(
-        statuses.map(s => api.accounting.getJEs({ status:s, limit:1, offset:0 }))
+        statuses.map(s => api.accounting.getJEs({ status:s, limit:1000, offset:0 }))
       )
       const counts = {}
       results.forEach((r,i) => {
         if (r.status==='fulfilled') {
           const d = r.value
-          counts[statuses[i]] = d?.total_count||d?.total||d?.data?.count||d?.count||0
+          const total =
+            d?.total_count ||
+            d?.total       ||
+            d?.meta?.total ||
+            d?.data?.total ||
+            d?.data?.total_count ||
+            d?.count       ||
+            (Array.isArray(d?.data)  ? d.data.length  : 0) ||
+            (Array.isArray(d?.items) ? d.items.length  : 0)
+          counts[statuses[i]] = total || 0
         }
       })
       setStatusCounts(counts)
@@ -168,8 +184,20 @@ export default function JournalPage() {
     finally { setExporting(false) }
   }
 
-  const totalDR = jes.reduce((s,j) => s+(parseFloat(j.total_debit)||0), 0)
-  const totalCR = jes.reduce((s,j) => s+(parseFloat(j.total_credit)||0), 0)
+  // ── Client-side filtering للمبلغ والبحث (Backend قد لا يدعمها) ──
+  const displayJes = jes.filter(j => {
+    if (filters.min_amount) {
+      const amt = parseFloat(j.total_debit)||parseFloat(j.total_credit)||0
+      if (amt < parseFloat(filters.min_amount)) return false
+    }
+    if (filters.max_amount) {
+      const amt = parseFloat(j.total_debit)||parseFloat(j.total_credit)||0
+      if (amt > parseFloat(filters.max_amount)) return false
+    }
+    return true
+  })
+  const totalDR = displayJes.reduce((s,j) => s+(parseFloat(j.total_debit)||0), 0)
+  const totalCR = displayJes.reduce((s,j) => s+(parseFloat(j.total_credit)||0), 0)
   const balanced = Math.abs(totalDR-totalCR) < 0.01
   const totalPages = Math.ceil(totalCount/PAGE_SIZE)||1
   const grandTotal = Object.values(statusCounts).reduce((s,v) => s+v, 0) || totalCount
@@ -319,10 +347,13 @@ export default function JournalPage() {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">👤 المنشئ</label>
-            <input className="input w-36" placeholder="اسم أو بريد..."
-              value={filters.created_by}
-              onChange={e => setFilters(p => ({...p,created_by:e.target.value}))}
-              onKeyDown={e => e.key==='Enter' && applyFilter({})}/>
+            <select className="select w-40" value={filters.created_by}
+              onChange={e => applyFilter({created_by:e.target.value})}>
+              <option value="">كل المنشئين</option>
+              {allUsers.map(u => (
+                <option key={u} value={u}>{u.split('@')[0]}</option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2 pb-0.5">
             <button onClick={() => applyFilter({})}
@@ -373,13 +404,13 @@ export default function JournalPage() {
             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto mb-3"/>
             <div className="text-sm">جارٍ التحميل...</div>
           </div>
-        ) : jes.length===0 ? (
+        ) : displayJes.length===0 ? (
           <div className="text-center py-16 text-slate-400">
             <div className="text-5xl mb-3">📋</div>
             <div className="text-base font-medium text-slate-600 mb-1">لا توجد قيود</div>
             <div className="text-sm">{Object.values(filters).some(v=>v!=='')?'جرّب تغيير الفلاتر':'ابدأ بإنشاء أول قيد'}</div>
           </div>
-        ) : jes.map((je,idx) => {
+        ) : displayJes.map((je,idx) => {
           const sc = STATUS_CONFIG[je.status]||STATUS_CONFIG.draft
           const dr = parseFloat(je.total_debit)||0
           const cr = parseFloat(je.total_credit)||0
@@ -425,7 +456,7 @@ export default function JournalPage() {
         {jes.length > 0 && (
           <div className="grid grid-cols-12 text-sm font-semibold border-t-2 border-slate-200" style={{background:'#f0f4f8'}}>
             <div className="col-span-7 px-4 py-3 text-slate-600 text-xs">
-              عرض <span className="font-bold text-slate-800 text-sm">{jes.length}</span> من أصل <span className="font-bold text-blue-700 text-sm">{totalCount}</span> قيد
+              عرض <span className="font-bold text-slate-800 text-sm">{displayJes.length}</span> من أصل <span className="font-bold text-blue-700 text-sm">{totalCount}</span> قيد
               {filters.status&&<span className="mr-2 text-slate-400">— {STATUS_CONFIG[filters.status]?.label}</span>}
             </div>
             <div className="col-span-1 px-3 py-3 text-center font-mono text-blue-700">{fmt(totalDR,2)}</div>
