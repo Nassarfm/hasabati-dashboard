@@ -15,7 +15,7 @@ import api from '../api/client'
 import { printJE } from './JEPrint'
 import { JEActivityTimeline, RecentActivityPanel } from './ActivityLog'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 20
 
 const STATUS_CONFIG = {
   draft:          { label:'مسودة',        bg:'bg-slate-100',  text:'text-slate-600',  dot:'⚪' },
