@@ -19,17 +19,43 @@ import {
   ReportsPage, VATPage, AssetsPage, TreasuryPage
 } from './pages/OtherPages'
 
+const PAGE_LABELS = {
+  dashboard:   'لوحة التحكم',
+  coa:         'دليل الحسابات',
+  dimensions:  'الأبعاد المحاسبية',
+  branches:    'الفروع',
+  costcenters: 'مراكز التكلفة',
+  projects:    'المشاريع',
+  fiscal:      'الفترات المالية',
+  journal:     'القيود اليومية',
+  trialbal:    'ميزان المراجعة',
+  ledger:      'الأستاذ العام',
+  sales:       'المبيعات',
+  purchases:   'المشتريات',
+  inventory:   'المخزون',
+  hr:          'الموارد البشرية',
+  assets:      'الأصول الثابتة',
+  treasury:    'الخزينة',
+  reports:     'التقارير المالية',
+  vat:         'ضريبة القيمة المضافة',
+}
+
 function AppContent() {
   const { user, loading } = useAuth()
   const [page,      setPage]      = useState('dashboard')
   const [collapsed, setCollapsed] = useState(false)
 
-  // للـ Drill-down من ميزان المراجعة → الأستاذ العام
+  // Drill-down: ميزان المراجعة → الأستاذ العام
   const [ledgerAccount, setLedgerAccount] = useState({ code:'', name:'' })
 
   const navigateToLedger = (code, name) => {
     setLedgerAccount({ code, name })
     setPage('ledger')
+  }
+
+  const navigate = (p) => {
+    if (p !== 'ledger') setLedgerAccount({ code:'', name:'' })
+    setPage(p)
   }
 
   if (loading) {
@@ -49,27 +75,6 @@ function AppContent() {
 
   const sideWidth = collapsed ? 64 : 240
 
-  const PAGE_LABELS = {
-    dashboard:  'لوحة التحكم',
-    coa:        'دليل الحسابات',
-    dimensions: 'الأبعاد المحاسبية',
-    branches:   'الفروع',
-    costcenters:'مراكز التكلفة',
-    projects:   'المشاريع',
-    fiscal:     'الفترات المالية',
-    journal:    'القيود اليومية',
-    trialbal:   'ميزان المراجعة',
-    ledger:     'الأستاذ العام',
-    sales:      'المبيعات',
-    purchases:  'المشتريات',
-    inventory:  'المخزون',
-    hr:         'الموارد البشرية',
-    assets:     'الأصول الثابتة',
-    treasury:   'الخزينة',
-    reports:    'التقارير المالية',
-    vat:        'ضريبة القيمة المضافة',
-  }
-
   const renderPage = () => {
     switch(page) {
       case 'dashboard':   return <DashboardPage/>
@@ -80,12 +85,8 @@ function AppContent() {
       case 'projects':    return <ProjectsPage/>
       case 'fiscal':      return <FiscalPeriodsPage/>
       case 'journal':     return <JournalPage/>
-      case 'trialbal':
-        return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
-      case 'ledger':
-        return <LedgerPage
-          initialAccountCode={ledgerAccount.code}
-          initialAccountName={ledgerAccount.name}/>
+      case 'trialbal':    return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
+      case 'ledger':      return <LedgerPage initialAccountCode={ledgerAccount.code} initialAccountName={ledgerAccount.name}/>
       case 'sales':       return <SalesPage/>
       case 'purchases':   return <PurchasesPage/>
       case 'inventory':   return <InventoryPage/>
@@ -102,45 +103,49 @@ function AppContent() {
     <div className="min-h-screen bg-slate-50">
       <Sidebar
         activePage={page}
-        onNavigate={(p) => {
-          // إذا انتقل لغير الأستاذ العام، امسح الحساب المختار
-          if (p !== 'ledger') setLedgerAccount({ code:'', name:'' })
-          setPage(p)
-        }}
+        onNavigate={navigate}
         collapsed={collapsed}
         onToggle={() => setCollapsed(p => !p)}
       />
       <main className="min-h-screen transition-all duration-300" style={{ marginRight: sideWidth }}>
         <header className="bg-white border-b border-slate-100 sticky top-0 z-20 px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <span className="font-semibold text-slate-800">حساباتي</span>
-            <span className="text-slate-300">ERP v2.0</span>
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-bold text-slate-700">حساباتي</span>
+            <span className="text-slate-300 font-light">ERP v2.0</span>
             <span className="text-slate-300">/</span>
-            <span className="text-slate-800 font-medium">{PAGE_LABELS[page]||page}</span>
-            {/* Breadcrumb للأستاذ العام */}
-            {page==='ledger' && ledgerAccount.code && (
+            {/* ميزان المراجعة */}
+            {page === 'ledger' && ledgerAccount.code ? (
               <>
+                <button onClick={() => navigate('trialbal')}
+                  className="text-slate-500 hover:text-blue-700 transition-colors">
+                  ميزان المراجعة
+                </button>
                 <span className="text-slate-300">/</span>
-                <span className="text-blue-700 font-mono font-bold">{ledgerAccount.code}</span>
-                <span className="text-slate-500">{ledgerAccount.name}</span>
+                <span className="text-blue-700 font-bold font-mono">{ledgerAccount.code}</span>
+                <span className="text-slate-600">{ledgerAccount.name}</span>
               </>
+            ) : (
+              <span className="text-slate-800 font-medium">{PAGE_LABELS[page]||page}</span>
             )}
           </div>
+
           <div className="flex items-center gap-3">
             {/* زر الرجوع من الأستاذ العام */}
-            {page==='ledger' && (
-              <button onClick={() => setPage('trialbal')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            {page === 'ledger' && ledgerAccount.code && (
+              <button onClick={() => navigate('trialbal')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors">
                 ← ميزان المراجعة
               </button>
             )}
             <NotificationBell/>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"/>
               متصل بـ Railway
             </div>
           </div>
         </header>
+
         <div className="p-6" key={page}>
           {renderPage()}
         </div>
