@@ -32,14 +32,14 @@ const INSTANCE_STATUS = {
 // API helpers
 // ══════════════════════════════════════════════════════════
 const recurringApi = {
-  list:        (params={}) => api.get('/accounting/recurring', params),
-  get:         (id)        => api.get(`/accounting/recurring/${id}`),
-  preview:     (payload)   => api.post('/accounting/recurring/preview', payload),
-  create:      (payload)   => api.post('/accounting/recurring', payload),
-  postPending: (id)        => api.post(`/accounting/recurring/${id}/post-pending`),
-  skip:        (instId,note)=>api.post(`/accounting/recurring/instances/${instId}/skip`,{note}),
-  setStatus:   (id,status) => api.patch(`/accounting/recurring/${id}/status`,{status}),
-  delete:      (id)        => api.delete(`/accounting/recurring/${id}`),
+  list:        (params={}) => api.accounting.listRecurring(params),
+  get:         (id)        => api.accounting.getRecurring(id),
+  preview:     (payload)   => api.accounting.previewRecurring(payload),
+  create:      (payload)   => api.accounting.createRecurring(payload),
+  postPending: (id)        => api.accounting.postRecurring(id),
+  skip:        (instId,note)=>api.accounting.skipInstance(instId,note),
+  setStatus:   (id,status) => api.accounting.setRecurringStatus(id,status),
+  delete:      (id)        => api.accounting.deleteRecurring(id),
 }
 
 // ══════════════════════════════════════════════════════════
