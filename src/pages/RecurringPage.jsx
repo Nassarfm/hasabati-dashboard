@@ -520,15 +520,21 @@ function CreateRecurringForm({ onBack }) {
 function RecurringDetail({ entry: initEntry, onBack, onRefresh }) {
   const [entry,   setEntry]   = useState(initEntry)
   const [posting, setPosting] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const refresh = () => {
     setLoading(true)
-    recurringApi.get(entry.id)
-      .then(d => setEntry(d?.data||d?.data||d))
+    recurringApi.get(initEntry.id)
+      .then(d => {
+        const data = d?.data || d
+        setEntry(data)
+      })
       .catch(()=>{})
       .finally(()=>setLoading(false))
   }
+
+  // جلب التفاصيل الكاملة مع الأقساط عند الفتح
+  useEffect(() => { refresh() }, [])
 
   const handlePostPending = async () => {
     setPosting(true)
