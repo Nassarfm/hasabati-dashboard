@@ -199,7 +199,7 @@ function CreateRecurringForm({ onBack }) {
   const [form, setForm] = useState({
     name:'', description:'', total_amount:'',
     frequency:'monthly', post_day:'start',
-    start_date:'', end_date:'', je_type:'JV',
+    start_date:'', end_date:'', je_type:'REC',
     notes:'',
   })
 
@@ -308,11 +308,10 @@ function CreateRecurringForm({ onBack }) {
             </div>
             <div>
               <label className="text-xs text-slate-400 block mb-1.5">نوع القيد</label>
-              <select className="select w-full" value={form.je_type} onChange={e=>setForm(p=>({...p,je_type:e.target.value}))}>
-                <option value="JV">JV — قيد يومية</option>
-                <option value="ACR">ACR — إطفاء</option>
-                <option value="EXP">EXP — مصروف</option>
-              </select>
+              <div className="input w-full bg-slate-50 text-slate-700 flex items-center gap-2 cursor-not-allowed">
+                <span className="font-mono font-bold text-blue-700">REC</span>
+                <span>— قيد متكرر</span>
+              </div>
             </div>
             <div className="col-span-2">
               <label className="text-xs text-slate-400 block mb-1.5">الوصف *</label>
