@@ -14,9 +14,10 @@ import ProjectsPage from './pages/ProjectsPage'
 import FiscalPeriodsPage from './pages/FiscalPeriodsPage'
 import TrialBalancePage from './pages/TrialBalancePage'
 import LedgerPage from './pages/LedgerPage'
+import RecurringPage from './pages/RecurringPage'
 import {
   SalesPage, PurchasesPage, InventoryPage, HRPage,
-  ReportsPage, VATPage, AssetsPage, TreasuryPage
+  ReportsPage, VATPage, AssetsPage, TreasuryPage,
 } from './pages/OtherPages'
 
 const PAGE_LABELS = {
@@ -42,18 +43,21 @@ const PAGE_LABELS = {
   treasury:    'الخزينة',
 }
 
-// Placeholder للقيود العكسية — Phase 2
+// Placeholder — القيود العكسية
 function ReversingPage() {
   return (
     <div className="page-enter space-y-4">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold text-slate-800">القيود العكسية</h1><p className="text-sm text-slate-400 mt-0.5">إلغاء تأثير القيود المرحّلة بقيود معكوسة</p></div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">القيود العكسية</h1>
+          <p className="text-sm text-slate-400 mt-0.5">إلغاء تأثير القيود المرحّلة بقيود معكوسة</p>
+        </div>
       </div>
       <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-16 text-center">
         <div className="text-5xl mb-4">↩️</div>
         <div className="text-xl font-bold text-slate-700 mb-2">القيود العكسية</div>
         <div className="text-sm text-slate-400 mb-6 max-w-md mx-auto">
-          يتم إنشاء قيد عكسي بنفس مبالغ القيد الأصلي لكن بعكس المدين والدائن — يستخدم لإلغاء قيد خاطئ أو تسوية مؤقتة
+          يُنشئ قيداً عكسياً بنفس مبالغ القيد الأصلي لإلغاء تأثيره المحاسبي
         </div>
         <span className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 px-4 py-2 rounded-full text-sm font-medium">
           🔜 قريباً — Phase 2
@@ -63,51 +67,10 @@ function ReversingPage() {
   )
 }
 
-// Placeholder للقيود المتكررة — Phase 2
-function RecurringPage() {
-  return (
-    <div className="page-enter space-y-4">
-      <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold text-slate-800">القيود المتكررة</h1><p className="text-sm text-slate-400 mt-0.5">توزيع المبالغ تلقائياً على فترات متساوية</p></div>
-      </div>
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-4">
-        <div className="text-base font-bold text-slate-700">🔄 كيف تعمل القيود المتكررة؟</div>
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            {step:'1', icon:'📝', title:'أدخل القيد', desc:'حدد الحسابات والمبلغ الإجمالي ونوع التوزيع'},
-            {step:'2', icon:'📅', title:'حدد الفترة', desc:'من تاريخ إلى تاريخ — يولد النظام جدول الإطفاء تلقائياً'},
-            {step:'3', icon:'✅', title:'وافق وارحّل', desc:'يرحّل النظام قيداً شهرياً تلقائياً في أول أو نهاية كل شهر'},
-          ].map(s=>(
-            <div key={s.step} className="bg-slate-50 rounded-xl p-4 text-center">
-              <div className="text-3xl mb-2">{s.icon}</div>
-              <div className="font-bold text-slate-800 text-sm mb-1">{s.title}</div>
-              <div className="text-xs text-slate-500">{s.desc}</div>
-            </div>
-          ))}
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <div className="font-bold text-blue-800 text-sm mb-2">📌 مثال: إيجار سنوي</div>
-          <div className="text-xs text-blue-700 space-y-1">
-            <div>• المبلغ الإجمالي: 24,000 ريال</div>
-            <div>• الفترة: 1/1/2026 → 31/12/2026</div>
-            <div>• النتيجة: 12 قيد شهري × 2,000 ريال — مرحّل تلقائياً في أول كل شهر</div>
-          </div>
-        </div>
-        <div className="text-center pt-4">
-          <span className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 px-4 py-2 rounded-full text-sm font-medium">
-            🔜 قريباً — Phase 2
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function AppContent() {
   const { user, loading } = useAuth()
   const [page,      setPage]      = useState('dashboard')
   const [collapsed, setCollapsed] = useState(false)
-  // Drill-down: ميزان المراجعة → الأستاذ العام
   const [ledgerAccount, setLedgerAccount] = useState({ code:'', name:'' })
 
   const navigateToLedger = (code, name) => {
@@ -138,7 +101,7 @@ function AppContent() {
   const sideWidth = collapsed ? 64 : 240
 
   const renderPage = () => {
-    switch(page) {
+    switch (page) {
       case 'dashboard':   return <DashboardPage/>
       case 'coa':         return <COAPage/>
       case 'dimensions':  return <DimensionsPage/>
@@ -150,7 +113,6 @@ function AppContent() {
       case 'reversing':   return <ReversingPage/>
       case 'recurring':   return <RecurringPage/>
       case 'trialbal':    return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
-      // ── الأستاذ العام — صفحة مستقلة تماماً ──
       case 'ledger':      return <LedgerPage initialAccountCode={ledgerAccount.code} initialAccountName={ledgerAccount.name}/>
       case 'reports':     return <ReportsPage/>
       case 'vat':         return <VATPage/>
@@ -164,14 +126,13 @@ function AppContent() {
     }
   }
 
-  // Breadcrumb
   const getBreadcrumb = () => {
     if (page === 'ledger' && ledgerAccount.code) {
       return (
         <div className="flex items-center gap-2 text-sm">
           <span className="font-bold text-slate-700">حساباتي</span>
           <span className="text-slate-300">ERP v2.0 /</span>
-          <button onClick={()=>navigate('trialbal')} className="text-slate-500 hover:text-blue-700 transition-colors">
+          <button onClick={() => navigate('trialbal')} className="text-slate-500 hover:text-blue-700 transition-colors">
             ميزان المراجعة
           </button>
           <span className="text-slate-300">/</span>
@@ -184,20 +145,25 @@ function AppContent() {
       <div className="flex items-center gap-2 text-sm">
         <span className="font-bold text-slate-700">حساباتي</span>
         <span className="text-slate-300">ERP v2.0 /</span>
-        <span className="text-slate-800 font-medium">{PAGE_LABELS[page]||page}</span>
+        <span className="text-slate-800 font-medium">{PAGE_LABELS[page] || page}</span>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Sidebar activePage={page} onNavigate={navigate} collapsed={collapsed} onToggle={()=>setCollapsed(p=>!p)}/>
-      <main className="min-h-screen transition-all duration-300" style={{marginRight:sideWidth}}>
+      <Sidebar
+        activePage={page}
+        onNavigate={navigate}
+        collapsed={collapsed}
+        onToggle={() => setCollapsed(p => !p)}
+      />
+      <main className="min-h-screen transition-all duration-300" style={{ marginRight: sideWidth }}>
         <header className="bg-white border-b border-slate-100 sticky top-0 z-20 px-6 py-3 flex items-center justify-between">
           {getBreadcrumb()}
           <div className="flex items-center gap-3">
-            {page==='ledger'&&ledgerAccount.code&&(
-              <button onClick={()=>navigate('trialbal')}
+            {page === 'ledger' && ledgerAccount.code && (
+              <button onClick={() => navigate('trialbal')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors">
                 ← ميزان المراجعة
               </button>
@@ -209,7 +175,9 @@ function AppContent() {
             </div>
           </div>
         </header>
-        <div className="p-6" key={page}>{renderPage()}</div>
+        <div className="p-6" key={page}>
+          {renderPage()}
+        </div>
       </main>
       <ToastProvider/>
     </div>
