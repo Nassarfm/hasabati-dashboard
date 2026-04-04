@@ -82,7 +82,8 @@ export const api = {
     postRecurring:      (id)           => post(`/accounting/recurring/${id}/post-pending`, {}),
     skipInstance:       (instId, note) => post(`/accounting/recurring/instances/${instId}/skip`, { note }),
     setRecurringStatus: (id, status)   => patch(`/accounting/recurring/${id}/status`, { status }),
-    deleteRecurring:    (id)           => del(`/accounting/recurring/${id}`),
+    deleteRecurring:        (id)           => del(`/accounting/recurring/${id}`),
+    checkDueNotifications: ()             => post('/accounting/recurring/check-due-notifications', {}),
   },
 
   settings: {

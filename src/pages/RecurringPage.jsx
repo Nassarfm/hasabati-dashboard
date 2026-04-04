@@ -32,14 +32,15 @@ const INSTANCE_STATUS = {
 // API helpers
 // ══════════════════════════════════════════════════════════
 const recurringApi = {
-  list:        (params={}) => api.accounting.listRecurring(params),
-  get:         (id)        => api.accounting.getRecurring(id),
-  preview:     (payload)   => api.accounting.previewRecurring(payload),
-  create:      (payload)   => api.accounting.createRecurring(payload),
-  postPending: (id)        => api.accounting.postRecurring(id),
-  skip:        (instId,note)=>api.accounting.skipInstance(instId,note),
-  setStatus:   (id,status) => api.accounting.setRecurringStatus(id,status),
-  delete:      (id)        => api.accounting.deleteRecurring(id),
+  list:             (params={}) => api.accounting.listRecurring(params),
+  get:              (id)        => api.accounting.getRecurring(id),
+  preview:          (payload)   => api.accounting.previewRecurring(payload),
+  create:           (payload)   => api.accounting.createRecurring(payload),
+  postPending:      (id)        => api.accounting.postRecurring(id),
+  skip:             (instId,note)=>api.accounting.skipInstance(instId,note),
+  setStatus:        (id,status) => api.accounting.setRecurringStatus(id,status),
+  delete:           (id)        => api.accounting.deleteRecurring(id),
+  checkDue:         ()          => api.accounting.checkDueNotifications(),
 }
 
 // ══════════════════════════════════════════════════════════
@@ -53,6 +54,8 @@ export default function RecurringPage() {
 
   const loadList = useCallback(() => {
     setLoading(true)
+    // تحقق من الأقساط المستحقة وأرسل إشعاراً
+    recurringApi.checkDue().catch(()=>{})
     recurringApi.list()
       .then(d => setEntries(d?.data || d?.items || d || []))
       .catch(e => toast(e.message, 'error'))
