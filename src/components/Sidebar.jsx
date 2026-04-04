@@ -53,7 +53,7 @@ const SECTIONS = [
 ]
 
 export default function Sidebar({ activePage, onNavigate, collapsed, onToggle }) {
-  const { user, signOut } = useAuth()
+  const { user, logout } = useAuth()
   const [openSections, setOpenSections] = useState({
     master: true, transactions: true, reports: true, other: false
   })
@@ -61,7 +61,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
   const toggleSection = (id) => setOpenSections(p => ({ ...p, [id]: !p[id] }))
 
   const handleSignOut = async () => {
-    try { await signOut() } catch {}
+    try { await logout() } catch {}
   }
 
   return (
