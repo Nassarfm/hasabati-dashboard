@@ -54,7 +54,7 @@ export default function RecurringPage() {
   const loadList = useCallback(() => {
     setLoading(true)
     recurringApi.list()
-      .then(d => setEntries(d?.data || d?.items || []))
+      .then(d => setEntries(d?.data || d?.items || d || []))
       .catch(e => toast(e.message, 'error'))
       .finally(() => setLoading(false))
   }, [])
@@ -525,7 +525,7 @@ function RecurringDetail({ entry: initEntry, onBack, onRefresh }) {
   const refresh = () => {
     setLoading(true)
     recurringApi.get(entry.id)
-      .then(d => setEntry(d?.data||d))
+      .then(d => setEntry(d?.data||d?.data||d))
       .catch(()=>{})
       .finally(()=>setLoading(false))
   }
