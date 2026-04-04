@@ -73,7 +73,7 @@ export const api = {
     getFiscalLocks:     ()             => get('/accounting/fiscal-locks'),
     lockPeriod:         (b)            => post('/accounting/fiscal-locks', b),
     unlockPeriod:       (id)           => del(`/accounting/fiscal-locks/${id}`),
-    getDisplayName:     ()             => get('/auth/me').catch(() => null),
+    getDisplayName:     ()             => Promise.resolve(null), // endpoint غير موجود
     // ── القيود المتكررة ──
     previewRecurring:   (payload)      => post('/accounting/recurring/preview', payload),
     createRecurring:    (payload)      => post('/accounting/recurring', payload),
