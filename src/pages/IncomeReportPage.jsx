@@ -283,8 +283,8 @@ function IncomeComparison() {
 
   const exportExcel = () => {
     if (!dataA||!dataB) return
-    const wb = window.XLSX?.utils?.book_new?.()
-    if (!wb) return
+    if(!window.XLSX){alert('يرجى تحديث الصفحة (CTRL+F5)');return}
+    const wb = window.XLSX.utils.book_new()
     const sA=dataA.sections, sB=dataB.sections
     const rows=[
       ['مقارنة قائمة الدخل',`${yearA} vs ${yearB}`],[],

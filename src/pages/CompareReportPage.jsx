@@ -31,10 +31,52 @@ export function CompareReportPage(){
     }catch(e){toast(e.message,'error')}finally{setLoading(false)}
   }
 
+  const printCompare=()=>{
+    if(!data)return
+    const{bsA,bsB,isA,isB}=data
+    const now=new Date()
+    const pd=now.toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric'})
+    const pt=now.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})
+    const pct=(a,b)=>{if(!b||b===0)return a>0?'100%':'0%';return((a-b)/Math.abs(b)*100).toFixed(1)+'%'}
+    const row=(label,a,b)=>`<tr style="border-bottom:1px solid #e2e8f0">
+      <td style="padding:7px 10px;font-size:12px">${label}</td>
+      <td style="padding:7px 10px;text-align:left;font-family:monospace;font-size:12px;font-weight:600">${a.toLocaleString('ar-SA',{minimumFractionDigits:3})}</td>
+      <td style="padding:7px 10px;text-align:left;font-family:monospace;font-size:12px;color:#64748b">${b.toLocaleString('ar-SA',{minimumFractionDigits:3})}</td>
+      <td style="padding:7px 10px;text-align:center;font-size:12px;font-weight:700;color:${a>=b?'#059669':'#dc2626'}">${pct(a,b)}</td>
+    </tr>`
+    const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/><title>مقارنة الفترات</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;padding:20px}
+    .hdr{text-align:center;border-bottom:3px solid #1e40af;padding-bottom:12px;margin-bottom:16px}
+    .co{font-size:20px;font-weight:900;color:#1e40af}.ti{font-size:16px;font-weight:700}.pe{font-size:12px;color:#64748b}
+    table{width:100%;border-collapse:collapse;margin-bottom:14px}th{padding:9px 10px;font-size:12px;text-align:right}
+    .sh{background:#1e3a5f;color:#fff}
+    .foot{margin-top:20px;border-top:2px solid #1e40af;padding-top:12px;display:flex;justify-content:space-between}
+    .fl{font-size:11px;color:#64748b;line-height:1.9}.un{font-size:13px;font-weight:900;color:#1e3a5f}@media print{body{padding:8px}}</style></head><body>
+    <div class="hdr"><div class="co">حساباتي ERP</div><div class="ti">مقارنة الفترات المالية</div><div class="pe">${yearA} مقارنةً بـ ${yearB}</div></div>
+    <table><thead><tr class="sh"><th colspan="4">الميزانية العمومية</th></tr>
+    <tr style="background:#f8fafc"><th>البند</th><th style="text-align:left">${yearA}</th><th style="text-align:left">${yearB}</th><th style="text-align:center">التغيير %</th></tr></thead><tbody>
+      ${row('إجمالي الأصول',bsA.total_assets,bsB.total_assets)}
+      ${row('إجمالي الالتزامات',bsA.sections.liabilities.total,bsB.sections.liabilities.total)}
+      ${row('حقوق الملكية',bsA.sections.equity.total,bsB.sections.equity.total)}
+    </tbody></table>
+    <table><thead><tr class="sh"><th colspan="4">قائمة الدخل</th></tr>
+    <tr style="background:#f8fafc"><th>البند</th><th style="text-align:left">${yearA}</th><th style="text-align:left">${yearB}</th><th style="text-align:center">التغيير %</th></tr></thead><tbody>
+      ${row('الإيرادات',isA.sections.revenue.total,isB.sections.revenue.total)}
+      ${row('مجمل الربح',isA.sections.gross_profit,isB.sections.gross_profit)}
+      ${row('صافي الدخل',isA.net_income,isB.net_income)}
+    </tbody></table>
+    <div class="foot"><div class="fl"><div class="un">طُبع بواسطة: مستخدم النظام</div><div>التاريخ: ${pd}</div><div>الوقت: ${pt}</div></div>
+    <div style="font-size:11px;color:#64748b;text-align:left"><div>حساباتي ERP v2.0</div><div>مقارنة ${yearA} vs ${yearB}</div></div></div>
+    </body></html>`
+    const win=window.open('','_blank','width=1000,height=800')
+    win.document.write(html);win.document.close()
+    setTimeout(()=>{win.focus();win.print()},600)
+  }
+
   const exportExcel=()=>{
     if(!data)return
-    const wb=window.XLSX?.utils?.book_new?.()
-    if(!wb)return
+    if(!window.XLSX){alert('يرجى تحديث الصفحة (CTRL+F5)');return}
+    const wb=window.XLSX.utils.book_new()
     const{bsA,bsB,isA,isB}=data
     const rows=[['مقارنة شاملة',`${yearA} vs ${yearB}`],[],
       ['البند',yearA,yearB,'التغيير','%'],
@@ -58,7 +100,12 @@ export function CompareReportPage(){
     <div className="page-enter space-y-5">
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold text-slate-800">مقارنة الفترات</h1><p className="text-sm text-slate-400">مقارنة شاملة لجميع القوائم المالية بين سنتين</p></div>
-        {data&&<button onClick={exportExcel} className="px-4 py-2.5 rounded-xl border border-emerald-300 text-emerald-700 text-sm hover:bg-emerald-50">📊 تصدير Excel</button>}
+        {data&&(
+          <div className="flex gap-2">
+            <button onClick={printCompare} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">🖨️ طباعة</button>
+            <button onClick={exportExcel} className="px-4 py-2.5 rounded-xl border border-emerald-300 text-emerald-700 text-sm hover:bg-emerald-50">📊 Excel</button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">

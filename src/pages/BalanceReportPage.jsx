@@ -41,6 +41,41 @@ function BalanceReport(){
 
   const asOfDate=data?new Date(year,month-1,new Date(year,month,0).getDate()).toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric'}):''
 
+  const exportExcel=()=>{
+    if(!data)return
+    const wb=window.XLSX?.utils?.book_new?.()
+    if(!wb){alert('XLSX غير متاح - يرجى تحديث الصفحة');return}
+    const s=data.sections
+    const cA=(s.assets.rows||[]).filter(r=>r.account_code<'15')
+    const fA=(s.assets.rows||[]).filter(r=>r.account_code>='15')
+    const cL=(s.liabilities.rows||[]).filter(r=>r.account_code<'25')
+    const lL=(s.liabilities.rows||[]).filter(r=>r.account_code>='25')
+    const rows=[
+      ['الميزانية العمومية', asOfDate],[],
+      ['كود الحساب','اسم الحساب','المبلغ'],
+      ['── الأصول المتداولة ──'],
+      ...cA.map(r=>[r.account_code,r.account_name,r.amount]),
+      ['','مجموع الأصول المتداولة',cA.reduce((s,r)=>s+r.amount,0)],
+      ['── الأصول غير المتداولة ──'],
+      ...fA.map(r=>[r.account_code,r.account_name,r.amount]),
+      ['','مجموع الأصول غير المتداولة',fA.reduce((s,r)=>s+r.amount,0)],
+      ['','إجمالي الأصول',data.total_assets],[],
+      ['── الالتزامات المتداولة ──'],
+      ...cL.map(r=>[r.account_code,r.account_name,r.amount]),
+      ['','مجموع الالتزامات المتداولة',cL.reduce((s,r)=>s+r.amount,0)],
+      ['── الالتزامات غير المتداولة ──'],
+      ...lL.map(r=>[r.account_code,r.account_name,r.amount]),
+      ['','مجموع الالتزامات غير المتداولة',lL.reduce((s,r)=>s+r.amount,0)],
+      ['── حقوق الملكية ──'],
+      ...(s.equity.rows||[]).map(r=>[r.account_code,r.account_name,r.amount]),
+      ['','إجمالي الالتزامات + حقوق الملكية',data.total_liab_equity],
+    ]
+    const ws=window.XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols']=[{wch:14},{wch:35},{wch:16}]
+    window.XLSX.utils.book_append_sheet(wb,ws,'الميزانية')
+    window.XLSX.writeFile(wb,`balance_${year}_${month}.xlsx`)
+  }
+
   const print=()=>{
     if(!data)return
     const s=data.sections
@@ -117,7 +152,10 @@ function BalanceReport(){
           <button onClick={load} disabled={loading} className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50">
             {loading?'⏳ جارٍ...':'📊 عرض التقرير'}
           </button>
-          {data&&<button onClick={print} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">🖨️ طباعة</button>}
+          {data&&<>
+            <button onClick={print} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">🖨️ طباعة</button>
+            <button onClick={exportExcel} className="px-4 py-2.5 rounded-xl border border-emerald-300 text-emerald-700 text-sm hover:bg-emerald-50">📊 Excel</button>
+          </>}
         </div>
         {data&&<div className="mt-2 text-xs text-slate-400">كما في: <span className="font-bold text-slate-700">{asOfDate}</span></div>}
       </div>

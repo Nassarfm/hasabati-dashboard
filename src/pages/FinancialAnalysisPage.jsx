@@ -94,10 +94,64 @@ export default function FinancialAnalysisPage() {
     finally { setLoading(false) }
   }
 
+  const printAnalysis = () => {
+    if (!ratios) return
+    const now = new Date()
+    const pd = now.toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric'})
+    const pt = now.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})
+    const ratioRow = (label, value, unit='', formula='') => `
+      <tr style="border-bottom:1px solid #e2e8f0">
+        <td style="padding:8px 12px;font-size:12px;font-weight:600">${label}</td>
+        <td style="padding:8px 12px;text-align:left;font-family:monospace;font-size:14px;font-weight:700">${isNaN(value)?'—':value.toFixed(2)}${unit}</td>
+        <td style="padding:8px 12px;font-size:11px;color:#64748b">${formula}</td>
+      </tr>`
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/>
+    <title>التحليل المالي</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;padding:20px}
+    .hdr{text-align:center;border-bottom:3px solid #1e40af;padding-bottom:12px;margin-bottom:16px}
+    .co{font-size:22px;font-weight:900;color:#1e40af}.ti{font-size:17px;font-weight:700}.pe{font-size:12px;color:#64748b}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+    .kp{border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center}.kp-l{font-size:10px;color:#64748b}.kp-v{font-size:15px;font-weight:700;font-family:monospace}
+    table{width:100%;border-collapse:collapse;margin-bottom:14px}th{padding:10px 12px;text-align:right;font-size:12px}
+    .sh{background:#1e3a5f;color:#fff}
+    .foot{margin-top:20px;border-top:2px solid #1e40af;padding-top:12px;display:flex;justify-content:space-between}
+    .fl{font-size:11px;color:#64748b;line-height:1.9}.un{font-size:13px;font-weight:900;color:#1e3a5f}@media print{body{padding:8px}}</style></head><body>
+    <div class="hdr"><div class="co">حساباتي ERP</div><div class="ti">التحليل المالي</div><div class="pe">${year}/${String(month).padStart(2,'0')}</div></div>
+    <div class="kpis">
+      <div class="kp"><div class="kp-l">إجمالي الأصول</div><div class="kp-v" style="color:#1d4ed8">${ratios.totalAssets.toLocaleString('ar-SA',{maximumFractionDigits:0})}</div></div>
+      <div class="kp"><div class="kp-l">إجمالي الالتزامات</div><div class="kp-v" style="color:#dc2626">${ratios.totalLiab.toLocaleString('ar-SA',{maximumFractionDigits:0})}</div></div>
+      <div class="kp"><div class="kp-l">حقوق الملكية</div><div class="kp-v" style="color:#7c3aed">${ratios.equity.toLocaleString('ar-SA',{maximumFractionDigits:0})}</div></div>
+      <div class="kp"><div class="kp-l">رأس المال العامل</div><div class="kp-v" style="color:${ratios.workingCapital>=0?'#059669':'#dc2626'}">${ratios.workingCapital.toLocaleString('ar-SA',{maximumFractionDigits:0})}</div></div>
+    </div>
+    <table><thead><tr class="sh"><th colspan="3">نسب السيولة</th></tr><tr style="background:#f8fafc"><th>المؤشر</th><th style="text-align:left">القيمة</th><th>المعادلة</th></tr></thead><tbody>
+      ${ratioRow('نسبة التداول',ratios.currentRatio,'','الأصول المتداولة ÷ الالتزامات المتداولة')}
+      ${ratioRow('نسبة السيولة السريعة',ratios.quickRatio,'','(الأصول المتداولة - المخزون) ÷ الالتزامات المتداولة')}
+      ${ratioRow('نسبة النقدية',ratios.cashRatio,'','النقدية ÷ الالتزامات المتداولة')}
+    </tbody></table>
+    <table><thead><tr class="sh"><th colspan="3">نسب الرافعة المالية</th></tr><tr style="background:#f8fafc"><th>المؤشر</th><th style="text-align:left">القيمة</th><th>المعادلة</th></tr></thead><tbody>
+      ${ratioRow('الدين إلى حقوق الملكية',ratios.debtToEquity,'','إجمالي الالتزامات ÷ حقوق الملكية')}
+      ${ratioRow('الدين إلى الأصول',ratios.debtToAssets,'%','إجمالي الالتزامات ÷ إجمالي الأصول')}
+      ${ratioRow('نسبة الملكية',ratios.equityRatio,'%','حقوق الملكية ÷ إجمالي الأصول')}
+    </tbody></table>
+    <table><thead><tr class="sh"><th colspan="3">نسب الربحية</th></tr><tr style="background:#f8fafc"><th>المؤشر</th><th style="text-align:left">القيمة</th><th>المعادلة</th></tr></thead><tbody>
+      ${ratioRow('هامش الربح الإجمالي',ratios.grossMargin,'%','مجمل الربح ÷ الإيرادات')}
+      ${ratioRow('هامش الربح التشغيلي',ratios.operatingMargin,'%','الربح التشغيلي ÷ الإيرادات')}
+      ${ratioRow('صافي هامش الربح',ratios.netMargin,'%','صافي الربح ÷ الإيرادات')}
+      ${ratioRow('العائد على الأصول ROA',ratios.roa,'%','صافي الربح ÷ إجمالي الأصول')}
+      ${ratioRow('العائد على حقوق الملكية ROE',ratios.roe,'%','صافي الربح ÷ حقوق الملكية')}
+    </tbody></table>
+    <div class="foot"><div class="fl"><div class="un">طُبع بواسطة: مستخدم النظام</div><div>التاريخ: ${pd}</div><div>الوقت: ${pt}</div></div>
+    <div style="font-size:11px;color:#64748b;text-align:left"><div>حساباتي ERP v2.0</div><div>التحليل المالي ${year}/${String(month).padStart(2,'0')}</div></div></div>
+    </body></html>`
+    const win=window.open('','_blank','width=1000,height=800')
+    win.document.write(html);win.document.close()
+    setTimeout(()=>{win.focus();win.print()},600)
+  }
+
   const exportExcel = () => {
     if (!ratios) return
-    const wb = window.XLSX?.utils?.book_new?.()
-    if (!wb) return
+    if(!window.XLSX){alert('يرجى تحديث الصفحة (CTRL+F5)');return}
+    const wb = window.XLSX.utils.book_new()
     const rows = [
       ['التحليل المالي', `${year}/${String(month).padStart(2,'0')}`],[],
       ['المؤشر','القيمة'],
@@ -136,7 +190,8 @@ export default function FinancialAnalysisPage() {
         </div>
         {ratios&&(
           <div className="flex gap-2">
-            <button onClick={exportExcel} className="px-4 py-2.5 rounded-xl border border-emerald-300 text-emerald-700 text-sm hover:bg-emerald-50">📊 تصدير Excel</button>
+            <button onClick={printAnalysis} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">🖨️ طباعة</button>
+            <button onClick={exportExcel} className="px-4 py-2.5 rounded-xl border border-emerald-300 text-emerald-700 text-sm hover:bg-emerald-50">📊 Excel</button>
           </div>
         )}
       </div>
