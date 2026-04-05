@@ -1,876 +1,378 @@
-import { useEffect, useState } from 'react'
-import { PageHeader, Field, toast } from '../components/UI'
-import SlideOver, { SlideOverFooter } from '../components/SlideOver'
+/* BranchesPage.jsx — إدارة الفروع مع KPI Cards */
+import { useState, useEffect, useCallback } from 'react'
+import { toast } from '../components/UI'
 import api from '../api/client'
 
-const TABS = [
-  { id: 'branches',     label: 'الفروع',         icon: '🏢' },
-  { id: 'regions',      label: 'المناطق',         icon: '🗺️' },
-  { id: 'cities',       label: 'المدن',           icon: '🏙️' },
-  { id: 'branch_types', label: 'أنواع الفروع',    icon: '🏷️' },
-]
+// ── ألوان الحالة ──
+const STATUS = {
+  active:   { label:'نشط',    bg:'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  inactive: { label:'معطّل',  bg:'bg-red-100 text-red-600 border-red-200' },
+  default:  { label:'نشط',    bg:'bg-emerald-100 text-emerald-700 border-emerald-200' },
+}
 
-export default function BranchesPage() {
-  const [tab, setTab] = useState('branches')
+function StatusBadge({ b }) {
+  const s = STATUS[b.status] || STATUS.default
+  return <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${s.bg}`}>{s.label}</span>
+}
 
+// ── KPI Card ──
+function KCard({ icon, label, value, sub, color='text-slate-800', bg='bg-white', border='border-slate-200' }) {
   return (
-    <div className="page-enter space-y-5">
-      <PageHeader title="إعداد الفروع" subtitle="إدارة المناطق والمدن وأنواع الفروع" />
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={"px-4 py-2 rounded-lg text-sm font-medium transition-all " +
-              (tab === t.id ? "bg-white text-primary-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
-            {t.icon} {t.label}
-          </button>
-        ))}
+    <div className={`rounded-2xl border-2 ${border} ${bg} p-4 shadow-sm`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-400 font-medium">{label}</span>
+        <span className="text-xl">{icon}</span>
       </div>
-
-      {tab === 'branches'     && <BranchesTab />}
-      {tab === 'regions'      && <RegionsTab />}
-      {tab === 'cities'       && <CitiesTab />}
-      {tab === 'branch_types' && <BranchTypesTab />}
+      <div className={`text-2xl font-bold font-mono ${color}`}>{value}</div>
+      {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
     </div>
   )
 }
 
-// ══════════════════════════════════════════════
-// Tab: الفروع
-// ══════════════════════════════════════════════
-function BranchesTab() {
-  const [branches,     setBranches]     = useState([])
-  const [regions,      setRegions]      = useState([])
-  const [branchTypes,  setBranchTypes]  = useState([])
-  const [loading,      setLoading]      = useState(true)
-  const [showModal,      setShowModal]      = useState(false)
-  const [editItem,       setEditItem]       = useState(null)
-  const [deactivateItem, setDeactivateItem] = useState(null)
-  const [search,         setSearch]         = useState('')
+// ── Modal إنشاء/تعديل فرع ──
+function BranchModal({ branch, regions, cities, branchTypes, onSave, onClose }) {
+  const isEdit = !!branch?.id
+  const [form, setForm] = useState({
+    code:           branch?.code       || '',
+    name_ar:        branch?.name_ar    || '',
+    name_en:        branch?.name_en    || '',
+    branch_type_id: branch?.branch_type_id || '',
+    region_id:      branch?.region_id  || '',
+    city_id:        branch?.city_id    || '',
+    address:        branch?.address    || '',
+    phone:          branch?.phone      || '',
+    manager:        branch?.manager    || '',
+    level:          branch?.level      || 1,
+  })
+  const [saving, setSaving] = useState(false)
+  const filteredCities = cities.filter(c => !form.region_id || c.region_id === form.region_id)
 
-  const handleActivate = async (b) => {
-    if (!confirm(`هل تريد تفعيل الفرع ${b.name_ar}؟`)) return
+  const save = async () => {
+    if (!form.code || !form.name_ar) { toast('الكود والاسم مطلوبان','error'); return }
+    setSaving(true)
     try {
-      await api.settings.activateBranch(b.id)
-      toast(`تم تفعيل الفرع ${b.name_ar}`, 'success')
-      load()
-    } catch (e) { toast(e.message, 'error') }
+      if (isEdit) await api.settings.updateBranch(branch.id, form)
+      else        await api.settings.createBranch(form)
+      toast(isEdit?'✅ تم تعديل الفرع':'✅ تم إنشاء الفرع','success')
+      onSave()
+    } catch(e) { toast(e.message,'error') }
+    finally { setSaving(false) }
   }
 
-  const load = async () => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-white font-bold text-lg">{isEdit?'✏️ تعديل فرع':'🏢 فرع جديد'}</h2>
+            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">✕</button>
+          </div>
+        </div>
+        <div className="px-6 py-5 grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">الكود <span className="text-red-500">*</span></label>
+            <input className="input" placeholder="1011" value={form.code} onChange={e=>setForm(p=>({...p,code:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">نوع الفرع</label>
+            <select className="select" value={form.branch_type_id} onChange={e=>setForm(p=>({...p,branch_type_id:e.target.value}))}>
+              <option value="">— اختر</option>
+              {branchTypes.map(t=><option key={t.id} value={t.id}>{t.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5 col-span-2">
+            <label className="text-xs font-semibold text-slate-600">الاسم بالعربي <span className="text-red-500">*</span></label>
+            <input className="input" placeholder="فرع الرياض الرئيسي" value={form.name_ar} onChange={e=>setForm(p=>({...p,name_ar:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">الاسم بالإنجليزي</label>
+            <input className="input" placeholder="Riyadh Main Branch" value={form.name_en} onChange={e=>setForm(p=>({...p,name_en:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">المنطقة</label>
+            <select className="select" value={form.region_id} onChange={e=>setForm(p=>({...p,region_id:e.target.value,city_id:''}))}>
+              <option value="">— اختر</option>
+              {regions.map(r=><option key={r.id} value={r.id}>{r.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">المدينة</label>
+            <select className="select" value={form.city_id} onChange={e=>setForm(p=>({...p,city_id:e.target.value}))}>
+              <option value="">— اختر</option>
+              {filteredCities.map(c=><option key={c.id} value={c.id}>{c.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">المستوى</label>
+            <select className="select" value={form.level} onChange={e=>setForm(p=>({...p,level:Number(e.target.value)}))}>
+              {[1,2,3,4].map(l=><option key={l} value={l}>مستوى {l}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">المدير</label>
+            <input className="input" placeholder="اسم المدير" value={form.manager} onChange={e=>setForm(p=>({...p,manager:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5 col-span-2">
+            <label className="text-xs font-semibold text-slate-600">العنوان</label>
+            <input className="input" placeholder="عنوان الفرع" value={form.address} onChange={e=>setForm(p=>({...p,address:e.target.value}))}/>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">إلغاء</button>
+          <button onClick={save} disabled={saving||!form.code||!form.name_ar}
+            className="px-6 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-40">
+            {saving?'⏳ جارٍ...':isEdit?'💾 حفظ التعديلات':'✅ إنشاء الفرع'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+// الصفحة الرئيسية
+// ════════════════════════════════════════════════════════
+export default function BranchesPage() {
+  const [branches,     setBranches]     = useState([])
+  const [regions,      setRegions]      = useState([])
+  const [cities,       setCities]       = useState([])
+  const [branchTypes,  setBranchTypes]  = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [search,       setSearch]       = useState('')
+  const [filterRegion, setFilterRegion] = useState('')
+  const [filterType,   setFilterType]   = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [modal,        setModal]        = useState(null) // null | 'create' | branch_obj
+  const [viewTree,     setViewTree]     = useState(false)
+
+  const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [b, r, bt] = await Promise.all([
+      const [br, rg, bt] = await Promise.all([
         api.settings.listBranches(),
         api.settings.listRegions(),
         api.settings.listBranchTypes(),
       ])
-      setBranches(b?.data || [])
-      setRegions(r?.data || [])
-      setBranchTypes(bt?.data || [])
-    } catch (e) { toast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [])
-
-  const filtered = branches.filter(b =>
-    !search || b.code?.includes(search) || b.name_ar?.includes(search) || b.name_en?.toLowerCase().includes(search.toLowerCase())
-  )
-
-  const [viewMode, setViewMode] = useState('list') // list | tree
-
-  return (
-    <div className="space-y-4">
-      <div className="card flex gap-3">
-        <input className="input flex-1" placeholder="🔍 بحث..." value={search} onChange={e => setSearch(e.target.value)} />
-        <div className="flex border border-slate-200 rounded-lg overflow-hidden">
-          <button onClick={() => setViewMode('list')}
-            className={"px-3 py-1.5 text-xs font-medium " + (viewMode === 'list' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50')}>
-            ☰ قائمة
-          </button>
-          <button onClick={() => setViewMode('tree')}
-            className={"px-3 py-1.5 text-xs font-medium " + (viewMode === 'tree' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50')}>
-            🌳 شجرة
-          </button>
-        </div>
-        <button onClick={load} className="btn-ghost">🔄</button>
-        <button onClick={() => setShowModal(true)} className="btn-primary">+ فرع جديد</button>
-      </div>
-
-      {viewMode === 'tree' && (
-        <BranchTreeView regions={regions} branches={filtered} onEdit={setEditItem} onDeactivate={setDeactivateItem} onActivate={handleActivate} />
-      )}
-
-      {viewMode === 'list' && (
-
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b">
-            <tr>
-              <th className="th w-24">الكود</th>
-              <th className="th">الاسم بالعربي</th>
-              <th className="th">الاسم بالإنجليزي</th>
-              <th className="th w-28">النوع</th>
-              <th className="th">المنطقة</th>
-              <th className="th">المدينة</th>
-              <th className="th w-16">تسلسل</th>
-              <th className="th w-20">الحالة</th>
-              <th className="th w-16">إجراء</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? <tr><td colSpan={9} className="text-center py-8 text-slate-400">جارٍ التحميل...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={9} className="text-center py-8 text-slate-400">لا توجد فروع</td></tr>
-            : filtered.map(b => (
-              <tr key={b.id} className="hover:bg-slate-50">
-                <td className="td"><span className="font-mono font-bold text-primary-600">{b.code}</span></td>
-                <td className="td font-medium">{b.name_ar}</td>
-                <td className="td text-slate-500 text-sm">{b.name_en || '—'}</td>
-                <td className="td"><span className="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded-full">{b.branch_type_name || '—'}</span></td>
-                <td className="td text-sm">{b.region_name || '—'}</td>
-                <td className="td text-sm">{b.city_name || '—'}</td>
-                <td className="td text-center text-sm">{b.city_sequence}</td>
-                <td className="td text-center">
-                  <span className={b.is_active ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full" : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
-                    {b.is_active ? 'نشط' : 'موقف'}
-                  </span>
-                </td>
-                <td className="td text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    <button onClick={() => setEditItem(b)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
-                    {b.is_active
-                      ? <button onClick={() => setDeactivateItem(b)} className="text-xs text-red-500 hover:text-red-700" title="إيقاف">⏸️</button>
-                      : <button onClick={() => handleActivate(b)} className="text-xs text-emerald-600 hover:text-emerald-800" title="تفعيل">▶️</button>
-                    }
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      )}
-
-      {showModal && <BranchModal regions={regions} branches={branches} branchTypes={branchTypes}
-        onClose={() => setShowModal(false)} onSaved={() => { load(); setShowModal(false) }} />}
-      {deactivateItem && <DeactivateModal
-        name={deactivateItem?.name_ar}
-        onClose={() => setDeactivateItem(null)}
-        onConfirm={async (reason) => {
-          await api.settings.deactivateBranch(deactivateItem.id, reason)
-          toast(`تم إيقاف الفرع ${deactivateItem.name_ar}`, 'success')
-          setDeactivateItem(null); load()
-        }} />}
-      {editItem && <BranchModal regions={regions} branches={branches} branchTypes={branchTypes} branch={editItem}
-        onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }} />}
-    </div>
-  )
-}
-
-function BranchModal({ branch, regions, branches, branchTypes, onClose, onSaved }) {
-  const isEdit = !!branch
-  const [form, setForm] = useState({
-    code: branch?.code || '', name_ar: branch?.name_ar || '', name_en: branch?.name_en || '',
-    branch_type_id: branch?.branch_type_id || '', address: branch?.address || '',
-    country: branch?.country || 'KSA', currency: branch?.currency || 'SAR',
-    parent_id: branch?.parent_id || '', region_id: branch?.region_id || '',
-    city_id: branch?.city_id || '', city_sequence: branch?.city_sequence || 1,
-    is_active: branch?.is_active ?? true,
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [suggesting, setSuggesting] = useState(false)
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  const selectedRegion = regions.find(r => r.id === form.region_id)
-  const cities = selectedRegion?.cities || []
-
-  const suggestCode = async () => {
-    if (!form.region_id || !form.city_id) return
-    setSuggesting(true)
-    try {
-      const region = regions.find(r => r.id === form.region_id)
-      const city = cities.find(c => c.id === form.city_id)
-      if (!region || !city) return
-      const d = await api.settings.suggestBranchCode(region.code, city.code)
-      set('code', d?.data?.suggested_code || '')
-    } catch (e) { toast(e.message, 'error') }
-    finally { setSuggesting(false) }
-  }
-
-  const handleSave = async () => {
-    if (!form.code || !form.name_ar) { setError('الكود والاسم بالعربي إلزاميان'); return }
-    setSaving(true); setError('')
-    try {
-      const payload = {
-        ...form,
-        branch_type_id: form.branch_type_id || null,
-        parent_id: form.parent_id || null,
-        region_id: form.region_id || null,
-        city_id: form.city_id || null,
-        city_sequence: Number(form.city_sequence),
-        branch_type: branchTypes.find(bt => bt.id === form.branch_type_id)?.code || null,
+      setBranches(br?.data||br?.items||[])
+      setRegions(rg?.data||rg?.items||[])
+      setBranchTypes(bt?.data||bt?.items||[])
+      // جلب مدن كل منطقة
+      const allCities = []
+      for (const r of (rg?.data||rg?.items||[])) {
+        try {
+          const c = await api.settings.listCities(r.id)
+          allCities.push(...(c?.data||c?.items||[]).map(city=>({...city, region_id:r.id})))
+        } catch {}
       }
-      if (isEdit) await api.settings.updateBranch(branch.id, payload)
-      else await api.settings.createBranch(payload)
-      toast(`تم ${isEdit ? 'تعديل' : 'إضافة'} الفرع`, 'success')
-      onSaved()
-    } catch (e) { setError(e.message) }
-    finally { setSaving(false) }
+      setCities(allCities)
+    } catch(e) { toast(e.message,'error') }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { load() }, [])
+
+  // ── KPIs ──
+  const activeCount   = branches.filter(b=>b.status==='active'||!b.status).length
+  const inactiveCount = branches.length - activeCount
+  const regionCounts  = regions.map(r=>({
+    name: r.name_ar,
+    count: branches.filter(b=>b.region_id===r.id||b.region?.id===r.id).length
+  })).filter(r=>r.count>0)
+  const topRegion = regionCounts.sort((a,b)=>b.count-a.count)[0]
+
+  // ── فلترة ──
+  const filtered = branches.filter(b => {
+    if (search && !b.name_ar?.includes(search) && !b.code?.includes(search)) return false
+    if (filterRegion && b.region_id!==filterRegion && b.region?.id!==filterRegion) return false
+    if (filterType && b.branch_type_id!==filterType) return false
+    if (filterStatus === 'active'   && b.status==='inactive') return false
+    if (filterStatus === 'inactive' && b.status!=='inactive') return false
+    return true
+  })
+
+  const handleActivate = async (b) => {
+    try {
+      await api.settings.activateBranch(b.id)
+      toast('✅ تم تفعيل الفرع','success')
+      load()
+    } catch(e) { toast(e.message,'error') }
   }
 
+  const handleDeactivate = async (b) => {
+    try {
+      await api.settings.deactivateBranch(b.id)
+      toast('تم تعطيل الفرع','success')
+      load()
+    } catch(e) { toast(e.message,'error') }
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"/>
+    </div>
+  )
+
   return (
-    <SlideOver open onClose={onClose}
-      title={isEdit ? `تعديل فرع — ${branch.name_ar}` : 'إضافة فرع جديد'}
-      subtitle={isEdit ? `الكود: ${branch.code}` : 'أدخل بيانات الفرع الجديد'}
-      size="lg"
-      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ التعديل' : 'إضافة الفرع'} />}>
-      <div className="grid grid-cols-2 gap-4">
-        {/* المنطقة والمدينة أولاً لتوليد الكود */}
-        <Field label="المنطقة">
-          <select className="select" value={form.region_id}
-            onChange={e => { set('region_id', e.target.value); set('city_id', ''); set('code', '') }}>
-            <option value="">— اختر المنطقة —</option>
-            {regions.map(r => <option key={r.id} value={r.id}>{r.name_ar}</option>)}
-          </select>
-        </Field>
-        <Field label="المدينة">
-          <select className="select" value={form.city_id}
-            onChange={e => { set('city_id', e.target.value); set('code', '') }}
-            disabled={!form.region_id}>
-            <option value="">— اختر المدينة —</option>
-            {cities.map(c => <option key={c.id} value={c.id}>{c.name_ar}</option>)}
-          </select>
-        </Field>
-        <Field label="كود الفرع (4 أرقام)" required>
-          <div className="flex gap-2">
-            <input className="input font-mono flex-1" value={form.code}
-              onChange={e => set('code', e.target.value)} placeholder="1011" disabled={isEdit} />
-            {!isEdit && (
-              <button onClick={suggestCode} disabled={!form.region_id || !form.city_id || suggesting}
-                className="btn-ghost text-xs px-3" title="توليد كود تلقائي">
-                {suggesting ? '⏳' : '🔢'}
+    <div className="page-enter space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">إدارة الفروع</h1>
+          <p className="text-sm text-slate-400 mt-0.5">جميع فروع المنشأة وتوزيعها الجغرافي</p>
+        </div>
+        <button onClick={() => setModal('create')}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 shadow-sm">
+          🏢 + فرع جديد
+        </button>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-5 gap-3">
+        <KCard icon="🏢" label="إجمالي الفروع"   value={branches.length}  color="text-slate-800"   bg="bg-white"       border="border-slate-200"/>
+        <KCard icon="✅" label="الفروع النشطة"    value={activeCount}     color="text-emerald-700" bg="bg-emerald-50"  border="border-emerald-200"
+          sub={branches.length>0?`${Math.round(activeCount/branches.length*100)}% من الإجمالي`:''}/>
+        <KCard icon="⛔" label="الفروع المعطّلة"  value={inactiveCount}   color="text-red-600"     bg="bg-red-50"      border="border-red-200"/>
+        <KCard icon="🗺️" label="المناطق الجغرافية" value={regions.length}  color="text-blue-700"   bg="bg-blue-50"     border="border-blue-200"/>
+        <KCard icon="🏙️" label="المدن"             value={cities.length}   color="text-purple-700" bg="bg-purple-50"   border="border-purple-200"
+          sub={topRegion?`أكثر منطقة: ${topRegion.name} (${topRegion.count})`:''}/>
+      </div>
+
+      {/* توزيع الفروع على المناطق */}
+      {regionCounts.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <div className="text-xs font-bold text-slate-500 mb-3">🗺️ توزيع الفروع على المناطق</div>
+          <div className="flex gap-3 flex-wrap">
+            {regionCounts.map(r => (
+              <button key={r.name}
+                onClick={()=>setFilterRegion(regions.find(rg=>rg.name_ar===r.name)?.id||'')}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                <span className="text-xs font-medium text-slate-700">{r.name}</span>
+                <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">{r.count}</span>
               </button>
-            )}
+            ))}
           </div>
-        </Field>
-        <Field label="الاسم بالعربي" required>
-          <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} />
-        </Field>
-        <Field label="الاسم بالإنجليزي">
-          <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} />
-        </Field>
-        <Field label="نوع الفرع">
-          <select className="select" value={form.branch_type_id} onChange={e => set('branch_type_id', e.target.value)}>
-            <option value="">— اختر النوع —</option>
-            {branchTypes.map(bt => <option key={bt.id} value={bt.id}>{bt.name_ar}</option>)}
-          </select>
-        </Field>
-        <Field label="الفرع الأب">
-          <select className="select" value={form.parent_id} onChange={e => set('parent_id', e.target.value)}>
-            <option value="">— لا يوجد —</option>
-            {branches.filter(b => b.id !== branch?.id).map(b => (
-              <option key={b.id} value={b.id}>{b.code} — {b.name_ar}</option>
+          {/* Progress bars */}
+          <div className="mt-3 space-y-2">
+            {regionCounts.slice(0,5).map(r => (
+              <div key={r.name} className="flex items-center gap-3">
+                <span className="text-xs text-slate-500 w-28 truncate">{r.name}</span>
+                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-blue-500 rounded-full transition-all"
+                    style={{width:`${Math.round(r.count/branches.length*100)}%`}}/>
+                </div>
+                <span className="text-xs font-mono text-slate-500 w-8">{r.count}</span>
+              </div>
             ))}
-          </select>
-        </Field>
-        <Field label="تسلسل داخل المدينة">
-          <input className="input" type="number" value={form.city_sequence}
-            onChange={e => set('city_sequence', e.target.value)} min={1} />
-        </Field>
-        <Field label="الدولة">
-          <input className="input" value={form.country} onChange={e => set('country', e.target.value)} />
-        </Field>
-        <Field label="العنوان" className="col-span-3">
-          <input className="input" value={form.address} onChange={e => set('address', e.target.value)} />
-        </Field>
-        {isEdit && (
-          <div className="flex items-center gap-2">
-            <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4" />
-            <label className="text-sm text-slate-700">نشط</label>
           </div>
-        )}
-      </div>
-      {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-    </SlideOver>
-  )
-}
-
-// ══════════════════════════════════════════════
-// Shared Deactivate Modal
-// ══════════════════════════════════════════════
-function DeactivateModal({ name, onClose, onConfirm }) {
-  const [reason,  setReason]  = useState('')
-  const [saving,  setSaving]  = useState(false)
-
-  const handleConfirm = async () => {
-    setSaving(true)
-    try { await onConfirm(reason || null) }
-    catch (e) { toast(e.message, 'error') }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <SlideOver open onClose={onClose} title={`إيقاف — ${name}`} subtitle="هذا الإجراء يمنع أي حركات مستقبلية" size="sm"
-      footer={
-        <div className="flex items-center justify-between">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إلغاء</button>
-          <button onClick={handleConfirm} disabled={saving}
-            className="px-5 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
-            {saving ? '⏳ جارٍ...' : '⏸️ تأكيد الإيقاف'}
-          </button>
         </div>
-      }>
-      <div className="space-y-4">
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-          ⚠️ سيتم إيقاف هذا العنصر ومنع أي حركات مستقبلية عليه.
-        </div>
-        <Field label="سبب الإيقاف">
-          <textarea className="input" rows={3} value={reason}
-            onChange={e => setReason(e.target.value)}
-            placeholder="اختياري — مثال: الفرع أُغلق بتاريخ..." />
-        </Field>
-      </div>
-    </SlideOver>
-  )
-}
+      )}
 
-
-// ══════════════════════════════════════════════
-// Tab: المناطق
-// ══════════════════════════════════════════════
-function RegionsTab() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [editItem, setEditItem] = useState(null)
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const d = await api.settings.listRegions()
-      setItems(d?.data || [])
-    } catch (e) { toast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [])
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between">
-        <span className="text-sm text-slate-500">{items.length} منطقة</span>
-        <div className="flex gap-2">
-          <button onClick={load} className="btn-ghost text-sm">🔄</button>
-          <button onClick={() => setShowModal(true)} className="btn-primary text-sm">+ منطقة جديدة</button>
-        </div>
-      </div>
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b">
-            <tr>
-              <th className="th w-20">الكود</th>
-              <th className="th">الاسم بالعربي</th>
-              <th className="th">الاسم بالإنجليزي</th>
-              <th className="th w-20">المدن</th>
-              <th className="th w-20">الحالة</th>
-              <th className="th w-16">إجراء</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? <tr><td colSpan={6} className="text-center py-6 text-slate-400">جارٍ التحميل...</td></tr>
-            : items.map(r => (
-              <tr key={r.id} className="hover:bg-slate-50">
-                <td className="td"><span className="font-mono font-bold text-primary-600">{r.code}</span></td>
-                <td className="td font-medium">{r.name_ar}</td>
-                <td className="td text-slate-500 text-sm">{r.name_en || '—'}</td>
-                <td className="td text-center text-sm">{r.cities?.length || 0}</td>
-                <td className="td text-center">
-                  <span className={r.is_active ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full" : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
-                    {r.is_active ? 'نشط' : 'موقف'}
-                  </span>
-                </td>
-                <td className="td text-center">
-                  <button onClick={() => setEditItem(r)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {showModal && <RegionModal onClose={() => setShowModal(false)}
-        onSaved={() => { load(); setShowModal(false) }} />}
-      {editItem && <SimpleModal title={`✏️ تعديل — ${editItem.name_ar}`} item={editItem}
-        onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }}
-        onSubmit={async (f) => api.settings.updateRegion(editItem.id, f)} />}
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════
-// Tab: المدن
-// ══════════════════════════════════════════════
-function CitiesTab() {
-  const [items,   setItems]   = useState([])
-  const [regions, setRegions] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [editItem, setEditItem] = useState(null)
-  const [filterRegion, setFilterRegion] = useState('')
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const [c, r] = await Promise.all([api.settings.listCities(), api.settings.listRegions()])
-      setItems(c?.data || [])
-      setRegions(r?.data || [])
-    } catch (e) { toast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [])
-
-  const filtered = filterRegion ? items.filter(c => c.region_id === filterRegion) : items
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-3 items-center">
-        <select className="select w-48" value={filterRegion} onChange={e => setFilterRegion(e.target.value)}>
-          <option value="">كل المناطق</option>
-          {regions.map(r => <option key={r.id} value={r.id}>{r.name_ar}</option>)}
-        </select>
-        <span className="text-sm text-slate-500 flex-1">{filtered.length} مدينة</span>
-        <button onClick={load} className="btn-ghost text-sm">🔄</button>
-        <button onClick={() => setShowModal(true)} className="btn-primary text-sm">+ مدينة جديدة</button>
-      </div>
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b">
-            <tr>
-              <th className="th w-20">الكود</th>
-              <th className="th">اسم المدينة</th>
-              <th className="th">الاسم بالإنجليزي</th>
-              <th className="th">المنطقة</th>
-              <th className="th w-20">الحالة</th>
-              <th className="th w-16">إجراء</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? <tr><td colSpan={6} className="text-center py-6 text-slate-400">جارٍ التحميل...</td></tr>
-            : filtered.map(c => (
-              <tr key={c.id} className="hover:bg-slate-50">
-                <td className="td"><span className="font-mono font-bold text-primary-600">{c.code}</span></td>
-                <td className="td font-medium">{c.name_ar}</td>
-                <td className="td text-slate-500 text-sm">{c.name_en || '—'}</td>
-                <td className="td text-sm">{c.region_name || '—'}</td>
-                <td className="td text-center">
-                  <span className={c.is_active ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full" : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
-                    {c.is_active ? 'نشط' : 'موقف'}
-                  </span>
-                </td>
-                <td className="td text-center">
-                  <button onClick={() => setEditItem(c)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {showModal && <CityModal regions={regions} onClose={() => setShowModal(false)} onSaved={() => { load(); setShowModal(false) }} />}
-      {editItem && <SimpleModal title={`✏️ تعديل — ${editItem.name_ar}`} item={editItem}
-        onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }}
-        onSubmit={async (f) => api.settings.updateCity(editItem.id, f)} />}
-    </div>
-  )
-}
-
-function CityModal({ regions, onClose, onSaved }) {
-  const [form, setForm] = useState({ region_id: '', code: '', name_ar: '', name_en: '' })
-  const [saving,     setSaving]     = useState(false)
-  const [suggesting, setSuggesting] = useState(false)
-  const [error,      setError]      = useState('')
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  const suggestCode = async (regionId) => {
-    if (!regionId) return
-    setSuggesting(true)
-    try {
-      const d = await api.settings.suggestCityCode(regionId)
-      set('code', d?.data?.suggested_code || '')
-    } catch (e) { toast(e.message, 'error') }
-    finally { setSuggesting(false) }
-  }
-
-  const handleSave = async () => {
-    if (!form.region_id || !form.name_ar) { setError('المنطقة والاسم إلزاميان'); return }
-    setSaving(true); setError('')
-    try {
-      await api.settings.createCity(form.region_id, { code: form.code || null, name_ar: form.name_ar, name_en: form.name_en || null })
-      toast('تم إضافة المدينة', 'success')
-      onSaved()
-    } catch (e) { setError(e.message) }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <SlideOver open onClose={onClose} title="إضافة مدينة جديدة" size="sm"
-      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel="إضافة المدينة" />}>
-      <div className="space-y-3">
-        <Field label="المنطقة" required>
-          <select className="select" value={form.region_id}
-            onChange={e => { set('region_id', e.target.value); suggestCode(e.target.value) }}>
-            <option value="">— اختر المنطقة —</option>
-            {regions.map(r => <option key={r.id} value={r.id}>{r.name_ar}</option>)}
-          </select>
-        </Field>
-        <Field label="كود المدينة">
-          <div className="flex gap-2">
-            <input className="input font-mono flex-1" value={form.code}
-              onChange={e => set('code', e.target.value)}
-              placeholder={suggesting ? '...' : '01'} />
-            <button onClick={() => suggestCode(form.region_id)} disabled={!form.region_id || suggesting}
-              className="btn-ghost text-xs px-3" title="توليد تلقائي">
-              {suggesting ? '⏳' : '🔢'}
+      {/* فلاتر */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex flex-col gap-1 flex-1 min-w-40">
+            <label className="text-xs text-slate-400">بحث</label>
+            <input className="input" placeholder="اسم الفرع أو الكود..." value={search}
+              onChange={e=>setSearch(e.target.value)}/>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">المنطقة</label>
+            <select className="select w-36" value={filterRegion} onChange={e=>setFilterRegion(e.target.value)}>
+              <option value="">كل المناطق</option>
+              {regions.map(r=><option key={r.id} value={r.id}>{r.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">النوع</label>
+            <select className="select w-32" value={filterType} onChange={e=>setFilterType(e.target.value)}>
+              <option value="">كل الأنواع</option>
+              {branchTypes.map(t=><option key={t.id} value={t.id}>{t.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">الحالة</label>
+            <select className="select w-28" value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+              <option value="">الكل</option>
+              <option value="active">نشط</option>
+              <option value="inactive">معطّل</option>
+            </select>
+          </div>
+          {(search||filterRegion||filterType||filterStatus) && (
+            <button onClick={()=>{setSearch('');setFilterRegion('');setFilterType('');setFilterStatus('')}}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm hover:bg-slate-50">
+              إعادة تعيين
             </button>
-          </div>
-          <p className="text-xs text-slate-400 mt-1">يُولَّد تلقائياً عند اختيار المنطقة</p>
-        </Field>
-        <Field label="الاسم بالعربي" required>
-          <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} placeholder="الرياض" />
-        </Field>
-        <Field label="الاسم بالإنجليزي">
-          <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} placeholder="Riyadh" />
-        </Field>
-      </div>
-      {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-    </SlideOver>
-  )
-}
-
-// ══════════════════════════════════════════════
-// Tab: أنواع الفروع
-// ══════════════════════════════════════════════
-function BranchTypesTab() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [editItem, setEditItem] = useState(null)
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const d = await api.settings.listBranchTypes()
-      setItems(d?.data || [])
-    } catch (e) { toast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [])
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between">
-        <span className="text-sm text-slate-500">{items.length} نوع</span>
-        <div className="flex gap-2">
-          <button onClick={load} className="btn-ghost text-sm">🔄</button>
-          <button onClick={() => setShowModal(true)} className="btn-primary text-sm">+ نوع جديد</button>
+          )}
+          <span className="text-xs text-slate-400 mr-auto py-2.5">{filtered.length} فرع</span>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        {loading ? <div className="col-span-3 text-center py-8 text-slate-400">جارٍ التحميل...</div>
-        : items.length === 0 ? <div className="col-span-3 text-center py-8 text-slate-400">لا توجد أنواع — اضغط "+ نوع جديد"</div>
-        : items.map(bt => (
-          <div key={bt.id} className="card flex items-center justify-between p-3">
-            <div>
-              <div className="font-mono text-xs text-slate-400 mb-0.5">{bt.code}</div>
-              <div className="font-medium text-slate-700 text-sm">{bt.name_ar}</div>
-              {bt.name_en && <div className="text-xs text-slate-400">{bt.name_en}</div>}
+
+      {/* الجدول */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="grid grid-cols-12 text-white text-xs font-bold py-3.5"
+          style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+          <div className="col-span-1 px-4">الكود</div>
+          <div className="col-span-3 px-3">الاسم</div>
+          <div className="col-span-2 px-3">النوع</div>
+          <div className="col-span-2 px-3">المنطقة / المدينة</div>
+          <div className="col-span-1 px-3 text-center">المستوى</div>
+          <div className="col-span-1 px-3 text-center">الحالة</div>
+          <div className="col-span-1 px-3">المدير</div>
+          <div className="col-span-1 px-3 text-center">إجراء</div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="text-center py-14 text-slate-400">
+            <div className="text-5xl mb-3">🏢</div>
+            <div className="font-medium">لا توجد فروع تطابق البحث</div>
+          </div>
+        ) : filtered.map((b,i) => (
+          <div key={b.id} className={`grid grid-cols-12 items-center border-b border-slate-100 hover:bg-blue-50/20 transition-colors ${i%2===0?'bg-white':'bg-slate-50/20'}`}>
+            <div className="col-span-1 px-4 py-3">
+              <span className="font-mono font-bold text-blue-700 text-sm">{b.code}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={bt.is_active ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full" : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
-                {bt.is_active ? 'نشط' : 'موقف'}
+            <div className="col-span-3 px-3 py-3">
+              <div className="font-semibold text-slate-800 text-sm">{b.name_ar}</div>
+              {b.name_en && <div className="text-xs text-slate-400">{b.name_en}</div>}
+            </div>
+            <div className="col-span-2 px-3 py-3">
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">
+                {branchTypes.find(t=>t.id===b.branch_type_id)?.name_ar || b.branch_type?.name_ar || '—'}
               </span>
-              <button onClick={() => setEditItem(bt)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
+            </div>
+            <div className="col-span-2 px-3 py-3">
+              <div className="text-xs text-slate-600">{regions.find(r=>r.id===b.region_id)?.name_ar || b.region?.name_ar || '—'}</div>
+              <div className="text-xs text-slate-400">{cities.find(c=>c.id===b.city_id)?.name_ar || b.city?.name_ar || ''}</div>
+            </div>
+            <div className="col-span-1 px-3 py-3 text-center">
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-mono font-bold">{b.level||1}</span>
+            </div>
+            <div className="col-span-1 px-3 py-3 text-center"><StatusBadge b={b}/></div>
+            <div className="col-span-1 px-3 py-3 text-xs text-slate-500 truncate">{b.manager||'—'}</div>
+            <div className="col-span-1 px-3 py-3 flex items-center gap-1.5 justify-center">
+              <button onClick={() => setModal(b)}
+                className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center text-sm" title="تعديل">✏️</button>
+              {b.status==='inactive'
+                ? <button onClick={()=>handleActivate(b)} className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center text-sm" title="تفعيل">✅</button>
+                : <button onClick={()=>handleDeactivate(b)} className="w-7 h-7 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center text-sm" title="تعطيل">⛔</button>
+              }
             </div>
           </div>
         ))}
       </div>
-      {showModal && <SimpleModal title="➕ نوع فرع جديد" onClose={() => setShowModal(false)}
-        onSaved={() => { load(); setShowModal(false) }}
-        onSubmit={async (f) => api.settings.createBranchType(f)} withCode />}
-      {editItem && <SimpleModal title={`✏️ تعديل — ${editItem.name_ar}`} item={editItem}
-        onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }}
-        onSubmit={async (f) => api.settings.updateBranchType(editItem.id, f)} />}
+
+      {/* Modal */}
+      {modal && (
+        <BranchModal
+          branch={modal==='create'?null:modal}
+          regions={regions}
+          cities={cities}
+          branchTypes={branchTypes}
+          onSave={() => { setModal(null); load() }}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
-  )
-}
-
-// ══════════════════════════════════════════════
-// Branch Tree View
-// ══════════════════════════════════════════════
-function BranchTreeView({ regions, branches, onEdit, onDeactivate, onActivate }) {
-  const [expanded, setExpanded] = useState({})
-  const toggle = (key) => setExpanded(p => ({ ...p, [key]: !p[key] }))
-
-  // group branches by city_id
-  const branchesByCity = {}
-  const branchesNoCity = []
-  branches.forEach(b => {
-    if (b.city_id) {
-      if (!branchesByCity[b.city_id]) branchesByCity[b.city_id] = []
-      branchesByCity[b.city_id].push(b)
-    } else {
-      branchesNoCity.push(b)
-    }
-  })
-
-  if (!regions.length) {
-    return (
-      <div className="card text-center py-12 text-slate-400">
-        لا توجد مناطق — أضف منطقة أولاً
-      </div>
-    )
-  }
-
-  return (
-    <div className="card p-0 overflow-hidden">
-      {regions.map(region => {
-        const regionKey = `r-${region.id}`
-        const regionOpen = expanded[regionKey] !== false // default open
-        const cities = region.cities || []
-        const totalBranches = cities.reduce((s, c) => s + (branchesByCity[c.id]?.length || 0), 0)
-
-        return (
-          <div key={region.id} className="border-b border-slate-100 last:border-0">
-            {/* المنطقة */}
-            <div
-              className="flex items-center gap-3 px-4 py-3 bg-primary-50 cursor-pointer hover:bg-primary-100 transition-colors"
-              onClick={() => toggle(regionKey)}
-            >
-              <span className="text-slate-400 w-4 text-center text-xs">
-                {regionOpen ? '▾' : '▸'}
-              </span>
-              <span className="text-lg">🗺️</span>
-              <div className="flex-1">
-                <span className="font-bold text-primary-800">{region.name_ar}</span>
-                {region.name_en && <span className="text-xs text-primary-500 mr-2">({region.name_en})</span>}
-              </div>
-              <div className="flex items-center gap-3 text-xs text-slate-500">
-                <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-mono">{region.code}</span>
-                <span>{cities.length} مدينة</span>
-                <span>{totalBranches} فرع</span>
-              </div>
-            </div>
-
-            {/* المدن */}
-            {regionOpen && cities.map(city => {
-              const cityKey = `c-${city.id}`
-              const cityOpen = expanded[cityKey] !== false
-              const cityBranches = branchesByCity[city.id] || []
-
-              return (
-                <div key={city.id} className="border-t border-slate-50">
-                  {/* المدينة */}
-                  <div
-                    className="flex items-center gap-3 px-6 py-2.5 bg-slate-50 cursor-pointer hover:bg-blue-50 transition-colors"
-                    onClick={() => toggle(cityKey)}
-                  >
-                    <span className="text-slate-400 w-4 text-center text-xs">
-                      {cityOpen ? '▾' : '▸'}
-                    </span>
-                    <span>🏙️</span>
-                    <div className="flex-1">
-                      <span className="font-semibold text-slate-700">{city.name_ar}</span>
-                      {city.name_en && <span className="text-xs text-slate-400 mr-2">({city.name_en})</span>}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-400">
-                      <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-mono">
-                        {region.code}{city.code}
-                      </span>
-                      <span>{cityBranches.length} فرع</span>
-                    </div>
-                  </div>
-
-                  {/* الفروع */}
-                  {cityOpen && (
-                    <div>
-                      {cityBranches.length === 0 ? (
-                        <div className="px-16 py-2 text-xs text-slate-300 italic">لا توجد فروع في هذه المدينة</div>
-                      ) : cityBranches.sort((a,b) => a.code.localeCompare(b.code)).map(branch => (
-                        <div key={branch.id}
-                          className={"flex items-center gap-3 px-10 py-2.5 border-t border-slate-50 hover:bg-slate-50 transition-colors " +
-                            (!branch.is_active ? "opacity-60" : "")}>
-                          <span className="w-4" />
-                          <span>{branch.is_active ? '🏢' : '🔒'}</span>
-                          <div className="flex-1">
-                            <span className={"font-medium text-sm " + (!branch.is_active ? "text-slate-400 line-through" : "text-slate-700")}>
-                              {branch.name_ar}
-                            </span>
-                            {branch.name_en && <span className="text-xs text-slate-400 mr-2">({branch.name_en})</span>}
-                            {branch.branch_type_name && (
-                              <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full mr-2">
-                                {branch.branch_type_name}
-                              </span>
-                            )}
-                            {!branch.is_active && branch.deactivation_reason && (
-                              <span className="text-xs text-red-400 mr-2">— {branch.deactivation_reason}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                              {branch.code}
-                            </span>
-                            <span className={branch.is_active
-                              ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full"
-                              : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
-                              {branch.is_active ? 'نشط' : 'موقف'}
-                            </span>
-                            <div className="flex gap-1">
-                              <button onClick={() => onEdit(branch)}
-                                className="text-xs text-primary-600 hover:text-primary-800 px-1">✏️</button>
-                              {branch.is_active
-                                ? <button onClick={() => onDeactivate(branch)}
-                                    className="text-xs text-red-500 hover:text-red-700 px-1">⏸️</button>
-                                : <button onClick={() => onActivate(branch)}
-                                    className="text-xs text-emerald-600 hover:text-emerald-800 px-1">▶️</button>
-                              }
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-
-            {/* فروع بدون مدينة */}
-            {regionOpen && branchesNoCity.filter(b => !b.region_id || b.region_id === region.id).map(branch => (
-              <div key={branch.id}
-                className="flex items-center gap-3 px-10 py-2.5 border-t border-slate-50 hover:bg-slate-50">
-                <span className="w-4" />
-                <span>🏢</span>
-                <span className="flex-1 font-medium text-sm text-slate-700">{branch.name_ar}</span>
-                <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{branch.code}</span>
-                <button onClick={() => onEdit(branch)} className="text-xs text-primary-600">✏️</button>
-              </div>
-            ))}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-
-// ══════════════════════════════════════════════
-// Region Modal with auto-code
-// ══════════════════════════════════════════════
-function RegionModal({ onClose, onSaved }) {
-  const [form, setForm] = useState({ code: '', name_ar: '', name_en: '' })
-  const [saving, setSaving] = useState(false)
-  const [suggesting, setSuggesting] = useState(false)
-  const [error, setError] = useState('')
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  useEffect(() => {
-    const suggest = async () => {
-      setSuggesting(true)
-      try {
-        const d = await api.settings.suggestRegionCode()
-        set('code', d?.data?.suggested_code || '')
-      } catch (e) {}
-      finally { setSuggesting(false) }
-    }
-    suggest()
-  }, [])
-
-  const handleSave = async () => {
-    if (!form.name_ar) { setError('الاسم بالعربي إلزامي'); return }
-    setSaving(true); setError('')
-    try {
-      await api.settings.createRegion({ code: form.code, name_ar: form.name_ar, name_en: form.name_en || null })
-      toast('تم إضافة المنطقة', 'success')
-      onSaved()
-    } catch (e) { setError(e.message) }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <SlideOver open onClose={onClose} title="إضافة منطقة جديدة" size="sm"
-      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel="إضافة المنطقة" />}>
-      <div className="space-y-3">
-        <Field label="كود المنطقة">
-          <div className="flex gap-2">
-            <input className="input font-mono flex-1" value={form.code}
-              onChange={e => set('code', e.target.value)}
-              placeholder={suggesting ? '...' : '1'} />
-          </div>
-          <p className="text-xs text-slate-400 mt-1">يُولَّد تلقائياً</p>
-        </Field>
-        <Field label="الاسم بالعربي" required>
-          <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} placeholder="المنطقة الوسطى" />
-        </Field>
-        <Field label="الاسم بالإنجليزي">
-          <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} placeholder="Central Region" />
-        </Field>
-      </div>
-      {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-    </SlideOver>
-  )
-}
-
-
-// ══════════════════════════════════════════════
-// Shared Simple Modal
-// ══════════════════════════════════════════════
-function SimpleModal({ title, item, onClose, onSaved, onSubmit, withCode = false }) {
-  const [form, setForm] = useState({
-    code: item?.code || '', name_ar: item?.name_ar || '',
-    name_en: item?.name_en || '', is_active: item?.is_active ?? true,
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  const handleSave = async () => {
-    if (!form.name_ar) { setError('الاسم بالعربي إلزامي'); return }
-    if (withCode && !item && !form.code) { setError('الكود إلزامي'); return }
-    setSaving(true); setError('')
-    try {
-      await onSubmit({ code: form.code, name_ar: form.name_ar, name_en: form.name_en || null, is_active: form.is_active })
-      toast('تم الحفظ بنجاح', 'success')
-      onSaved()
-    } catch (e) { setError(e.message) }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <SlideOver open onClose={onClose} title={title} size="sm"
-      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={item ? 'حفظ' : 'إضافة'} />}>
-      <div className="space-y-3">
-        {(withCode || item) && (
-          <Field label="الكود" required={withCode && !item}>
-            <input className="input font-mono" value={form.code} onChange={e => set('code', e.target.value)} disabled={!!item} />
-          </Field>
-        )}
-        <Field label="الاسم بالعربي" required>
-          <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} />
-        </Field>
-        <Field label="الاسم بالإنجليزي">
-          <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} />
-        </Field>
-        {item && (
-          <div className="flex items-center gap-2">
-            <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4" />
-            <label className="text-sm text-slate-700">نشط</label>
-          </div>
-        )}
-      </div>
-      {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-    </SlideOver>
   )
 }

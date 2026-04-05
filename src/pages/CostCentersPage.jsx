@@ -1,477 +1,393 @@
-import { useEffect, useState } from 'react'
-import { PageHeader, Field, toast } from '../components/UI'
-import SlideOver, { SlideOverFooter } from '../components/SlideOver'
+/* CostCentersPage.jsx — إدارة مراكز التكلفة مع KPI Cards */
+import { useState, useEffect, useCallback } from 'react'
+import { toast } from '../components/UI'
 import api from '../api/client'
 
-const TABS = [
-  { id: 'departments', label: 'الأقسام',           icon: '🏢' },
-  { id: 'costcenters', label: 'مراكز التكلفة',     icon: '💰' },
-  { id: 'types',       label: 'أنواع مراكز التكلفة', icon: '🏷️' },
-]
+function StatusBadge({ status }) {
+  const active = status !== 'inactive'
+  return <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border
+    ${active?'bg-emerald-100 text-emerald-700 border-emerald-200':'bg-red-100 text-red-600 border-red-200'}`}>
+    {active?'نشط':'معطّل'}
+  </span>
+}
 
+function KCard({ icon, label, value, sub, color='text-slate-800', bg='bg-white', border='border-slate-200' }) {
+  return (
+    <div className={`rounded-2xl border-2 ${border} ${bg} p-4 shadow-sm`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-400 font-medium">{label}</span>
+        <span className="text-xl">{icon}</span>
+      </div>
+      <div className={`text-2xl font-bold font-mono ${color}`}>{value}</div>
+      {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+    </div>
+  )
+}
+
+// ── Modal ──
+function CCModal({ cc, ccTypes, allCCs, onSave, onClose }) {
+  const isEdit = !!cc?.id
+  const [form, setForm] = useState({
+    code:        cc?.code       || '',
+    name_ar:     cc?.name_ar    || '',
+    name_en:     cc?.name_en    || '',
+    cc_type_id:  cc?.cc_type_id || '',
+    parent_id:   cc?.parent_id  || '',
+    description: cc?.description|| '',
+    budget:      cc?.budget     || '',
+    manager:     cc?.manager    || '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    if (!form.code || !form.name_ar) { toast('الكود والاسم مطلوبان','error'); return }
+    setSaving(true)
+    try {
+      if (isEdit) await api.settings.updateCostCenter(cc.id, form)
+      else        await api.settings.createCostCenter(form)
+      toast(isEdit?'✅ تم تعديل مركز التكلفة':'✅ تم إنشاء مركز التكلفة','success')
+      onSave()
+    } catch(e) { toast(e.message,'error') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-white font-bold text-lg">{isEdit?'✏️ تعديل مركز تكلفة':'💰 مركز تكلفة جديد'}</h2>
+            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">✕</button>
+          </div>
+        </div>
+        <div className="px-6 py-5 grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">الكود <span className="text-red-500">*</span></label>
+            <input className="input" placeholder="CC001" value={form.code} onChange={e=>setForm(p=>({...p,code:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">نوع مركز التكلفة</label>
+            <select className="select" value={form.cc_type_id} onChange={e=>setForm(p=>({...p,cc_type_id:e.target.value}))}>
+              <option value="">— اختر</option>
+              {ccTypes.map(t=><option key={t.id} value={t.id}>{t.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5 col-span-2">
+            <label className="text-xs font-semibold text-slate-600">الاسم بالعربي <span className="text-red-500">*</span></label>
+            <input className="input" placeholder="مركز تكلفة الإدارة العامة" value={form.name_ar} onChange={e=>setForm(p=>({...p,name_ar:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">الاسم بالإنجليزي</label>
+            <input className="input" placeholder="General Admin" value={form.name_en} onChange={e=>setForm(p=>({...p,name_en:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">مركز التكلفة الأب</label>
+            <select className="select" value={form.parent_id} onChange={e=>setForm(p=>({...p,parent_id:e.target.value}))}>
+              <option value="">— لا يوجد (رئيسي)</option>
+              {allCCs.filter(c=>c.id!==cc?.id).map(c=>(
+                <option key={c.id} value={c.id}>{c.code} — {c.name_ar}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">المدير المسؤول</label>
+            <input className="input" placeholder="اسم المدير" value={form.manager} onChange={e=>setForm(p=>({...p,manager:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-600">الميزانية السنوية</label>
+            <input type="number" className="input" placeholder="0.000" value={form.budget} onChange={e=>setForm(p=>({...p,budget:e.target.value}))}/>
+          </div>
+          <div className="flex flex-col gap-1.5 col-span-2">
+            <label className="text-xs font-semibold text-slate-600">الوصف</label>
+            <input className="input" placeholder="وصف مختصر لمركز التكلفة" value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))}/>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">إلغاء</button>
+          <button onClick={save} disabled={saving||!form.code||!form.name_ar}
+            className="px-6 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-40">
+            {saving?'⏳ جارٍ...':isEdit?'💾 حفظ التعديلات':'✅ إنشاء'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+// الصفحة الرئيسية
+// ════════════════════════════════════════════════════════
 export default function CostCentersPage() {
-  const [tab, setTab] = useState('departments')
+  const [costCenters, setCostCenters] = useState([])
+  const [ccTypes,     setCCTypes]     = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [search,      setSearch]      = useState('')
+  const [filterType,  setFilterType]  = useState('')
+  const [filterLevel, setFilterLevel] = useState('')
+  const [modal,       setModal]       = useState(null)
+  const [viewMode,    setViewMode]    = useState('list') // list | tree
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [cc, ct] = await Promise.all([
+        api.settings.listCostCenters(),
+        api.settings.listCCTypes(),
+      ])
+      setCostCenters(cc?.data||cc?.items||[])
+      setCCTypes(ct?.data||ct?.items||[])
+    } catch(e) { toast(e.message,'error') }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { load() }, [])
+
+  // ── KPIs ──
+  const activeCount  = costCenters.filter(c=>c.status!=='inactive').length
+  const rootCount    = costCenters.filter(c=>!c.parent_id).length
+  const withBudget   = costCenters.filter(c=>c.budget&&parseFloat(c.budget)>0).length
+  const totalBudget  = costCenters.reduce((s,c)=>s+(parseFloat(c.budget)||0),0)
+  const typeCounts   = ccTypes.map(t=>({
+    name:t.name_ar,
+    count:costCenters.filter(c=>c.cc_type_id===t.id||c.cc_type?.id===t.id).length
+  })).filter(t=>t.count>0)
+
+  // ── فلترة ──
+  const filtered = costCenters.filter(c => {
+    if (search && !c.name_ar?.includes(search) && !c.code?.includes(search)) return false
+    if (filterType && c.cc_type_id!==filterType && c.cc_type?.id!==filterType) return false
+    if (filterLevel === 'root' && c.parent_id) return false
+    if (filterLevel === 'sub'  && !c.parent_id) return false
+    return true
+  })
+
+  // ── Tree View ──
+  const buildTree = (items, parentId=null) =>
+    items.filter(c=>(c.parent_id||null)===(parentId||null))
+      .map(c=>({...c, children:buildTree(items,c.id)}))
+
+  function TreeNode({ node, depth=0 }) {
+    const [open, setOpen] = useState(true)
+    return (
+      <div>
+        <div className={`flex items-center gap-2 py-2 px-4 hover:bg-blue-50/30 transition-colors border-b border-slate-100`}
+          style={{paddingRight: `${16+depth*20}px`}}>
+          {node.children?.length > 0
+            ? <button onClick={()=>setOpen(p=>!p)} className="text-slate-400 text-xs w-4">{open?'▼':'▶'}</button>
+            : <span className="w-4 text-slate-200 text-xs">—</span>}
+          <span className="font-mono text-blue-700 font-bold text-xs">{node.code}</span>
+          <span className="text-sm text-slate-700 font-medium">{node.name_ar}</span>
+          {node.cc_type && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{node.cc_type?.name_ar||ccTypes.find(t=>t.id===node.cc_type_id)?.name_ar}</span>}
+          <StatusBadge status={node.status}/>
+          {node.manager && <span className="text-xs text-slate-400 mr-auto">👤 {node.manager}</span>}
+          <div className="flex gap-1.5 mr-2">
+            <button onClick={()=>setModal(node)} className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center text-xs">✏️</button>
+          </div>
+        </div>
+        {open && node.children?.map(child=><TreeNode key={child.id} node={child} depth={depth+1}/>)}
+      </div>
+    )
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"/>
+    </div>
+  )
+
   return (
     <div className="page-enter space-y-5">
-      <PageHeader title="مراكز التكلفة" subtitle="إدارة الأقسام ومراكز التكلفة وأنواعها" />
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={"px-4 py-2 rounded-lg text-sm font-medium transition-all " +
-              (tab === t.id ? "bg-white text-primary-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
-      {tab === 'departments' && <DepartmentsTab />}
-      {tab === 'costcenters' && <CostCentersTab />}
-      {tab === 'types'       && <CCTypesTab />}
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════
-// Tab: الأقسام (المستوى 1)
-// ══════════════════════════════════════════════
-function DepartmentsTab() {
-  const [items,    setItems]    = useState([])
-  const [ccTypes,  setCcTypes]  = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [showModal,    setShowModal]    = useState(false)
-  const [editItem,     setEditItem]     = useState(null)
-  const [deactivateItem,setDeactivateItem]= useState(null)
-  const [search,       setSearch]       = useState('')
-
-  const handleActivate = async (d) => {
-    if (!confirm(`هل تريد تفعيل ${d.name_en}؟`)) return
-    try { await api.settings.activateCostCenter(d.id); toast('تم التفعيل', 'success'); load() }
-    catch (e) { toast(e.message, 'error') }
-  }
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const [cc, ct] = await Promise.all([
-        api.settings.listCostCenters(),
-        api.settings.listCCTypes(),
-      ])
-      setItems((cc?.data || []).filter(c => c.level === 1))
-      setCcTypes(ct?.data || [])
-    } catch (e) { toast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [])
-
-  const filtered = items.filter(d =>
-    !search || d.code?.includes(search) || d.name_en?.toLowerCase().includes(search.toLowerCase()) || d.name_ar?.includes(search)
-  )
-
-  return (
-    <div className="space-y-4">
-      <div className="card flex gap-3">
-        <input className="input flex-1" placeholder="🔍 بحث..." value={search} onChange={e => setSearch(e.target.value)} />
-        <button onClick={load} className="btn-ghost">🔄</button>
-        <button onClick={() => setShowModal(true)} className="btn-primary">+ قسم جديد</button>
-      </div>
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b">
-            <tr>
-              <th className="th w-24">الكود</th>
-              <th className="th">اسم القسم (إنجليزي)</th>
-              <th className="th">اسم القسم (عربي)</th>
-              <th className="th">نوع مركز التكلفة</th>
-              <th className="th w-20">الحالة</th>
-              <th className="th w-16">إجراء</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? <tr><td colSpan={6} className="text-center py-8 text-slate-400">جارٍ التحميل...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={6} className="text-center py-8 text-slate-400">لا توجد أقسام</td></tr>
-            : filtered.map(d => (
-              <tr key={d.id} className="hover:bg-slate-50 bg-slate-50/50">
-                <td className="td"><span className="font-mono font-bold text-primary-700">{d.code}</span></td>
-                <td className="td font-bold text-slate-800">{d.name_en}</td>
-                <td className="td text-slate-600">{d.name_ar || '—'}</td>
-                <td className="td">
-                  <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                    {d.cost_center_type_name || '—'}
-                  </span>
-                </td>
-                <td className="td text-center">
-                  <span className={d.is_active ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full" : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
-                    {d.is_active ? 'نشط' : 'موقف'}
-                  </span>
-                </td>
-                <td className="td text-center">
-                  <div className="flex items-center justify-center gap-2">
-                    <button onClick={() => setEditItem(d)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
-                    {d.is_active
-                      ? <button onClick={() => setDeactivateItem(d)} className="text-xs text-red-500 hover:text-red-700" title="إيقاف">⏸️</button>
-                      : <button onClick={() => handleActivate(d)} className="text-xs text-emerald-600 hover:text-emerald-800" title="تفعيل">▶️</button>
-                    }
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {showModal && <CCModal ccTypes={ccTypes} level={1} onClose={() => setShowModal(false)} onSaved={() => { load(); setShowModal(false) }} />}
-      {editItem && <CCModal ccTypes={ccTypes} level={1} item={editItem} onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }} />}
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════
-// Tab: مراكز التكلفة (المستوى 2)
-// ══════════════════════════════════════════════
-function CostCentersTab() {
-  const [items,      setItems]      = useState([])
-  const [departments,setDepartments]= useState([])
-  const [ccTypes,    setCcTypes]    = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [showModal,  setShowModal]  = useState(false)
-  const [editItem,   setEditItem]   = useState(null)
-  const [search,     setSearch]     = useState('')
-  const [filterDept, setFilterDept] = useState('')
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const [cc, ct] = await Promise.all([
-        api.settings.listCostCenters(),
-        api.settings.listCCTypes(),
-      ])
-      const all = cc?.data || []
-      setItems(all.filter(c => c.level === 2))
-      setDepartments(all.filter(c => c.level === 1))
-      setCcTypes(ct?.data || [])
-    } catch (e) { toast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [])
-
-  const filtered = items.filter(c => {
-    const matchSearch = !search || c.code?.includes(search) || c.name_en?.toLowerCase().includes(search.toLowerCase()) || c.name_ar?.includes(search)
-    const matchDept = !filterDept || c.parent_id === filterDept
-    return matchSearch && matchDept
-  })
-
-  return (
-    <div className="space-y-4">
-      <div className="card flex gap-3 flex-wrap">
-        <input className="input flex-1 min-w-[180px]" placeholder="🔍 بحث..." value={search} onChange={e => setSearch(e.target.value)} />
-        <select className="select w-48" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
-          <option value="">كل الأقسام</option>
-          {departments.map(d => <option key={d.id} value={d.id}>{d.code} — {d.name_en}</option>)}
-        </select>
-        <button onClick={load} className="btn-ghost">🔄</button>
-        <button onClick={() => setShowModal(true)} className="btn-primary">+ مركز تكلفة</button>
-      </div>
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50 border-b">
-            <tr>
-              <th className="th w-24">الكود</th>
-              <th className="th">الاسم الإنجليزي</th>
-              <th className="th">الاسم العربي</th>
-              <th className="th">القسم الأب</th>
-              <th className="th">نوع مركز التكلفة</th>
-              <th className="th w-20">الحالة</th>
-              <th className="th w-16">إجراء</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? <tr><td colSpan={7} className="text-center py-8 text-slate-400">جارٍ التحميل...</td></tr>
-            : filtered.length === 0 ? <tr><td colSpan={7} className="text-center py-8 text-slate-400">لا توجد مراكز تكلفة</td></tr>
-            : filtered.map(c => {
-              const parent = departments.find(d => d.id === c.parent_id)
-              return (
-                <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="td"><span className="font-mono font-bold text-primary-600">{c.code}</span></td>
-                  <td className="td font-medium text-slate-700">{c.name_en}</td>
-                  <td className="td text-slate-500 text-sm">{c.name_ar || '—'}</td>
-                  <td className="td text-sm">
-                    {parent ? <span className="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded-full">{parent.code} — {parent.name_en}</span> : '—'}
-                  </td>
-                  <td className="td">
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                      {c.cost_center_type_name || '—'}
-                    </span>
-                  </td>
-                  <td className="td text-center">
-                    <span className={c.is_active ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full" : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
-                      {c.is_active ? 'نشط' : 'موقف'}
-                    </span>
-                  </td>
-                  <td className="td text-center">
-                    <button onClick={() => setEditItem(c)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      {showModal && <CCModal ccTypes={ccTypes} departments={departments} level={2}
-        onClose={() => setShowModal(false)} onSaved={() => { load(); setShowModal(false) }} />}
-      {editItem && <CCModal ccTypes={ccTypes} departments={departments} level={2} item={editItem}
-        onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }} />}
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════
-// Tab: أنواع مراكز التكلفة
-// ══════════════════════════════════════════════
-function CCTypesTab() {
-  const [items,    setItems]    = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [showModal,setShowModal]= useState(false)
-  const [editItem, setEditItem] = useState(null)
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const d = await api.settings.listCCTypes()
-      setItems(d?.data || [])
-    } catch (e) { toast(e.message, 'error') }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [])
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-slate-500">{items.length} نوع</span>
-        <div className="flex gap-2">
-          <button onClick={load} className="btn-ghost text-sm">🔄</button>
-          <button onClick={() => setShowModal(true)} className="btn-primary text-sm">+ نوع جديد</button>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">مراكز التكلفة</h1>
+          <p className="text-sm text-slate-400 mt-0.5">تصنيف المصروفات والإيرادات على مراكز المسؤولية</p>
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {loading ? <div className="col-span-2 text-center py-8 text-slate-400">جارٍ التحميل...</div>
-        : items.map(t => (
-          <div key={t.id} className={"card flex items-center justify-between p-3 " + (t.is_system ? "border-l-4 border-primary-400" : "")}>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-slate-400">{t.code}</span>
-                {t.is_system && <span className="text-xs bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded">أساسي</span>}
-              </div>
-              <div className="font-medium text-slate-700 text-sm mt-0.5">{t.name_en}</div>
-              {t.name_ar && <div className="text-xs text-slate-400">{t.name_ar}</div>}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={t.is_active ? "text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full" : "text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full"}>
-                {t.is_active ? 'نشط' : 'موقف'}
-              </span>
-              {!t.is_system && (
-                <button onClick={() => setEditItem(t)} className="text-xs text-primary-600 hover:text-primary-800">✏️</button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-      {showModal && <CCTypeModal onClose={() => setShowModal(false)} onSaved={() => { load(); setShowModal(false) }} />}
-      {editItem && <CCTypeModal item={editItem} onClose={() => setEditItem(null)} onSaved={() => { load(); setEditItem(null) }} />}
-    </div>
-  )
-}
-
-function CCTypeModal({ item, onClose, onSaved }) {
-  const isEdit = !!item
-  const [form, setForm] = useState({ code: item?.code || '', name_en: item?.name_en || '', name_ar: item?.name_ar || '', is_active: item?.is_active ?? true })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  const handleSave = async () => {
-    if (!form.name_en) { setError('الاسم الإنجليزي إلزامي'); return }
-    if (!isEdit && !form.code) { setError('الكود إلزامي'); return }
-    setSaving(true); setError('')
-    try {
-      if (isEdit) await api.settings.updateCCType(item.id, { name_en: form.name_en, name_ar: form.name_ar, is_active: form.is_active })
-      else await api.settings.createCCType({ code: form.code, name_en: form.name_en, name_ar: form.name_ar })
-      toast(`تم ${isEdit ? 'تعديل' : 'إضافة'} النوع`, 'success')
-      onSaved()
-    } catch (e) { setError(e.message) }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <SlideOver open onClose={onClose} title={isEdit ? `تعديل — ${item.name_en}` : 'نوع جديد'} size="sm"
-      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ' : 'إضافة'} />}>
-      <div className="space-y-3">
-        {!isEdit && (
-          <Field label="الكود" required>
-            <input className="input font-mono" value={form.code} onChange={e => set('code', e.target.value)} placeholder="custom_type" />
-          </Field>
-        )}
-        <Field label="الاسم الإنجليزي" required>
-          <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} />
-        </Field>
-        <Field label="الاسم العربي">
-          <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} />
-        </Field>
-        {isEdit && (
-          <div className="flex items-center gap-2">
-            <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4" />
-            <label className="text-sm text-slate-700">نشط</label>
-          </div>
-        )}
-      </div>
-      {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-    </SlideOver>
-  )
-}
-
-// ══════════════════════════════════════════════
-// Shared Deactivate Modal
-// ══════════════════════════════════════════════
-function DeactivateModal({ name, onClose, onConfirm }) {
-  const [reason, setReason] = useState('')
-  const [saving, setSaving] = useState(false)
-  const handleConfirm = async () => {
-    setSaving(true)
-    try { await onConfirm(reason || null) }
-    catch (e) { toast(e.message, 'error') }
-    finally { setSaving(false) }
-  }
-  return (
-    <SlideOver open onClose={onClose} title={`إيقاف — ${name}`} subtitle="هذا الإجراء يمنع الحركات المستقبلية" size="sm"
-      footer={
-        <div className="flex items-center justify-between">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">إلغاء</button>
-          <button onClick={handleConfirm} disabled={saving} className="px-5 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
-            {saving ? '⏳ جارٍ...' : '⏸️ تأكيد الإيقاف'}
-          </button>
-        </div>
-      }>
-      <div className="space-y-3">
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
-          ⚠️ سيتم إيقاف هذا العنصر ومنع أي حركات مستقبلية عليه.
-        </div>
-        <Field label="سبب الإيقاف">
-          <textarea className="input" rows={3} value={reason}
-            onChange={e => setReason(e.target.value)}
-            placeholder="اختياري — مثال: تم إغلاق القسم بتاريخ..." />
-        </Field>
-      </div>
-      <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onClose} className="btn-ghost">إلغاء</button>
-        <button onClick={handleConfirm} disabled={saving}
-          className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700">
-          {saving ? '⏳...' : '⏸️ إيقاف'}
+        <button onClick={() => setModal('create')}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 shadow-sm">
+          💰 + مركز جديد
         </button>
       </div>
-    </SlideOver>
-  )
-}
 
+      {/* KPI Cards */}
+      <div className="grid grid-cols-5 gap-3">
+        <KCard icon="💰" label="إجمالي المراكز"    value={costCenters.length} color="text-slate-800"   bg="bg-white"       border="border-slate-200"/>
+        <KCard icon="✅" label="المراكز النشطة"     value={activeCount}       color="text-emerald-700" bg="bg-emerald-50"  border="border-emerald-200"
+          sub={costCenters.length>0?`${Math.round(activeCount/costCenters.length*100)}% من الإجمالي`:''}/>
+        <KCard icon="🌳" label="مراكز رئيسية"       value={rootCount}         color="text-blue-700"    bg="bg-blue-50"     border="border-blue-200"
+          sub={`${costCenters.length-rootCount} مركز فرعي`}/>
+        <KCard icon="📊" label="لها ميزانية"         value={withBudget}        color="text-purple-700"  bg="bg-purple-50"   border="border-purple-200"/>
+        <KCard icon="💵" label="إجمالي الميزانيات"   value={totalBudget>0?totalBudget.toLocaleString('ar-SA',{maximumFractionDigits:0}):'—'}
+          color="text-amber-700" bg="bg-amber-50" border="border-amber-200"
+          sub="ريال سعودي"/>
+      </div>
 
-// ══════════════════════════════════════════════
-// Shared CC Modal (Department + Cost Center)
-// ══════════════════════════════════════════════
-function CCModal({ item, level, ccTypes, departments = [], onClose, onSaved }) {
-  const isEdit = !!item
-  const [form, setForm] = useState({
-    code: item?.code || '', name_en: item?.name_en || '', name_ar: item?.name_ar || '',
-    level: level, cost_center_type_id: item?.cost_center_type_id || '',
-    parent_id: item?.parent_id || '', is_active: item?.is_active ?? true,
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [suggesting, setSuggesting] = useState(false)
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  const suggestCode = async () => {
-    if (!form.parent_id || level !== 2) return
-    setSuggesting(true)
-    try {
-      const parent = departments.find(d => d.id === form.parent_id)
-      if (!parent) return
-      const d = await api.settings.suggestCCCode(parent.code)
-      set('code', d?.data?.suggested_code || '')
-    } catch (e) { toast(e.message, 'error') }
-    finally { setSuggesting(false) }
-  }
-
-  const handleSave = async () => {
-    if (!form.code || !form.name_en) { setError('الكود والاسم الإنجليزي إلزاميان'); return }
-    setSaving(true); setError('')
-    try {
-      const payload = {
-        code: form.code, name_en: form.name_en, name_ar: form.name_ar || null,
-        level: Number(level),
-        cost_center_type_id: form.cost_center_type_id || null,
-        cost_center_type: ccTypes.find(t => t.id === form.cost_center_type_id)?.code || null,
-        parent_id: form.parent_id || null,
-        is_active: form.is_active,
-        department_code: level === 2 ? departments.find(d => d.id === form.parent_id)?.code || null : form.code,
-        department_name: level === 2 ? departments.find(d => d.id === form.parent_id)?.name_en || null : form.name_en,
-      }
-      if (isEdit) await api.settings.updateCostCenter(item.id, payload)
-      else await api.settings.createCostCenter(payload)
-      toast(`تم ${isEdit ? 'تعديل' : 'إضافة'} ${level === 1 ? 'القسم' : 'مركز التكلفة'}`, 'success')
-      onSaved()
-    } catch (e) { setError(e.message) }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <SlideOver open onClose={onClose}
-      title={isEdit ? `تعديل — ${item.name_en}` : (level === 1 ? 'قسم جديد' : 'مركز تكلفة جديد')}
-      subtitle={isEdit ? `الكود: ${item.code}` : 'أدخل البيانات المطلوبة'}
-      size="lg"
-      footer={<SlideOverFooter onClose={onClose} onSave={handleSave} saving={saving} saveLabel={isEdit ? 'حفظ التعديل' : (level === 1 ? 'إضافة القسم' : 'إضافة مركز التكلفة')} />}>
-      <div className="grid grid-cols-2 gap-4">
-        {level === 2 && (
-          <Field label="القسم الأب" required className="col-span-2">
-            <select className="select" value={form.parent_id}
-              onChange={e => { set('parent_id', e.target.value); if (!isEdit) set('code', '') }}>
-              <option value="">— اختر القسم —</option>
-              {departments.map(d => <option key={d.id} value={d.id}>{d.code} — {d.name_en}</option>)}
-            </select>
-          </Field>
-        )}
-        <Field label="الكود (4 أرقام)" required>
-          <div className="flex gap-2">
-            <input className="input font-mono flex-1" value={form.code}
-              onChange={e => set('code', e.target.value)}
-              placeholder={level === 1 ? "1000" : "1001"} disabled={isEdit} />
-            {!isEdit && level === 2 && (
-              <button onClick={suggestCode} disabled={!form.parent_id || suggesting}
-                className="btn-ghost text-xs px-3" title="توليد كود تلقائي">
-                {suggesting ? '⏳' : '🔢'}
+      {/* توزيع حسب النوع */}
+      {typeCounts.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <div className="text-xs font-bold text-slate-500 mb-3">📊 توزيع المراكز حسب النوع</div>
+          <div className="flex gap-3 flex-wrap">
+            {typeCounts.map(t=>(
+              <button key={t.name}
+                onClick={()=>setFilterType(ccTypes.find(ct=>ct.name_ar===t.name)?.id||'')}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors">
+                <span className="text-xs font-medium text-purple-700">{t.name}</span>
+                <span className="text-xs font-bold text-purple-900 bg-purple-200 px-2 py-0.5 rounded-full">{t.count}</span>
               </button>
-            )}
+            ))}
           </div>
-        </Field>
-        <Field label="نوع مركز التكلفة">
-          <select className="select" value={form.cost_center_type_id}
-            onChange={e => set('cost_center_type_id', e.target.value)}>
-            <option value="">— اختر النوع —</option>
-            {ccTypes.map(t => <option key={t.id} value={t.id}>{t.name_en}</option>)}
-          </select>
-        </Field>
-        <Field label="الاسم الإنجليزي" required>
-          <input className="input" value={form.name_en} onChange={e => set('name_en', e.target.value)} placeholder="Finance" />
-        </Field>
-        <Field label="الاسم العربي">
-          <input className="input" value={form.name_ar} onChange={e => set('name_ar', e.target.value)} placeholder="المالية" />
-        </Field>
-        {isEdit && (
-          <div className="flex items-center gap-2 mt-2">
-            <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4" />
-            <label className="text-sm text-slate-700">نشط</label>
+          <div className="mt-3 space-y-2">
+            {typeCounts.slice(0,5).map(t=>(
+              <div key={t.name} className="flex items-center gap-3">
+                <span className="text-xs text-slate-500 w-36 truncate">{t.name}</span>
+                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-purple-500 rounded-full transition-all"
+                    style={{width:`${Math.round(t.count/costCenters.length*100)}%`}}/>
+                </div>
+                <span className="text-xs font-mono text-slate-500 w-8">{t.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* فلاتر + view toggle */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex flex-col gap-1 flex-1 min-w-40">
+            <label className="text-xs text-slate-400">بحث</label>
+            <input className="input" placeholder="اسم مركز التكلفة أو الكود..." value={search}
+              onChange={e=>setSearch(e.target.value)}/>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">النوع</label>
+            <select className="select w-36" value={filterType} onChange={e=>setFilterType(e.target.value)}>
+              <option value="">كل الأنواع</option>
+              {ccTypes.map(t=><option key={t.id} value={t.id}>{t.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">المستوى</label>
+            <select className="select w-28" value={filterLevel} onChange={e=>setFilterLevel(e.target.value)}>
+              <option value="">الكل</option>
+              <option value="root">رئيسي فقط</option>
+              <option value="sub">فرعي فقط</option>
+            </select>
+          </div>
+          {(search||filterType||filterLevel) && (
+            <button onClick={()=>{setSearch('');setFilterType('');setFilterLevel('')}}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm hover:bg-slate-50">
+              إعادة تعيين
+            </button>
+          )}
+          {/* View Mode Toggle */}
+          <div className="mr-auto flex rounded-xl border border-slate-200 overflow-hidden">
+            <button onClick={()=>setViewMode('list')}
+              className={`px-4 py-2.5 text-xs font-medium ${viewMode==='list'?'bg-blue-700 text-white':'bg-white text-slate-600 hover:bg-slate-50'}`}>
+              ≡ قائمة
+            </button>
+            <button onClick={()=>setViewMode('tree')}
+              className={`px-4 py-2.5 text-xs font-medium ${viewMode==='tree'?'bg-blue-700 text-white':'bg-white text-slate-600 hover:bg-slate-50'}`}>
+              🌳 شجرة
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* المحتوى */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {viewMode==='list' ? (
+          <>
+            <div className="grid grid-cols-12 text-white text-xs font-bold py-3.5"
+              style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+              <div className="col-span-1 px-4">الكود</div>
+              <div className="col-span-3 px-3">الاسم</div>
+              <div className="col-span-2 px-3">النوع</div>
+              <div className="col-span-2 px-3">المركز الأب</div>
+              <div className="col-span-1 px-3 text-center">الحالة</div>
+              <div className="col-span-2 px-3">المدير / الميزانية</div>
+              <div className="col-span-1 px-3 text-center">إجراء</div>
+            </div>
+            {filtered.length===0 ? (
+              <div className="text-center py-14 text-slate-400">
+                <div className="text-5xl mb-3">💰</div>
+                <div className="font-medium">لا توجد مراكز تكلفة تطابق البحث</div>
+              </div>
+            ) : filtered.map((c,i)=>(
+              <div key={c.id} className={`grid grid-cols-12 items-center border-b border-slate-100 hover:bg-blue-50/20 transition-colors ${i%2===0?'bg-white':'bg-slate-50/20'}`}>
+                <div className="col-span-1 px-4 py-3">
+                  <span className="font-mono font-bold text-blue-700 text-sm">{c.code}</span>
+                </div>
+                <div className="col-span-3 px-3 py-3">
+                  <div className="font-semibold text-slate-800 text-sm">{c.name_ar}</div>
+                  {c.description && <div className="text-xs text-slate-400 truncate">{c.description}</div>}
+                </div>
+                <div className="col-span-2 px-3 py-3">
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-lg">
+                    {ccTypes.find(t=>t.id===c.cc_type_id)?.name_ar || c.cc_type?.name_ar || '—'}
+                  </span>
+                </div>
+                <div className="col-span-2 px-3 py-3 text-xs text-slate-500">
+                  {c.parent_id ? (costCenters.find(p=>p.id===c.parent_id)?.name_ar||'—') : <span className="text-blue-600 font-medium">مركز رئيسي</span>}
+                </div>
+                <div className="col-span-1 px-3 py-3 text-center"><StatusBadge status={c.status}/></div>
+                <div className="col-span-2 px-3 py-3">
+                  <div className="text-xs text-slate-600">{c.manager||'—'}</div>
+                  {c.budget && parseFloat(c.budget)>0 && (
+                    <div className="text-xs text-amber-600 font-mono font-bold">
+                      {parseFloat(c.budget).toLocaleString('ar-SA',{minimumFractionDigits:0})}
+                    </div>
+                  )}
+                </div>
+                <div className="col-span-1 px-3 py-3 flex justify-center">
+                  <button onClick={()=>setModal(c)} className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center text-sm">✏️</button>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          // Tree View
+          <div className="py-2">
+            {buildTree(costCenters).map(node=>(
+              <TreeNode key={node.id} node={node}/>
+            ))}
           </div>
         )}
       </div>
-      {error && <div className="mt-3 text-red-600 text-sm bg-red-50 rounded-xl p-3">⚠️ {error}</div>}
-    </SlideOver>
+
+      {/* Modal */}
+      {modal && (
+        <CCModal
+          cc={modal==='create'?null:modal}
+          ccTypes={ccTypes}
+          allCCs={costCenters}
+          onSave={()=>{setModal(null);load()}}
+          onClose={()=>setModal(null)}
+        />
+      )}
+    </div>
   )
+
+  function TreeNode({ node, depth=0 }) {
+    const [open, setOpen] = useState(true)
+    return (
+      <div>
+        <div className="flex items-center gap-2 py-2.5 border-b border-slate-100 hover:bg-blue-50/20 transition-colors"
+          style={{paddingRight:`${16+depth*24}px`, paddingLeft:'16px'}}>
+          {node.children?.length > 0
+            ? <button onClick={()=>setOpen(p=>!p)} className="text-slate-400 text-xs w-5 shrink-0">{open?'▼':'▶'}</button>
+            : <span className="w-5 text-slate-200 text-xs shrink-0">—</span>}
+          <span className="font-mono text-blue-700 font-bold text-xs">{node.code}</span>
+          <span className="text-sm text-slate-800 font-medium">{node.name_ar}</span>
+          {node.cc_type_id && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{ccTypes.find(t=>t.id===node.cc_type_id)?.name_ar}</span>}
+          <StatusBadge status={node.status}/>
+          {node.children?.length>0 && <span className="text-xs text-slate-400">({node.children.length} فرعي)</span>}
+          {node.manager && <span className="text-xs text-slate-400 mr-auto">👤 {node.manager}</span>}
+          <button onClick={()=>setModal(node)} className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center text-xs shrink-0">✏️</button>
+        </div>
+        {open && (node.children||[]).map(child=><TreeNode key={child.id} node={child} depth={depth+1}/>)}
+      </div>
+    )
+  }
 }
