@@ -152,7 +152,10 @@ function ProjectModal({ project, onSave, onClose }) {
     manager:      project?.manager     || '',
     client:       project?.client      || '',
     priority:     project?.priority    || 'medium',
-    notes:        project?.notes       || '',
+    notes:          project?.notes         || '',
+    contract_value: project?.contract_value || '',
+    revenue_method: project?.revenue_method || '',
+    project_type:   project?.project_type   || '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -265,6 +268,25 @@ function ProjectModal({ project, onSave, onClose }) {
                   <option value="medium">🟡 متوسطة</option>
                   <option value="high">🔴 عالية</option>
                   <option value="critical">🚨 حرجة</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600">نوع المشروع</label>
+                <input className="input" placeholder="مثال: إنشائي، تقني، استشاري..." value={form.project_type} onChange={e=>setForm(p=>({...p,project_type:e.target.value}))}/>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600">قيمة العقد</label>
+                <input type="number" className="input font-mono" placeholder="0.000" value={form.contract_value} onChange={e=>setForm(p=>({...p,contract_value:e.target.value}))}/>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-600">طريقة الإيراد</label>
+                <select className="select" value={form.revenue_method} onChange={e=>setForm(p=>({...p,revenue_method:e.target.value}))}>
+                  <option value="">— اختر</option>
+                  <option value="fixed">مبلغ ثابت</option>
+                  <option value="milestone">مراحل</option>
+                  <option value="time_material">وقت ومواد</option>
+                  <option value="percentage">نسبة إنجاز</option>
+                  <option value="monthly">شهري</option>
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
@@ -509,50 +531,126 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="grid grid-cols-12 text-white text-xs font-bold py-3.5"
-            style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
-            <div className="col-span-1 px-4">الكود</div>
-            <div className="col-span-3 px-3">الاسم</div>
-            <div className="col-span-1 px-3 text-center">الحالة</div>
-            <div className="col-span-2 px-3 text-center">الميزانية</div>
-            <div className="col-span-1 px-3 text-center">الإنفاق%</div>
-            <div className="col-span-1 px-3 text-center">البدء</div>
-            <div className="col-span-1 px-3 text-center">الانتهاء</div>
-            <div className="col-span-1 px-3">المدير</div>
-            <div className="col-span-1 px-3 text-center">إجراء</div>
-          </div>
-          {filtered.map((p,i)=>{
-            const isOverdue = p.status==='active'&&p.end_date&&new Date(p.end_date)<today
-            const bPct = p.budget&&p.actual_cost?parseFloat(p.actual_cost)/parseFloat(p.budget)*100:null
-            return(
-              <div key={p.id||p.code} className={`grid grid-cols-12 items-center border-b border-slate-100 hover:bg-blue-50/20 transition-colors ${i%2===0?'bg-white':'bg-slate-50/20'}`}>
-                <div className="col-span-1 px-4 py-3">
-                  <span className="font-mono font-bold text-blue-700 text-xs">{p.code}</span>
-                </div>
-                <div className="col-span-3 px-3 py-3">
-                  <div className="font-semibold text-slate-800 text-sm truncate">{p.name}</div>
-                  {isOverdue&&<span className="text-xs text-red-600 font-bold">⚠️ متأخر</span>}
-                </div>
-                <div className="col-span-1 px-3 py-3 text-center"><StatusBadge status={p.status}/></div>
-                <div className="col-span-2 px-3 py-3 text-center">
-                  {p.budget ? <span className="font-mono text-xs font-bold text-slate-700">{parseFloat(p.budget).toLocaleString('ar-SA',{maximumFractionDigits:0})}</span> : <span className="text-slate-300">—</span>}
-                </div>
-                <div className="col-span-1 px-3 py-3 text-center">
-                  {bPct!==null ? (
-                    <span className={`font-mono text-xs font-bold ${bPct>90?'text-red-600':bPct>70?'text-amber-600':'text-emerald-600'}`}>
-                      {bPct.toFixed(0)}%
-                    </span>
-                  ) : <span className="text-slate-300">—</span>}
-                </div>
-                <div className="col-span-1 px-3 py-3 text-center text-xs font-mono text-slate-500">{p.start_date||'—'}</div>
-                <div className={`col-span-1 px-3 py-3 text-center text-xs font-mono ${isOverdue?'text-red-600 font-bold':''}`}>{p.end_date||'—'}</div>
-                <div className="col-span-1 px-3 py-3 text-xs text-slate-500 truncate">{p.manager||'—'}</div>
-                <div className="col-span-1 px-3 py-3 text-center">
-                  <button onClick={()=>setModal(p)} className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center text-sm mx-auto">✏️</button>
-                </div>
-              </div>
-            )
-          })}
+          {/* رأس الجدول */}
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}} className="text-white">
+                <th className="px-3 py-3.5 text-right w-8">#</th>
+                <th className="px-3 py-3.5 text-right min-w-40">اسم المشروع</th>
+                <th className="px-3 py-3.5 text-center w-24">النوع</th>
+                <th className="px-3 py-3.5 text-right w-32">العميل</th>
+                <th className="px-3 py-3.5 text-center w-28">قيمة العقد</th>
+                <th className="px-3 py-3.5 text-center w-28">الميزانية</th>
+                <th className="px-3 py-3.5 text-center w-28">طريقة الإيراد</th>
+                <th className="px-3 py-3.5 text-center w-24">الحالة</th>
+                <th className="px-3 py-3.5 text-center w-16">إجراء</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p,i)=>{
+                const isOverdue = p.status==='active'&&p.end_date&&new Date(p.end_date)<today
+                const priorityIcon = {critical:'🚨',high:'🔴',medium:'🟡',low:'🟢'}[p.priority]||''
+                return(
+                  <tr key={p.id||p.code}
+                    className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${i%2===0?'bg-white':'bg-slate-50/20'}`}>
+                    {/* # */}
+                    <td className="px-3 py-3 text-center text-slate-400 font-mono">{i+1}</td>
+                    {/* اسم المشروع */}
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        {priorityIcon && <span title={p.priority}>{priorityIcon}</span>}
+                        <div>
+                          <div className="font-semibold text-slate-800 text-sm">{p.name}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="font-mono text-blue-600 text-xs">{p.code}</span>
+                            {isOverdue && <span className="text-red-600 font-bold text-xs">⚠️ متأخر</span>}
+                            {p.start_date && (
+                              <span className="text-slate-400 text-xs">{p.start_date} ← {p.end_date||'—'}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    {/* النوع */}
+                    <td className="px-3 py-3 text-center">
+                      {p.project_type||p.type
+                        ? <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">{p.project_type||p.type}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* العميل */}
+                    <td className="px-3 py-3">
+                      <div className="text-sm text-slate-700 truncate max-w-32">{p.client||'—'}</div>
+                    </td>
+                    {/* قيمة العقد */}
+                    <td className="px-3 py-3 text-center">
+                      {p.contract_value&&parseFloat(p.contract_value)>0
+                        ? <span className="font-mono text-sm font-bold text-emerald-700">{parseFloat(p.contract_value).toLocaleString('ar-SA',{maximumFractionDigits:0})}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* الميزانية */}
+                    <td className="px-3 py-3 text-center">
+                      {p.budget&&parseFloat(p.budget)>0 ? (
+                        <div>
+                          <div className="font-mono text-sm font-bold text-blue-700">{parseFloat(p.budget).toLocaleString('ar-SA',{maximumFractionDigits:0})}</div>
+                          {p.actual_cost&&parseFloat(p.actual_cost)>0 && (() => {
+                            const pct = parseFloat(p.actual_cost)/parseFloat(p.budget)*100
+                            return(
+                              <div className="mt-1">
+                                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden w-20 mx-auto">
+                                  <div className={`h-1.5 rounded-full ${pct>90?'bg-red-500':pct>70?'bg-amber-500':'bg-emerald-500'}`}
+                                    style={{width:`${Math.min(pct,100)}%`}}/>
+                                </div>
+                                <span className={`text-xs font-mono ${pct>90?'text-red-600':pct>70?'text-amber-600':'text-emerald-600'}`}>{pct.toFixed(0)}%</span>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* طريقة الإيراد */}
+                    <td className="px-3 py-3 text-center">
+                      {p.revenue_method||p.billing_method
+                        ? <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-lg">{p.revenue_method||p.billing_method}</span>
+                        : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* الحالة */}
+                    <td className="px-3 py-3 text-center">
+                      <StatusBadge status={p.status}/>
+                    </td>
+                    {/* إجراء */}
+                    <td className="px-3 py-3 text-center">
+                      <button onClick={()=>setModal(p)}
+                        className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center text-sm mx-auto transition-colors">
+                        ✏️
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            {/* Footer إجماليات */}
+            {filtered.length > 0 && (
+              <tfoot>
+                <tr style={{background:'#f8fafc'}} className="border-t-2 border-slate-200 font-bold text-xs">
+                  <td colSpan={2} className="px-3 py-3 text-slate-600">{filtered.length} مشروع</td>
+                  <td colSpan={2}/>
+                  <td className="px-3 py-3 text-center font-mono text-emerald-700">
+                    {(() => {
+                      const total = filtered.reduce((s,p)=>s+(parseFloat(p.contract_value)||0),0)
+                      return total > 0 ? total.toLocaleString('ar-SA',{maximumFractionDigits:0}) : '—'
+                    })()}
+                  </td>
+                  <td className="px-3 py-3 text-center font-mono text-blue-700">
+                    {(() => {
+                      const total = filtered.reduce((s,p)=>s+(parseFloat(p.budget)||0),0)
+                      return total > 0 ? total.toLocaleString('ar-SA',{maximumFractionDigits:0}) : '—'
+                    })()}
+                  </td>
+                  <td colSpan={3}/>
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
       )}
 
