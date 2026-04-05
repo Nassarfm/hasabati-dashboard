@@ -185,6 +185,15 @@ function CashFlowComparison(){
     try{const[a,b]=await Promise.all([api.reports.cashFlow({year:yearA,month_from:mFrom,month_to:mTo}),api.reports.cashFlow({year:yearB,month_from:mFrom,month_to:mTo})])
     setDataA(a?.data||a);setDataB(b?.data||b)}catch(e){toast(e.message,'error')}finally{setLoading(false)}
   }
+  const CRow=({label,a,b})=>(
+    <div className="grid grid-cols-12 items-center border-b border-slate-100">
+      <div className="col-span-5 px-4 py-2.5 text-sm text-slate-700">{label}</div>
+      <div className={`col-span-3 px-3 py-2.5 text-center font-mono text-sm font-semibold ${a>=0?'text-emerald-700':'text-red-600'}`}>{a>=0?'+':''}{fmt(a,3)}</div>
+      <div className={`col-span-2 px-3 py-2.5 text-center font-mono text-sm text-slate-500`}>{b>=0?'+':''}{fmt(b,3)}</div>
+      <div className="col-span-2 px-3 py-2.5 text-center"><ChangeCell curr={a} prev={b}/></div>
+    </div>
+  )
+
   return(
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -203,18 +212,63 @@ function CashFlowComparison(){
         </div>
       </div>
       {dataA&&dataB&&(
-        <div className="grid grid-cols-3 gap-3">
-          {[{l:'صافي التشغيل',a:dataA.operating?.total||0,b:dataB.operating?.total||0},{l:'صافي الاستثمار',a:dataA.investing?.total||0,b:dataB.investing?.total||0},{l:'رصيد آخر المدة',a:dataA.closing_cash||0,b:dataB.closing_cash||0}].map(k=>(
-            <div key={k.l} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <div className="text-xs text-slate-400 mb-2">{k.l}</div>
-              <div className="flex items-end justify-between">
-                <div><div className="text-xs text-slate-400">{yearA}</div><div className={`font-mono font-bold text-base ${k.a>=0?'text-emerald-700':'text-red-600'}`}>{k.a>=0?'+':''}{fmt(k.a,3)}</div></div>
-                <ChangeCell curr={k.a} prev={k.b}/>
-                <div className="text-right"><div className="text-xs text-slate-400">{yearB}</div><div className="font-mono text-slate-500 text-sm">{k.b>=0?'+':''}{fmt(k.b,3)}</div></div>
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[{l:'صافي التشغيل',a:dataA.operating?.total||0,b:dataB.operating?.total||0},{l:'صافي الاستثمار',a:dataA.investing?.total||0,b:dataB.investing?.total||0},{l:'رصيد آخر المدة',a:dataA.closing_cash||0,b:dataB.closing_cash||0}].map(k=>(
+              <div key={k.l} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                <div className="text-xs text-slate-400 mb-2">{k.l}</div>
+                <div className="flex items-end justify-between">
+                  <div><div className="text-xs text-slate-400">{yearA}</div><div className={`font-mono font-bold text-base ${k.a>=0?'text-emerald-700':'text-red-600'}`}>{k.a>=0?'+':''}{fmt(k.a,3)}</div></div>
+                  <ChangeCell curr={k.a} prev={k.b}/>
+                  <div className="text-right"><div className="text-xs text-slate-400">{yearB}</div><div className="font-mono text-slate-500 text-sm">{k.b>=0?'+':''}{fmt(k.b,3)}</div></div>
+                </div>
               </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="grid grid-cols-12 text-white text-xs font-bold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+              <div className="col-span-5 px-4 py-3.5">البند</div>
+              <div className="col-span-3 px-3 py-3.5 text-center">{yearA}</div>
+              <div className="col-span-2 px-3 py-3.5 text-center">{yearB}</div>
+              <div className="col-span-2 px-3 py-3.5 text-center">التغيير %</div>
             </div>
-          ))}
-        </div>
+            <div className="px-4 py-2 bg-blue-700 text-white font-bold text-xs">⚙️ أنشطة التشغيل</div>
+            <CRow label="صافي الدخل" a={dataA.operating?.net_income||0} b={dataB.operating?.net_income||0}/>
+            <CRow label="الاهتلاك" a={dataA.operating?.depreciation||0} b={dataB.operating?.depreciation||0}/>
+            <CRow label="تغير الذمم المدينة" a={dataA.operating?.ar_change||0} b={dataB.operating?.ar_change||0}/>
+            <CRow label="تغير المخزون" a={dataA.operating?.inv_change||0} b={dataB.operating?.inv_change||0}/>
+            <CRow label="تغير الذمم الدائنة" a={dataA.operating?.ap_change||0} b={dataB.operating?.ap_change||0}/>
+            <div className="grid grid-cols-12 font-bold bg-blue-50 border-t-2 border-blue-200">
+              <div className="col-span-5 px-4 py-2.5 text-xs text-blue-700">صافي أنشطة التشغيل</div>
+              <div className={`col-span-3 px-3 py-2.5 text-center font-mono text-sm ${(dataA.operating?.total||0)>=0?'text-emerald-700':'text-red-600'}`}>{(dataA.operating?.total||0)>=0?'+':''}{fmt(dataA.operating?.total||0,3)}</div>
+              <div className="col-span-2 px-3 py-2.5 text-center font-mono text-sm text-slate-500">{(dataB.operating?.total||0)>=0?'+':''}{fmt(dataB.operating?.total||0,3)}</div>
+              <div className="col-span-2 px-3 py-2.5 text-center"><ChangeCell curr={dataA.operating?.total||0} prev={dataB.operating?.total||0}/></div>
+            </div>
+            <div className="px-4 py-2 text-white font-bold text-xs" style={{background:'#78350f'}}>🏗️ أنشطة الاستثمار</div>
+            <CRow label="تغير الأصول الثابتة" a={dataA.investing?.asset_net_change||0} b={dataB.investing?.asset_net_change||0}/>
+            <div className="grid grid-cols-12 font-bold bg-amber-50 border-t-2 border-amber-200">
+              <div className="col-span-5 px-4 py-2.5 text-xs text-amber-700">صافي أنشطة الاستثمار</div>
+              <div className="col-span-3 px-3 py-2.5 text-center font-mono text-sm">{fmt(dataA.investing?.total||0,3)}</div>
+              <div className="col-span-2 px-3 py-2.5 text-center font-mono text-sm text-slate-500">{fmt(dataB.investing?.total||0,3)}</div>
+              <div className="col-span-2 px-3 py-2.5 text-center"><ChangeCell curr={dataA.investing?.total||0} prev={dataB.investing?.total||0}/></div>
+            </div>
+            <div className="px-4 py-2 bg-purple-700 text-white font-bold text-xs">🏦 أنشطة التمويل</div>
+            <CRow label="صافي القروض" a={dataA.financing?.loans_net||0} b={dataB.financing?.loans_net||0}/>
+            <CRow label="صافي رأس المال" a={dataA.financing?.capital_net||0} b={dataB.financing?.capital_net||0}/>
+            <div className="grid grid-cols-12 font-bold bg-purple-50 border-t-2 border-purple-200">
+              <div className="col-span-5 px-4 py-2.5 text-xs text-purple-700">صافي أنشطة التمويل</div>
+              <div className="col-span-3 px-3 py-2.5 text-center font-mono text-sm">{fmt(dataA.financing?.total||0,3)}</div>
+              <div className="col-span-2 px-3 py-2.5 text-center font-mono text-sm text-slate-500">{fmt(dataB.financing?.total||0,3)}</div>
+              <div className="col-span-2 px-3 py-2.5 text-center"><ChangeCell curr={dataA.financing?.total||0} prev={dataB.financing?.total||0}/></div>
+            </div>
+            <div className={`grid grid-cols-12 text-white font-bold py-3 ${(dataA.closing_cash||0)>=0?'bg-emerald-700':'bg-red-700'}`}>
+              <div className="col-span-5 px-4">رصيد النقدية آخر المدة</div>
+              <div className="col-span-3 px-3 text-center font-mono">{fmt(dataA.closing_cash||0,3)}</div>
+              <div className="col-span-2 px-3 text-center font-mono opacity-80">{fmt(dataB.closing_cash||0,3)}</div>
+              <div className="col-span-2 px-3 text-center"><ChangeCell curr={dataA.closing_cash||0} prev={dataB.closing_cash||0}/></div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

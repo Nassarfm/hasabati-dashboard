@@ -175,6 +175,37 @@ function BalanceComparison(){
   }
   const sA=dataA?.sections,sB=dataB?.sections
   const labelA=`${yearA}/${String(monthA).padStart(2,'0')}`,labelB=`${yearB}/${String(monthB).padStart(2,'0')}`
+
+  const mergeRows=(a,b)=>{
+    const map={}
+    ;(a||[]).forEach(r=>{map[r.account_code]={code:r.account_code,name:r.account_name,a:r.amount,b:0}})
+    ;(b||[]).forEach(r=>{if(map[r.account_code])map[r.account_code].b=r.amount;else map[r.account_code]={code:r.account_code,name:r.account_name,a:0,b:r.amount}})
+    return Object.values(map).sort((x,y)=>x.code.localeCompare(y.code))
+  }
+
+  const CompSec=({title,bg,rowsA,rowsB,totalA,totalB,totalLabel})=>(
+    <div>
+      <div className={`grid grid-cols-12 text-white font-bold py-2.5 ${bg}`}><div className="col-span-12 px-4 text-sm">{title}</div></div>
+      {mergeRows(rowsA,rowsB).map((r,i)=>(
+        <div key={i} className={`grid grid-cols-12 items-center border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
+          <div className="col-span-5 px-4 py-2 flex items-center gap-2">
+            <span className="font-mono text-blue-700 text-xs w-14">{r.code}</span>
+            <span className="text-xs text-slate-700 truncate">{r.name}</span>
+          </div>
+          <div className="col-span-3 px-3 py-2 text-center font-mono text-sm font-semibold text-slate-800">{fmt(r.a,3)}</div>
+          <div className="col-span-2 px-3 py-2 text-center font-mono text-sm text-slate-500">{fmt(r.b,3)}</div>
+          <div className="col-span-2 px-3 py-2 text-center"><ChangeCell curr={r.a} prev={r.b}/></div>
+        </div>
+      ))}
+      <div className="grid grid-cols-12 font-bold border-t-2 border-slate-200 bg-slate-50">
+        <div className="col-span-5 px-4 py-2.5 text-xs">{totalLabel}</div>
+        <div className="col-span-3 px-3 py-2.5 text-center font-mono text-sm">{fmt(totalA,3)}</div>
+        <div className="col-span-2 px-3 py-2.5 text-center font-mono text-sm text-slate-500">{fmt(totalB,3)}</div>
+        <div className="col-span-2 px-3 py-2.5 text-center"><ChangeCell curr={totalA} prev={totalB}/></div>
+      </div>
+    </div>
+  )
+
   return(
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
@@ -194,18 +225,68 @@ function BalanceComparison(){
         </div>
       </div>
       {dataA&&dataB&&sA&&sB&&(
-        <div className="grid grid-cols-3 gap-3">
-          {[{l:'الأصول',a:dataA.total_assets,b:dataB.total_assets},{l:'الالتزامات',a:sA.liabilities.total,b:sB.liabilities.total},{l:'حقوق الملكية',a:sA.equity.total,b:sB.equity.total}].map(k=>(
-            <div key={k.l} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <div className="text-xs text-slate-400 mb-2">{k.l}</div>
-              <div className="flex items-end justify-between">
-                <div><div className="text-xs text-slate-400">{labelA}</div><div className="font-mono font-bold text-base text-slate-800">{fmt(k.a,3)}</div></div>
-                <ChangeCell curr={k.a} prev={k.b}/>
-                <div className="text-right"><div className="text-xs text-slate-400">{labelB}</div><div className="font-mono text-slate-500 text-sm">{fmt(k.b,3)}</div></div>
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[{l:'الأصول',a:dataA.total_assets,b:dataB.total_assets},{l:'الالتزامات',a:sA.liabilities.total,b:sB.liabilities.total},{l:'حقوق الملكية',a:sA.equity.total,b:sB.equity.total}].map(k=>(
+              <div key={k.l} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                <div className="text-xs text-slate-400 mb-2">{k.l}</div>
+                <div className="flex items-end justify-between">
+                  <div><div className="text-xs text-slate-400">{labelA}</div><div className="font-mono font-bold text-base text-slate-800">{fmt(k.a,3)}</div></div>
+                  <ChangeCell curr={k.a} prev={k.b}/>
+                  <div className="text-right"><div className="text-xs text-slate-400">{labelB}</div><div className="font-mono text-slate-500 text-sm">{fmt(k.b,3)}</div></div>
+                </div>
               </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="grid grid-cols-12 text-white text-xs font-bold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+              <div className="col-span-5 px-4 py-3.5">البند</div>
+              <div className="col-span-3 px-3 py-3.5 text-center">{labelA}</div>
+              <div className="col-span-2 px-3 py-3.5 text-center">{labelB}</div>
+              <div className="col-span-2 px-3 py-3.5 text-center">التغيير %</div>
             </div>
-          ))}
-        </div>
+            <CompSec title="🏦 الأصول المتداولة" bg="bg-blue-700"
+              rowsA={sA.assets.rows?.filter(r=>r.account_code<'15')||[]}
+              rowsB={sB.assets.rows?.filter(r=>r.account_code<'15')||[]}
+              totalA={(sA.assets.rows||[]).filter(r=>r.account_code<'15').reduce((s,r)=>s+r.amount,0)}
+              totalB={(sB.assets.rows||[]).filter(r=>r.account_code<'15').reduce((s,r)=>s+r.amount,0)}
+              totalLabel="مجموع الأصول المتداولة"/>
+            <CompSec title="🏗️ الأصول غير المتداولة" bg="bg-blue-600"
+              rowsA={sA.assets.rows?.filter(r=>r.account_code>='15')||[]}
+              rowsB={sB.assets.rows?.filter(r=>r.account_code>='15')||[]}
+              totalA={(sA.assets.rows||[]).filter(r=>r.account_code>='15').reduce((s,r)=>s+r.amount,0)}
+              totalB={(sB.assets.rows||[]).filter(r=>r.account_code>='15').reduce((s,r)=>s+r.amount,0)}
+              totalLabel="مجموع الأصول غير المتداولة"/>
+            <div className="grid grid-cols-12 bg-blue-700 text-white font-bold py-3">
+              <div className="col-span-5 px-4">إجمالي الأصول</div>
+              <div className="col-span-3 px-3 text-center font-mono">{fmt(dataA.total_assets,3)}</div>
+              <div className="col-span-2 px-3 text-center font-mono opacity-80">{fmt(dataB.total_assets,3)}</div>
+              <div className="col-span-2 px-3 text-center"><ChangeCell curr={dataA.total_assets} prev={dataB.total_assets}/></div>
+            </div>
+            <CompSec title="💳 الالتزامات المتداولة" bg="bg-red-700"
+              rowsA={sA.liabilities.rows?.filter(r=>r.account_code<'25')||[]}
+              rowsB={sB.liabilities.rows?.filter(r=>r.account_code<'25')||[]}
+              totalA={(sA.liabilities.rows||[]).filter(r=>r.account_code<'25').reduce((s,r)=>s+r.amount,0)}
+              totalB={(sB.liabilities.rows||[]).filter(r=>r.account_code<'25').reduce((s,r)=>s+r.amount,0)}
+              totalLabel="مجموع الالتزامات المتداولة"/>
+            <CompSec title="🏛️ الالتزامات غير المتداولة" bg="bg-red-600"
+              rowsA={sA.liabilities.rows?.filter(r=>r.account_code>='25')||[]}
+              rowsB={sB.liabilities.rows?.filter(r=>r.account_code>='25')||[]}
+              totalA={(sA.liabilities.rows||[]).filter(r=>r.account_code>='25').reduce((s,r)=>s+r.amount,0)}
+              totalB={(sB.liabilities.rows||[]).filter(r=>r.account_code>='25').reduce((s,r)=>s+r.amount,0)}
+              totalLabel="مجموع الالتزامات غير المتداولة"/>
+            <CompSec title="👑 حقوق الملكية" bg="bg-purple-700"
+              rowsA={sA.equity.rows||[]} rowsB={sB.equity.rows||[]}
+              totalA={sA.equity.total} totalB={sB.equity.total}
+              totalLabel="مجموع حقوق الملكية"/>
+            <div className="grid grid-cols-12 bg-slate-800 text-white font-bold py-3">
+              <div className="col-span-5 px-4">إجمالي الالتزامات + حقوق الملكية</div>
+              <div className="col-span-3 px-3 text-center font-mono">{fmt(dataA.total_liab_equity,3)}</div>
+              <div className="col-span-2 px-3 text-center font-mono opacity-80">{fmt(dataB.total_liab_equity,3)}</div>
+              <div className="col-span-2 px-3 text-center"><ChangeCell curr={dataA.total_liab_equity} prev={dataB.total_liab_equity}/></div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
