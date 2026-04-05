@@ -33,8 +33,11 @@ const SECTIONS = [
     items: [
       { id:'trialbal', icon:'⚖️', label:'ميزان المراجعة' },
       { id:'ledger',   icon:'📋', label:'الأستاذ العام' },
-      { id:'reports',  icon:'📈', label:'قائمة الدخل' },
-      { id:'vat',      icon:'🧮', label:'ضريبة القيمة المضافة' },
+      { id:'reports',          icon:'📈', label:'قائمة الدخل' },
+      { id:'vat',               icon:'🧮', label:'ضريبة القيمة المضافة' },
+      { id:'income_compare',   icon:'📊', label:'مقارنة الدخل' },
+      { id:'balance_compare',  icon:'📋', label:'مقارنة الميزانية' },
+      { id:'cashflow_compare', icon:'💹', label:'مقارنة التدفقات' },
     ]
   },
   {

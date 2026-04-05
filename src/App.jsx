@@ -16,6 +16,9 @@ import TrialBalancePage from './pages/TrialBalancePage'
 import LedgerPage from './pages/LedgerPage'
 import RecurringPage from './pages/RecurringPage'
 import ReportsPage from './pages/ReportsPage'
+import IncomeComparisonPage from './pages/IncomeComparisonPage'
+import BalanceComparisonPage from './pages/BalanceComparisonPage'
+import CashFlowComparisonPage from './pages/CashFlowComparisonPage'
 import {
   SalesPage, PurchasesPage, InventoryPage, HRPage,
   VATPage, AssetsPage, TreasuryPage,
@@ -34,7 +37,10 @@ const PAGE_LABELS = {
   recurring:   'القيود المتكررة',
   trialbal:    'ميزان المراجعة',
   ledger:      'الأستاذ العام',
-  reports:     'قائمة الدخل',
+  reports:          'قائمة الدخل',
+  income_compare:   'مقارنة قائمة الدخل',
+  balance_compare:  'مقارنة الميزانية العمومية',
+  cashflow_compare: 'مقارنة التدفقات النقدية',
   vat:         'ضريبة القيمة المضافة',
   sales:       'المبيعات',
   purchases:   'المشتريات',
@@ -115,7 +121,10 @@ function AppContent() {
       case 'recurring':   return <RecurringPage/>
       case 'trialbal':    return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
       case 'ledger':      return <LedgerPage initialAccountCode={ledgerAccount.code} initialAccountName={ledgerAccount.name}/>
-      case 'reports':     return <ReportsPage/>
+      case 'reports':          return <ReportsPage/>
+      case 'income_compare':   return <IncomeComparisonPage/>
+      case 'balance_compare':  return <BalanceComparisonPage/>
+      case 'cashflow_compare': return <CashFlowComparisonPage/>
       case 'vat':         return <VATPage/>
       case 'sales':       return <SalesPage/>
       case 'purchases':   return <PurchasesPage/>
