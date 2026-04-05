@@ -86,7 +86,7 @@ function DimSelect({ value, items, nameKey, valueKey='code', onChange, placehold
 // ════════════════════════════════════════════════════════
 // AllocationPage
 // ════════════════════════════════════════════════════════
-export default function AllocationPage() {
+export default function AllocationPage({ onBack }) {
   const [accounts,    setAccounts]    = useState([])
   const [dimensions,  setDimensions]  = useState([]) // كل الأبعاد ديناميكياً
   const [loading,     setLoading]     = useState(false)
@@ -113,9 +113,34 @@ export default function AllocationPage() {
     Promise.all([
       api.accounting.getCOA({ limit:500 }),
       api.dimensions.list(),
-    ]).then(([coa, dims]) => {
+      api.settings.listBranches(),
+      api.settings.listCostCenters(),
+      api.settings.listProjects(),
+    ]).then(([coa, dims, br, cc, pr]) => {
       setAccounts((coa?.data||coa?.items||[]).filter(a => a.postable))
-      setDimensions(dims?.data||dims?.items||[])
+      // دمج الأبعاد: النظامية (من جداول منفصلة) + المخصصة (من dimensions)
+      const customDims = (dims?.data||dims?.items||[])
+      const branches   = br?.data||br?.items||[]
+      const ccs        = cc?.data||cc?.items||[]
+      const projects   = pr?.data||pr?.items||[]
+      // بناء قائمة موحدة للأبعاد
+      const allDims = [
+        {
+          id:'sys-branch', code:'branch', name_ar:'الفرع', is_system:true,
+          values: branches.map(b=>({code:b.code, name_ar:b.name_ar||b.name_en||b.code, is_active:b.is_active!==false}))
+        },
+        {
+          id:'sys-cc', code:'cost_center', name_ar:'مركز التكلفة', is_system:true,
+          values: ccs.map(c=>({code:c.code, name_ar:c.name_ar||c.name_en||c.code, is_active:c.is_active!==false}))
+        },
+        {
+          id:'sys-proj', code:'project', name_ar:'المشروع', is_system:true,
+          values: projects.map(p=>({code:String(p.code), name_ar:p.name||String(p.code), is_active:p.status!=='closed'}))
+        },
+        // الأبعاد المخصصة من جدول dimensions (تصنيف المصروف + أي أبعاد مخصصة)
+        ...customDims,
+      ]
+      setDimensions(allDims)
     }).catch(() => {})
     .finally(() => setLoading(false))
   }, [])
@@ -169,18 +194,15 @@ export default function AllocationPage() {
       const mapDims = (dims={}) => {
         const out = {}
         const d = dims || {}
-        // نمرر الأبعاد كحقول مسماة إذا كانت موجودة
         Object.entries(d).forEach(([code, val]) => {
           if (!val?.value_code) return
-          if (code === 'branch')      { out.branch_code = val.value_code; out.branch_name = val.value_name }
-          else if (code === 'cost_center') { out.cost_center = val.value_code; out.cost_center_name = val.value_name }
-          else if (code === 'project') { out.project_code = val.value_code; out.project_name = val.value_name }
+          // الأبعاد النظامية — حقول مسماة
+          if (code === 'branch')                  { out.branch_code = val.value_code; out.branch_name = val.value_name }
+          else if (code === 'cost_center')        { out.cost_center = val.value_code; out.cost_center_name = val.value_name }
+          else if (code === 'project')            { out.project_code = val.value_code; out.project_name = val.value_name }
           else if (code === 'expense_classification') { out.expense_classification_code = val.value_code; out.expense_classification_name = val.value_name }
-          // الأبعاد المخصصة — نمررها كـ extra_dims
-          else {
-            if (!out.extra_dims) out.extra_dims = {}
-            out.extra_dims[code] = val.value_code
-          }
+          // الأبعاد المخصصة
+          else { if (!out.extra_dims) out.extra_dims = {}; out.extra_dims[code] = val.value_code }
         })
         return out
       }
@@ -251,11 +273,19 @@ export default function AllocationPage() {
           <h1 className="text-2xl font-bold text-slate-800">قيد التوزيع</h1>
           <p className="text-sm text-slate-400 mt-0.5">توزيع مبلغ من حساب مصدر على حسابات وجهة بنسب مئوية</p>
         </div>
-        {step < 4 && (
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-xs text-blue-700 font-medium">
-            <span>⚡</span> نوع القيد: ALO — قيد توزيع
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {onBack && step < 4 && (
+            <button onClick={onBack}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 font-medium">
+              ← رجوع
+            </button>
+          )}
+          {step < 4 && (
+            <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-xs text-blue-700 font-medium">
+              <span>⚡</span> نوع القيد: ALO — قيد توزيع
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Step Indicator */}

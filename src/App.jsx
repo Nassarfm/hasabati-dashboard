@@ -95,7 +95,7 @@ function AppContent() {
       case 'journal':            return <JournalPage/>
       case 'reversing':          return <ReversingPage onNavigateToJournal={()=>navigate('journal')}/>
       case 'recurring':          return <RecurringPage/>
-      case 'allocation':         return <AllocationPage/>
+      case 'allocation':         return <AllocationPage onBack={()=>navigate('journal')}/>
       case 'trialbal':           return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
       case 'ledger':             return <LedgerPage initialAccountCode={ledgerAccount.code} initialAccountName={ledgerAccount.name}/>
       case 'income_report':      return <IncomeReportPage/>
