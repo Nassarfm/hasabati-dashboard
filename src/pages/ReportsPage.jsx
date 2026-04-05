@@ -42,9 +42,10 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState('income')
 
   const tabs = [
-    { id:'income',  label:'قائمة الدخل',         icon:'📈' },
-    { id:'balance', label:'الميزانية العمومية',   icon:'⚖️' },
-    { id:'vat',     label:'ضريبة القيمة المضافة', icon:'🧮' },
+    { id:'income',   label:'قائمة الدخل',          icon:'📈' },
+    { id:'balance',  label:'الميزانية العمومية',    icon:'⚖️' },
+    { id:'cashflow', label:'التدفقات النقدية',       icon:'💵' },
+    { id:'vat',      label:'ضريبة القيمة المضافة',  icon:'🧮' },
   ]
 
   return (
@@ -67,9 +68,10 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {activeTab==='income'  && <IncomeStatementReport/>}
-      {activeTab==='balance' && <BalanceSheetReport/>}
-      {activeTab==='vat'     && <VATReport/>}
+      {activeTab==='income'   && <IncomeStatementReport/>}
+      {activeTab==='balance'  && <BalanceSheetReport/>}
+      {activeTab==='cashflow' && <CashFlowReport/>}
+      {activeTab==='vat'      && <VATReport/>}
     </div>
   )
 }
@@ -477,3 +479,162 @@ function VATReport() {
     </div>
   )
 }
+
+// ══════════════════════════════════════════════════════════
+// قائمة التدفقات النقدية
+// ══════════════════════════════════════════════════════════
+function CashFlowReport() {
+  const [year,      setYear]      = useState(CURRENT_YEAR)
+  const [monthFrom, setMonthFrom] = useState(1)
+  const [monthTo,   setMonthTo]   = useState(new Date().getMonth()+1)
+  const [data,      setData]      = useState(null)
+  const [loading,   setLoading]   = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const d = await api.reports.cashFlow({ year, month_from:monthFrom, month_to:monthTo })
+      setData(d?.data||d)
+    } catch(e) { toast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+
+  const CashSection = ({ title, icon, items, total, totalColor }) => (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-3 flex items-center gap-2 text-white font-bold" style={{background:'#1e3a5f'}}>
+        <span className="text-lg">{icon}</span><span>{title}</span>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {items.map((item,i) => item.value !== 0 && (
+          <div key={i} className="flex items-center justify-between px-5 py-3">
+            <span className="text-sm text-slate-600">{item.label}</span>
+            <span className={`font-mono font-semibold text-sm ${item.value>=0?'text-emerald-700':'text-red-600'}`}>
+              {item.value>=0?'+':''}{fmt(item.value,3)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className={`flex items-center justify-between px-5 py-3.5 font-bold border-t-2 border-slate-200 ${totalColor||'bg-slate-50'}`}>
+        <span>صافي {title}</span>
+        <span className={`font-mono text-base ${total>=0?'text-emerald-700':'text-red-600'}`}>
+          {total>=0?'+':''}{fmt(total,3)}
+        </span>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      {/* Controls */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div className="flex gap-4 items-end flex-wrap">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">السنة</label>
+            <select className="select w-24" value={year} onChange={e=>setYear(Number(e.target.value))}>
+              {[CURRENT_YEAR-1,CURRENT_YEAR].map(y=><option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">من شهر</label>
+            <select className="select w-32" value={monthFrom} onChange={e=>setMonthFrom(Number(e.target.value))}>
+              {MONTHS.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-400">إلى شهر</label>
+            <select className="select w-32" value={monthTo} onChange={e=>setMonthTo(Number(e.target.value))}>
+              {MONTHS.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2 pb-0.5">
+            {[
+              {label:'الربع الأول',from:1,to:3},{label:'النصف الأول',from:1,to:6},
+              {label:'هذه السنة',from:1,to:new Date().getMonth()+1},
+            ].map(p=>(
+              <button key={p.label} onClick={()=>{setMonthFrom(p.from);setMonthTo(p.to)}}
+                className="text-xs px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100">
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={load} disabled={loading}
+            className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50">
+            {loading?'⏳ جارٍ...':`💵 عرض التقرير`}
+          </button>
+        </div>
+      </div>
+
+      {data && (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              {label:'صافي أنشطة التشغيل',   v:data.operating?.total||0,      c:'text-blue-700',    bg:'bg-blue-50',    b:'border-blue-200'},
+              {label:'صافي أنشطة الاستثمار',  v:data.investing?.total||0,      c:'text-amber-700',   bg:'bg-amber-50',   b:'border-amber-200'},
+              {label:'صافي أنشطة التمويل',    v:data.financing?.total||0,      c:'text-purple-700',  bg:'bg-purple-50',  b:'border-purple-200'},
+              {label:'صافي التغير في النقدية', v:data.net_cash_change||0,       c:data.net_cash_change>=0?'text-emerald-700':'text-red-600', bg:data.net_cash_change>=0?'bg-emerald-50':'bg-red-50', b:data.net_cash_change>=0?'border-emerald-200':'border-red-200'},
+            ].map(k=>(
+              <div key={k.label} className={`rounded-2xl border ${k.b} ${k.bg} py-3 px-4 shadow-sm`}>
+                <div className="text-xs text-slate-400 mb-1">{k.label}</div>
+                <div className={`text-base font-bold font-mono ${k.c}`}>
+                  {(k.v>=0?'+':'')+fmt(k.v,3)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* الأقسام الثلاثة */}
+          <div className="grid grid-cols-3 gap-4">
+            <CashSection title="أنشطة التشغيل" icon="⚙️"
+              items={[
+                {label:'صافي الدخل',              value:data.operating?.net_income||0},
+                {label:'الاهتلاك والإطفاء',       value:data.operating?.depreciation||0},
+                {label:'تغير الذمم المدينة',       value:data.operating?.ar_change||0},
+                {label:'تغير المخزون',             value:data.operating?.inv_change||0},
+                {label:'تغير الذمم الدائنة',       value:data.operating?.ap_change||0},
+                {label:'تغير ضريبة القيمة المضافة',value:data.operating?.vat_change||0},
+              ]}
+              total={data.operating?.total||0}
+              totalColor="bg-blue-50 text-blue-700"/>
+
+            <CashSection title="أنشطة الاستثمار" icon="🏗️"
+              items={[
+                {label:'صافي تغير الأصول الثابتة', value:data.investing?.asset_net_change||0},
+              ]}
+              total={data.investing?.total||0}
+              totalColor="bg-amber-50 text-amber-700"/>
+
+            <CashSection title="أنشطة التمويل" icon="🏦"
+              items={[
+                {label:'صافي القروض',       value:data.financing?.loans_net||0},
+                {label:'صافي رأس المال',    value:data.financing?.capital_net||0},
+              ]}
+              total={data.financing?.total||0}
+              totalColor="bg-purple-50 text-purple-700"/>
+          </div>
+
+          {/* الملخص النهائي */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 font-bold text-white" style={{background:'#1e3a5f'}}>ملخص التدفق النقدي</div>
+            {[
+              {label:'رصيد النقدية أول المدة',    v:data.opening_cash||0,     c:'text-slate-700'},
+              {label:'+ صافي التدفق التشغيلي',   v:data.operating?.total||0, c:'text-blue-700'},
+              {label:'+ صافي التدفق الاستثماري',  v:data.investing?.total||0, c:'text-amber-700'},
+              {label:'+ صافي التدفق التمويلي',   v:data.financing?.total||0, c:'text-purple-700'},
+            ].map((r,i)=>(
+              <div key={i} className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                <span className="text-sm text-slate-600">{r.label}</span>
+                <span className={`font-mono font-semibold ${r.c}`}>{(r.v>=0?'+':'')+fmt(r.v,3)}</span>
+              </div>
+            ))}
+            <div className={`flex items-center justify-between px-5 py-4 font-bold text-white ${(data.closing_cash||0)>=0?'bg-emerald-700':'bg-red-700'}`}>
+              <span className="text-base">رصيد النقدية آخر المدة</span>
+              <span className="font-mono text-xl">{fmt(data.closing_cash||0,3)}</span>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+

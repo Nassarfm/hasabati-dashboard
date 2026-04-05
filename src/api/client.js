@@ -185,6 +185,7 @@ export const api = {
 
   reports: {
     incomeStatement:    (p={}) => get('/reports/income-statement', p),
+    cashFlow:           (p={}) => get('/reports/cash-flow', p),
     balanceSheet:       (p={}) => get('/reports/balance-sheet', p),
     trialBalance:       (p={}) => get('/reports/trial-balance', p),
     vatReturn:          (p={}) => get('/reports/vat-return', p),
