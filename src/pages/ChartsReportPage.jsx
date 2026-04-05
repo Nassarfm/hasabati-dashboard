@@ -19,6 +19,7 @@ export function ChartsReportPage() {
   const [year,    setYear]    = useState(CURRENT_YEAR)
   const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(false)
+  const [dimFilter,setDimFilter] = useState({})
 
   const load = async () => {
     setLoading(true)

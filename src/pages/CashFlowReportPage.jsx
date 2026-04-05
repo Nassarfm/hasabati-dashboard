@@ -27,6 +27,7 @@ function CashFlowReport(){
   const[mTo,setMTo]=useState(new Date().getMonth()+1)
   const[data,setData]=useState(null)
   const[loading,setLoading]=useState(false)
+  const [dimFilter,setDimFilter] = useState({})
 
   const load=async()=>{
     setLoading(true)
