@@ -18,7 +18,7 @@ const SECTIONS = [
     id: 'transactions', label: 'العمليات والمدخلات', icon: '📝',
     items: [
       { id:'journal',   icon:'📒', label:'القيود اليومية' },
-      { id:'reversing', icon:'↩️', label:'القيود العكسية',  badge:'قريباً' },
+      { id:'reversing', icon:'↩️', label:'القيود العكسية' },
       { id:'recurring', icon:'🔄', label:'القيود المتكررة' },
     ]
   },

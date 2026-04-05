@@ -45,6 +45,8 @@ export const api = {
     updateJE:          (id, b)         => put(`/accounting/je/${id}`, b),
     createJE:          (b)             => post('/accounting/je', b),
     postJE:            (id, b={})      => post(`/accounting/je/${id}/post`, b),
+    reverseJE:         (id, b)         => post(`/accounting/je/${id}/reverse`, b),
+    listJE:            (p={})          => get('/accounting/je', p),
     submitJE:          (id)            => post(`/accounting/je/${id}/submit`, {}),
     approveJE:         (id)            => post(`/accounting/je/${id}/approve`, {}),
     rejectJE:          (id, note)      => post(`/accounting/je/${id}/reject`, { note }),

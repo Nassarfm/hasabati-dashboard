@@ -15,6 +15,7 @@ import FiscalPeriodsPage from './pages/FiscalPeriodsPage'
 import TrialBalancePage from './pages/TrialBalancePage'
 import LedgerPage from './pages/LedgerPage'
 import RecurringPage from './pages/RecurringPage'
+import ReversingPage from './pages/ReversingPage'
 import IncomeReportPage from './pages/IncomeReportPage'
 import BalanceReportPage from './pages/BalanceReportPage'
 import CashFlowReportPage from './pages/CashFlowReportPage'
@@ -54,19 +55,7 @@ const PAGE_LABELS = {
   treasury:           'الخزينة',
 }
 
-function ReversingPage() {
-  return (
-    <div className="page-enter space-y-4">
-      <div><h1 className="text-2xl font-bold text-slate-800">القيود العكسية</h1><p className="text-sm text-slate-400">إلغاء تأثير القيود المرحّلة بقيود معكوسة</p></div>
-      <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-16 text-center">
-        <div className="text-5xl mb-4">↩️</div>
-        <div className="text-xl font-bold text-slate-700 mb-2">القيود العكسية</div>
-        <div className="text-sm text-slate-400 mb-6 max-w-md mx-auto">يُنشئ قيداً عكسياً بنفس مبالغ القيد الأصلي لإلغاء تأثيره المحاسبي</div>
-        <span className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 px-4 py-2 rounded-full text-sm">🔜 قريباً — Phase 2</span>
-      </div>
-    </div>
-  )
-}
+
 
 function AppContent() {
   const { user, loading } = useAuth()
@@ -102,7 +91,7 @@ function AppContent() {
       case 'projects':           return <ProjectsPage/>
       case 'fiscal':             return <FiscalPeriodsPage/>
       case 'journal':            return <JournalPage/>
-      case 'reversing':          return <ReversingPage/>
+      case 'reversing':          return <ReversingPage onNavigateToJournal={()=>navigate('journal')}/>
       case 'recurring':          return <RecurringPage/>
       case 'trialbal':           return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
       case 'ledger':             return <LedgerPage initialAccountCode={ledgerAccount.code} initialAccountName={ledgerAccount.name}/>
