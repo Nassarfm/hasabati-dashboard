@@ -506,20 +506,27 @@ export default function VATPage() {
   const [loading,    setLoading]    = useState(false)
   const [companyName,setCompanyName]= useState('حساباتي ERP')
 
+  const getMonths = () => {
+    if (filterMode==='quarter') {
+      return { month_from: QUARTERS[quarter].from, month_to: QUARTERS[quarter].to }
+    }
+    return { month_from: mFrom, month_to: mTo }
+  }
+
   const load = async () => {
     setLoading(true)
     try {
-      const from = filterMode==='quarter' ? QUARTERS[quarter].from : mFrom
-      const to   = filterMode==='quarter' ? QUARTERS[quarter].to   : mTo
-      const d = await api.reports.vatReturn({ year, month_from:from, month_to:to })
+      const { month_from, month_to } = getMonths()
+      const d = await api.reports.vatReturn({ year, month_from, month_to })
       setData(d?.data||d)
     } catch(e) { toast(e.message,'error') }
     finally { setLoading(false) }
   }
 
-  const periodLabel = filterMode==='quarter'
-    ? `${year} — ${QUARTERS[quarter].label}`
-    : `${year} / ${MONTHS[mFrom-1]} — ${MONTHS[mTo-1]}`
+  const periodLabel = (() => {
+    if (filterMode==='quarter') return `${year} — ${QUARTERS[quarter].label}`
+    return `${year} / ${MONTHS[mFrom-1]} — ${MONTHS[mTo-1]}`
+  })()
 
   return (
     <div className="page-enter space-y-5">

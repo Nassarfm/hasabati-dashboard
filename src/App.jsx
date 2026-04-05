@@ -25,8 +25,9 @@ import CompareReportPage from './pages/CompareReportPage'
 import ChartsReportPage from './pages/ChartsReportPage'
 import {
   SalesPage, PurchasesPage, InventoryPage, HRPage,
-  VATPage, AssetsPage, TreasuryPage,
+  AssetsPage, TreasuryPage,
 } from './pages/OtherPages'
+import VATPage from './pages/VATPage'
 
 const PAGE_LABELS = {
   dashboard:          'لوحة التحكم',
