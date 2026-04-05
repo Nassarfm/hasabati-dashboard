@@ -1,6 +1,7 @@
 /* قائمة الدخل — تبويبان: التقرير + المقارنة */
 import { useState } from 'react'
 import { toast, fmt } from '../components/UI'
+import DimensionFilter from '../components/DimensionFilter'
 import api from '../api/client'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -139,8 +140,9 @@ function IncomeReport() {
   const [filterMode,setFilterMode] = useState('period')
   const [dateFrom,setDateFrom] = useState(`${CURRENT_YEAR}-01-01`)
   const [dateTo,setDateTo]     = useState(new Date().toISOString().split('T')[0])
-  const [data,setData]   = useState(null)
+  const [data,setData]     = useState(null)
   const [loading,setLoading] = useState(false)
+  const [dimFilter,setDimFilter] = useState({})
 
   const load = async () => {
     setLoading(true)
@@ -148,7 +150,9 @@ function IncomeReport() {
       const params = filterMode==='period'
         ? {year:year[0], month_from:mFrom[0], month_to:mTo[0]}
         : {year:new Date(dateFrom).getFullYear(), month_from:new Date(dateFrom).getMonth()+1, month_to:new Date(dateTo).getMonth()+1}
-      const d = await api.reports.incomeStatement(params)
+      // إضافة فلاتر الأبعاد
+      const activeDims = Object.fromEntries(Object.entries(dimFilter).filter(([,v])=>v))
+      const d = await api.reports.incomeStatement({...params, ...activeDims})
       setData(d?.data||d)
     } catch(e) { toast(e.message,'error') }
     finally { setLoading(false) }
@@ -208,6 +212,9 @@ function IncomeReport() {
               ))}
             </div>
           </>}
+
+        {/* ── فلتر الأبعاد ── */}
+        <DimensionFilter value={dimFilter} onChange={v=>{setDimFilter(v);setData&&setData(null)}} compact/>
           <button onClick={load} disabled={loading}
             className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50">
             {loading?'⏳ جارٍ...':'📊 عرض التقرير'}

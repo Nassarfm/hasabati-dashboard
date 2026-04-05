@@ -1,6 +1,7 @@
 /* CashFlowReportPage.jsx */
 import { useState } from 'react'
 import { toast, fmt } from '../components/UI'
+import DimensionFilter from '../components/DimensionFilter'
 import api from '../api/client'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -29,7 +30,8 @@ function CashFlowReport(){
 
   const load=async()=>{
     setLoading(true)
-    try{const d=await api.reports.cashFlow({year,month_from:mFrom,month_to:mTo});setData(d?.data||d)}
+    try{const dimA=Object.fromEntries(Object.entries(dimFilter||{}).filter(([,v])=>v))
+    const d=await api.reports.cashFlow({year,month_from:mFrom,month_to:mTo,...dimA});setData(d?.data||d)}
     catch(e){toast(e.message,'error')}finally{setLoading(false)}
   }
 
@@ -117,6 +119,9 @@ function CashFlowReport(){
               <button key={p.l} onClick={()=>{setMFrom(p.f);setMTo(p.t)}} className="text-xs px-2.5 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100">{p.l}</button>
             ))}
           </div>
+
+        {/* ── فلتر الأبعاد ── */}
+        <DimensionFilter value={dimFilter} onChange={v=>{setDimFilter(v);setData&&setData(null)}} compact/>
           <button onClick={load} disabled={loading} className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50">
             {loading?'⏳ جارٍ...':'💵 عرض التقرير'}
           </button>

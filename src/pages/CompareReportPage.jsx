@@ -1,6 +1,7 @@
 /* CompareReportPage.jsx — مقارنة شاملة */
 import { useState } from 'react'
 import { toast, fmt } from '../components/UI'
+import DimensionFilter from '../components/DimensionFilter'
 import api from '../api/client'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -21,11 +22,12 @@ export function CompareReportPage(){
   const load=async()=>{
     setLoading(true)
     try{
+      const dimA=Object.fromEntries(Object.entries(dimFilter||{}).filter(([,v])=>v))
       const[bsA,bsB,isA,isB]=await Promise.all([
-        api.reports.balanceSheet({year:yearA,month}),
-        api.reports.balanceSheet({year:yearB,month}),
-        api.reports.incomeStatement({year:yearA,month_from:mFrom,month_to:mTo}),
-        api.reports.incomeStatement({year:yearB,month_from:mFrom,month_to:mTo}),
+        api.reports.balanceSheet({year:yearA,month,...dimA}),
+        api.reports.balanceSheet({year:yearB,month,...dimA}),
+        api.reports.incomeStatement({year:yearA,month_from:mFrom,month_to:mTo,...dimA}),
+        api.reports.incomeStatement({year:yearB,month_from:mFrom,month_to:mTo,...dimA}),
       ])
       setData({bsA:bsA?.data||bsA,bsB:bsB?.data||bsB,isA:isA?.data||isA,isB:isB?.data||isB})
     }catch(e){toast(e.message,'error')}finally{setLoading(false)}
@@ -122,6 +124,9 @@ export function CompareReportPage(){
             <select className="select w-24" value={mFrom} onChange={e=>setMFrom(Number(e.target.value))}>{MONTHS.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}</select></div>
           <div><div className="text-xs text-slate-400 mb-1">إلى</div>
             <select className="select w-24" value={mTo} onChange={e=>setMTo(Number(e.target.value))}>{MONTHS.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}</select></div>
+
+        {/* ── فلتر الأبعاد ── */}
+        <DimensionFilter value={dimFilter} onChange={v=>{setDimFilter(v);setData&&setData(null)}} compact/>
           <button onClick={load} disabled={loading} className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50 mb-0.5">{loading?'⏳':'🔀 مقارنة شاملة'}</button>
         </div>
       </div>

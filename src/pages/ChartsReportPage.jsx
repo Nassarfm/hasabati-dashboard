@@ -24,9 +24,10 @@ export function ChartsReportPage() {
     setLoading(true)
     try {
       // نجلب بيانات كل شهر
+      const dimA = Object.fromEntries(Object.entries(dimFilter||{}).filter(([,v])=>v))
       const results = await Promise.all(
         Array.from({length:12},(_,i)=>i+1).map(m =>
-          api.reports.incomeStatement({year, month_from:m, month_to:m}).catch(()=>null)
+          api.reports.incomeStatement({year, month_from:m, month_to:m, ...dimA}).catch(()=>null)
         )
       )
       const monthly = results.map((d,i) => {
@@ -78,6 +79,9 @@ export function ChartsReportPage() {
               {[CURRENT_YEAR-2,CURRENT_YEAR-1,CURRENT_YEAR].map(y=><option key={y} value={y}>{y}</option>)}
             </select>
           </div>
+
+        {/* ── فلتر الأبعاد ── */}
+        <DimensionFilter value={dimFilter} onChange={v=>{setDimFilter(v);setData&&setData(null)}} compact/>
           <button onClick={load} disabled={loading}
             className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50">
             {loading?'⏳ جارٍ...':'📉 عرض الرسوم البيانية'}

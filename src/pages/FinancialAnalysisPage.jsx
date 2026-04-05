@@ -1,6 +1,7 @@
 /* صفحة التحليل المالي — نسب السيولة والرافعة والربحية */
 import { useState } from 'react'
 import { toast, fmt } from '../components/UI'
+import DimensionFilter from '../components/DimensionFilter'
 import api from '../api/client'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -40,9 +41,10 @@ export default function FinancialAnalysisPage() {
   const load = async () => {
     setLoading(true)
     try {
+      const dimA=Object.fromEntries(Object.entries(dimFilter||{}).filter(([,v])=>v))
       const [bs, is] = await Promise.all([
-        api.reports.balanceSheet({ year, month }),
-        api.reports.incomeStatement({ year, month_from: mFrom, month_to: mTo }),
+        api.reports.balanceSheet({ year, month, ...dimA }),
+        api.reports.incomeStatement({ year, month_from: mFrom, month_to: mTo, ...dimA }),
       ])
       const bsData = bs?.data||bs
       const isData = is?.data||is
@@ -226,6 +228,9 @@ export default function FinancialAnalysisPage() {
                 </select></div>
             </div>
           </div>
+
+        {/* ── فلتر الأبعاد ── */}
+        <DimensionFilter value={dimFilter} onChange={v=>{setDimFilter(v);setRatios&&setRatios(null)}} compact/>
           <button onClick={load} disabled={loading}
             className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50 mb-0.5">
             {loading?'⏳ جارٍ...':'📐 تحليل'}
