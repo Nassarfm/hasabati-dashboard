@@ -11,16 +11,9 @@ const EMPTY_LINE = (id) => ({
   account_code: '',
   account_name: '',
   description:  '',
-  pct:          '',       // النسبة المئوية
-  debit:        0,        // يُحسب تلقائياً
-  branch_code:       '',
-  branch_name:       '',
-  cost_center:       '',
-  cost_center_name:  '',
-  project_code:      '',
-  project_name:      '',
-  expense_classification_code: '',
-  expense_classification_name: '',
+  pct:          '',   // النسبة المئوية
+  debit:        0,    // يُحسب تلقائياً
+  dims: {},           // { [dimCode]: { value_code, value_name } }
 })
 
 let _lineId = 1
@@ -95,10 +88,7 @@ function DimSelect({ value, items, nameKey, valueKey='code', onChange, placehold
 // ════════════════════════════════════════════════════════
 export default function AllocationPage() {
   const [accounts,    setAccounts]    = useState([])
-  const [branches,    setBranches]    = useState([])
-  const [costCenters, setCostCenters] = useState([])
-  const [projects,    setProjects]    = useState([])
-  const [expClass,    setExpClass]    = useState([])
+  const [dimensions,  setDimensions]  = useState([]) // كل الأبعاد ديناميكياً
   const [loading,     setLoading]     = useState(false)
   const [saving,      setSaving]      = useState(false)
   const [step,        setStep]        = useState(1) // 1=الإعداد، 2=الأسطر، 3=المعاينة
@@ -111,15 +101,8 @@ export default function AllocationPage() {
     description:  '',
     sourceAccount:{ code:'', name:'' },
     totalAmount:  '',
-    // أبعاد حساب المصدر
-    src_branch_code:       '',
-    src_branch_name:       '',
-    src_cost_center:       '',
-    src_cost_center_name:  '',
-    src_project_code:      '',
-    src_project_name:      '',
-    src_exp_class_code:    '',
-    src_exp_class_name:    '',
+    // أبعاد حساب المصدر — ديناميكية { [dimCode]: { value_code, value_name } }
+    srcDims: {},
   })
 
   // أسطر التوزيع
@@ -129,16 +112,10 @@ export default function AllocationPage() {
     setLoading(true)
     Promise.all([
       api.accounting.getCOA({ limit:500 }),
-      api.settings.listBranches(),
-      api.settings.listCostCenters(),
-      api.settings.listProjects(),
-      api.settings.listExpenseClassifications?.() ?? Promise.resolve({ data:[] }),
-    ]).then(([coa, br, cc, pr, ec]) => {
+      api.dimensions.list(),
+    ]).then(([coa, dims]) => {
       setAccounts((coa?.data||coa?.items||[]).filter(a => a.postable))
-      setBranches(br?.data||br?.items||[])
-      setCostCenters(cc?.data||cc?.items||[])
-      setProjects(pr?.data||pr?.items||[])
-      setExpClass(ec?.data||ec?.items||[])
+      setDimensions(dims?.data||dims?.items||[])
     }).catch(() => {})
     .finally(() => setLoading(false))
   }, [])
@@ -188,34 +165,40 @@ export default function AllocationPage() {
     setSaving(true)
     try {
       // بناء الأسطر: وجهات (مدين) + مصدر (دائن)
+      // تحويل الأبعاد الديناميكية إلى الحقول المعروفة في الـ API
+      const mapDims = (dims={}) => {
+        const out = {}
+        const d = dims || {}
+        // نمرر الأبعاد كحقول مسماة إذا كانت موجودة
+        Object.entries(d).forEach(([code, val]) => {
+          if (!val?.value_code) return
+          if (code === 'branch')      { out.branch_code = val.value_code; out.branch_name = val.value_name }
+          else if (code === 'cost_center') { out.cost_center = val.value_code; out.cost_center_name = val.value_name }
+          else if (code === 'project') { out.project_code = val.value_code; out.project_name = val.value_name }
+          else if (code === 'expense_classification') { out.expense_classification_code = val.value_code; out.expense_classification_name = val.value_name }
+          // الأبعاد المخصصة — نمررها كـ extra_dims
+          else {
+            if (!out.extra_dims) out.extra_dims = {}
+            out.extra_dims[code] = val.value_code
+          }
+        })
+        return out
+      }
+
       const jeLines = [
         ...linesWithAmounts.map(l => ({
           account_code: l.account_code,
           description:  l.description || header.description || `توزيع — ${l.pct}%`,
           debit:        l.debit,
           credit:       0,
-          branch_code:       l.branch_code       || undefined,
-          branch_name:       l.branch_name       || undefined,
-          cost_center:       l.cost_center       || undefined,
-          cost_center_name:  l.cost_center_name  || undefined,
-          project_code:      l.project_code      || undefined,
-          project_name:      l.project_name      || undefined,
-          expense_classification_code: l.expense_classification_code || undefined,
-          expense_classification_name: l.expense_classification_name || undefined,
+          ...mapDims(l.dims),
         })),
         {
           account_code: header.sourceAccount.code,
           description:  header.description || `توزيع — ${header.name}`,
           debit:        0,
           credit:       totalAmount,
-          branch_code:       header.src_branch_code       || undefined,
-          branch_name:       header.src_branch_name       || undefined,
-          cost_center:       header.src_cost_center       || undefined,
-          cost_center_name:  header.src_cost_center_name  || undefined,
-          project_code:      header.src_project_code      || undefined,
-          project_name:      header.src_project_name      || undefined,
-          expense_classification_code: header.src_exp_class_code || undefined,
-          expense_classification_name: header.src_exp_class_name || undefined,
+          ...mapDims(header.srcDims),
         }
       ]
 
@@ -363,48 +346,49 @@ export default function AllocationPage() {
                 value={header.description} onChange={e => setHeader(p => ({...p, description:e.target.value}))}/>
             </div>
 
-            {/* أبعاد حساب المصدر */}
-            <div className="col-span-2">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm font-semibold text-slate-700">أبعاد حساب المصدر (الدائن)</span>
-                <span className="text-xs text-slate-400">— اختياري</span>
+            {/* أبعاد حساب المصدر — ديناميكية */}
+            {dimensions.length > 0 && (
+              <div className="col-span-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-semibold text-slate-700">أبعاد حساب المصدر (الدائن)</span>
+                  <span className="text-xs text-slate-400">— اختياري</span>
+                </div>
+                <div className={`grid gap-3 bg-red-50 border border-red-200 rounded-xl p-4`}
+                  style={{gridTemplateColumns:`repeat(${Math.min(dimensions.length,4)},1fr)`}}>
+                  {dimensions.map(dim => (
+                    <div key={dim.id} className="flex flex-col gap-1.5">
+                      <label className="text-xs text-slate-500">{dim.name_ar}</label>
+                      <select className="select w-full text-xs"
+                        value={header.srcDims?.[dim.code]?.value_code||''}
+                        onChange={e => {
+                          const val = (dim.values||[]).find(v=>v.code===e.target.value)
+                          setHeader(p=>({...p, srcDims:{...p.srcDims,
+                            [dim.code]: e.target.value ? {value_code:e.target.value, value_name:val?.name_ar||''} : undefined
+                          }}))
+                        }}>
+                        <option value="">—</option>
+                        {(dim.values||[]).filter(v=>v.is_active).map(v=>(
+                          <option key={v.code} value={v.code}>{v.name_ar}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                {/* إظهار الأبعاد المختارة */}
+                {Object.entries(header.srcDims||{}).filter(([,v])=>v?.value_code).length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {Object.entries(header.srcDims||{}).filter(([,v])=>v?.value_code).map(([dimCode,val])=>{
+                      const dim = dimensions.find(d=>d.code===dimCode)
+                      return(
+                        <span key={dimCode} className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full border border-slate-200">
+                          {dim?.name_ar||dimCode}: {val.value_name||val.value_code}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-4 gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-                {/* الفرع */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-slate-500">الفرع</label>
-                  <DimSelect value={header.src_branch_code} items={branches} nameKey="name_ar" valueKey="code"
-                    onChange={(v,obj)=>setHeader(p=>({...p,src_branch_code:v,src_branch_name:obj?.name_ar||''}))}/>
-                </div>
-                {/* مركز التكلفة */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-slate-500">مركز التكلفة</label>
-                  <DimSelect value={header.src_cost_center} items={costCenters} nameKey="name_ar" valueKey="code"
-                    onChange={(v,obj)=>setHeader(p=>({...p,src_cost_center:v,src_cost_center_name:obj?.name_ar||''}))}/>
-                </div>
-                {/* المشروع */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-slate-500">المشروع</label>
-                  <DimSelect value={header.src_project_code} items={projects} nameKey="name" valueKey="code"
-                    onChange={(v,obj)=>setHeader(p=>({...p,src_project_code:v,src_project_name:obj?.name||''}))}/>
-                </div>
-                {/* تصنيف المصروف */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-slate-500">تصنيف المصروف</label>
-                  <DimSelect value={header.src_exp_class_code} items={expClass} nameKey="name_ar" valueKey="code"
-                    onChange={(v,obj)=>setHeader(p=>({...p,src_exp_class_code:v,src_exp_class_name:obj?.name_ar||''}))}/>
-                </div>
-              </div>
-              {/* إظهار الأبعاد المختارة */}
-              {(header.src_branch_code||header.src_cost_center||header.src_project_code||header.src_exp_class_code)&&(
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {header.src_branch_code&&<span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full border border-blue-200">🏢 {header.src_branch_name||header.src_branch_code}</span>}
-                  {header.src_cost_center&&<span className="text-xs bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full border border-purple-200">💰 {header.src_cost_center_name||header.src_cost_center}</span>}
-                  {header.src_project_code&&<span className="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200">📁 {header.src_project_name||header.src_project_code}</span>}
-                  {header.src_exp_class_code&&<span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full border border-amber-200">🏷️ {header.src_exp_class_name||header.src_exp_class_code}</span>}
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           <div className="flex justify-end pt-2">
@@ -451,29 +435,31 @@ export default function AllocationPage() {
 
           {/* جدول الأسطر */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* Header الجدول */}
-            <div style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}
-              className="grid text-white text-xs font-bold py-3"
-              style={{gridTemplateColumns:'2rem 2fr 1.5fr 5rem 7rem 5rem 5rem 5rem 5rem 2.5rem'}}>
-              <div className="px-2 text-center">#</div>
-              <div className="px-3">كود / اسم الحساب</div>
-              <div className="px-3">البيان</div>
-              <div className="px-3 text-center">النسبة %</div>
-              <div className="px-3 text-center" style={{color:'#93c5fd'}}>المبلغ (مدين)</div>
-              <div className="px-2 text-center">الفرع</div>
-              <div className="px-2 text-center">م.التكلفة</div>
-              <div className="px-2 text-center">المشروع</div>
-              <div className="px-2 text-center">تصنيف</div>
-              <div className="px-2"/>
-            </div>
+            {/* Header الجدول — ديناميكي */}
+            {(()=>{
+              const cols = `2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 2.5rem`
+              return(
+                <div style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:cols}}
+                  className="grid text-white text-xs font-bold py-3">
+                  <div className="px-2 text-center">#</div>
+                  <div className="px-3">كود / اسم الحساب</div>
+                  <div className="px-3">البيان</div>
+                  <div className="px-3 text-center">النسبة %</div>
+                  <div className="px-3 text-center" style={{color:'#93c5fd'}}>المبلغ (مدين)</div>
+                  {dimensions.map(d=><div key={d.id} className="px-2 text-center truncate">{d.name_ar}</div>)}
+                  <div className="px-2"/>
+                </div>
+              )
+            })()}
 
             {/* الأسطر */}
             {lines.map((line, i) => {
               const computed = linesWithAmounts[i]?.debit || 0
+              const cols = `2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 2.5rem`
               return (
                 <div key={line._id}
                   className={`grid items-center border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}
-                  style={{gridTemplateColumns:'2rem 2fr 1.5fr 5rem 7rem 5rem 5rem 5rem 5rem 2.5rem'}}>
+                  style={{gridTemplateColumns:cols}}>
                   {/* رقم السطر */}
                   <div className="px-2 py-2 text-center text-xs text-slate-400 font-mono">{i+1}</div>
 
@@ -523,29 +509,25 @@ export default function AllocationPage() {
                     </div>
                   </div>
 
-                  {/* الفرع */}
-                  <div className="px-1 py-2">
-                    <DimSelect value={line.branch_code} items={branches} nameKey="name_ar" valueKey="code"
-                      onChange={(v,obj) => { updateLine(line._id,'branch_code',v); updateLine(line._id,'branch_name',obj?.name_ar||'') }}/>
-                  </div>
-
-                  {/* مركز التكلفة */}
-                  <div className="px-1 py-2">
-                    <DimSelect value={line.cost_center} items={costCenters} nameKey="name_ar" valueKey="code"
-                      onChange={(v,obj) => { updateLine(line._id,'cost_center',v); updateLine(line._id,'cost_center_name',obj?.name_ar||'') }}/>
-                  </div>
-
-                  {/* المشروع */}
-                  <div className="px-1 py-2">
-                    <DimSelect value={line.project_code} items={projects} nameKey="name" valueKey="code"
-                      onChange={(v,obj) => { updateLine(line._id,'project_code',v); updateLine(line._id,'project_name',obj?.name||'') }}/>
-                  </div>
-
-                  {/* تصنيف */}
-                  <div className="px-1 py-2">
-                    <DimSelect value={line.expense_classification_code} items={expClass} nameKey="name_ar" valueKey="code"
-                      onChange={(v,obj) => { updateLine(line._id,'expense_classification_code',v); updateLine(line._id,'expense_classification_name',obj?.name_ar||'') }}/>
-                  </div>
+                  {/* الأبعاد الديناميكية */}
+                  {dimensions.map(dim => (
+                    <div key={dim.id} className="px-1 py-2">
+                      <select className="select w-full text-xs"
+                        value={line.dims?.[dim.code]?.value_code||''}
+                        onChange={e => {
+                          const val = (dim.values||[]).find(v=>v.code===e.target.value)
+                          updateLine(line._id, 'dims', {
+                            ...line.dims,
+                            [dim.code]: e.target.value ? {value_code:e.target.value, value_name:val?.name_ar||''} : undefined
+                          })
+                        }}>
+                        <option value="">—</option>
+                        {(dim.values||[]).filter(v=>v.is_active).map(v=>(
+                          <option key={v.code} value={v.code}>{v.name_ar}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
 
                   {/* حذف */}
                   <div className="px-2 py-2 text-center">
@@ -561,7 +543,7 @@ export default function AllocationPage() {
 
             {/* Footer الجدول */}
             <div className="grid items-center py-3 border-t-2 border-slate-200 bg-slate-50"
-              style={{gridTemplateColumns:'2rem 2fr 1.5fr 5rem 7rem 5rem 5rem 5rem 5rem 2.5rem'}}>
+              style={{gridTemplateColumns:`2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 2.5rem`}}>
               <div/>
               <div className="px-3 text-xs font-bold text-slate-500">الإجمالي ({lines.length} سطر وجهة)</div>
               <div/>
