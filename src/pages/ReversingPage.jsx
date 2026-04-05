@@ -379,67 +379,141 @@ export default function ReversingPage({ onNavigateToJournal }) {
       {detail && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={()=>setDetail(null)}/>
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto">
-            <div className="sticky top-0 flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg">{detail.serial}</h3>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <StatusBadge status={detail.status}/>
-                  <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{detail.je_type}</span>
-                  <span className="text-xs text-slate-400">{detail.entry_date}</span>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 shrink-0 text-white"
+              style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+              <div className="flex items-center gap-5">
+                <div>
+                  <div className="text-blue-200 text-xs">رقم القيد</div>
+                  <div className="font-mono font-bold text-xl">{detail.serial}</div>
                 </div>
+                <div className="w-px h-8 bg-blue-400/30"/>
+                <div>
+                  <div className="text-blue-200 text-xs">النوع</div>
+                  <div className="font-mono text-sm font-semibold">{detail.je_type}</div>
+                </div>
+                <div className="w-px h-8 bg-blue-400/30"/>
+                <div>
+                  <div className="text-blue-200 text-xs">التاريخ</div>
+                  <div className="font-mono text-sm">{detail.entry_date}</div>
+                </div>
+                <StatusBadge status={detail.status}/>
               </div>
-              <button onClick={()=>setDetail(null)} className="w-8 h-8 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50">✕</button>
+              <button onClick={()=>setDetail(null)}
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center">✕</button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="bg-slate-50 rounded-xl p-4">
-                <div className="text-xs text-slate-400 mb-2">البيان</div>
-                <div className="text-sm text-slate-800">{detail.description}</div>
-              </div>
-              {/* الأسطر */}
-              <div className="overflow-hidden rounded-xl border border-slate-200">
-                <div className="grid grid-cols-12 bg-slate-800 text-white text-xs font-bold">
-                  <div className="col-span-3 px-3 py-2.5">الحساب</div>
-                  <div className="col-span-4 px-3 py-2.5">البيان</div>
-                  <div className="col-span-2 px-3 py-2.5 text-center">مدين</div>
-                  <div className="col-span-3 px-3 py-2.5 text-center">دائن</div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* KPIs */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                  <div className="text-xs text-slate-400 mb-1">إجمالي المدين</div>
+                  <div className="text-2xl font-mono font-bold text-blue-700">{fmt(detail.total_debit,3)}</div>
                 </div>
-                {(detail.lines||[]).map((line,i)=>(
-                  <div key={i} className={`grid grid-cols-12 items-center border-b border-slate-100 text-xs ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
-                    <div className="col-span-3 px-3 py-2">
-                      <span className="font-mono text-blue-700 font-bold">{line.account_code}</span>
-                      <div className="text-slate-500 truncate">{line.account_name}</div>
-                    </div>
-                    <div className="col-span-4 px-3 py-2 text-slate-600 truncate">{line.description}</div>
-                    <div className="col-span-2 px-3 py-2 text-center font-mono text-emerald-700 font-semibold">
-                      {line.debit > 0 ? fmt(line.debit, 3) : '—'}
-                    </div>
-                    <div className="col-span-3 px-3 py-2 text-center font-mono text-red-600 font-semibold">
-                      {line.credit > 0 ? fmt(line.credit, 3) : '—'}
-                    </div>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                  <div className="text-xs text-slate-400 mb-1">إجمالي الدائن</div>
+                  <div className="text-2xl font-mono font-bold text-emerald-700">{fmt(detail.total_credit,3)}</div>
+                </div>
+                <div className={`rounded-xl px-4 py-3 border-2 flex items-center justify-center
+                  ${Math.abs((detail.total_debit||0)-(detail.total_credit||0))<0.01
+                    ?'bg-emerald-50 border-emerald-300 text-emerald-700'
+                    :'bg-red-50 border-red-300 text-red-600'}`}>
+                  <div className="text-center">
+                    <div className="text-2xl">{Math.abs((detail.total_debit||0)-(detail.total_credit||0))<0.01?'✅':'⚠️'}</div>
+                    <div className="text-sm font-bold mt-0.5">{Math.abs((detail.total_debit||0)-(detail.total_credit||0))<0.01?'متوازن':'غير متوازن'}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* البيان */}
+              <div className="bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
+                <span className="text-xs text-slate-400 ml-2">البيان:</span>
+                <span className="text-sm font-medium text-slate-800">{detail.description}</span>
+              </div>
+
+              {/* جدول الأسطر */}
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+                      <th className="px-4 py-3 text-center text-white w-10 text-xs">#</th>
+                      <th className="px-4 py-3 text-right text-white w-32 text-xs">كود الحساب</th>
+                      <th className="px-4 py-3 text-right text-white text-xs">اسم الحساب / البيان</th>
+                      <th className="px-4 py-3 text-center w-36 text-xs" style={{color:'#93c5fd'}}>مدين</th>
+                      <th className="px-4 py-3 text-center w-36 text-xs" style={{color:'#6ee7b7'}}>دائن</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detail.lines||[]).map((line,i)=>{
+                      const dr=parseFloat(line.debit)||0, cr=parseFloat(line.credit)||0
+                      return(
+                        <tr key={i} className={`border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
+                          <td className="px-4 py-3 text-center text-slate-400 text-xs">{i+1}</td>
+                          <td className="px-4 py-3">
+                            <span className="font-mono text-blue-700 font-bold text-sm">{line.account_code}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-800 text-sm">{line.account_name}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">{line.description}</div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {dr>0
+                              ? <span className="font-mono font-bold text-blue-700 text-base">{fmt(dr,3)}</span>
+                              : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {cr>0
+                              ? <span className="font-mono font-bold text-emerald-700 text-base">{fmt(cr,3)}</span>
+                              : <span className="text-slate-300">—</span>}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{background:'#1e3a5f'}} className="text-white font-bold">
+                      <td colSpan={3} className="px-4 py-3 text-sm">الإجمالي</td>
+                      <td className="px-4 py-3 text-center font-mono text-base">{fmt(detail.total_debit,3)}</td>
+                      <td className="px-4 py-3 text-center font-mono text-base">{fmt(detail.total_credit,3)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* معلومات إضافية */}
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                {[
+                  {label:'أُنشئ بواسطة', v:detail.created_by?.split('@')[0]||'—', icon:'👤'},
+                  {label:'رُحِّل بواسطة', v:detail.posted_by?.split('@')[0]||'—',  icon:'🚀'},
+                  {label:'تاريخ الترحيل', v:detail.posted_at?detail.posted_at.split('T')[0]:'—', icon:'📅'},
+                ].map(k=>(
+                  <div key={k.label} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-1.5 mb-1"><span>{k.icon}</span><span className="text-slate-400">{k.label}</span></div>
+                    <div className="font-semibold text-slate-700">{k.v}</div>
                   </div>
                 ))}
-                <div className="grid grid-cols-12 bg-slate-800 text-white font-bold text-xs">
-                  <div className="col-span-7 px-3 py-2.5">الإجمالي</div>
-                  <div className="col-span-2 px-3 py-2.5 text-center font-mono">{fmt(detail.total_debit,3)}</div>
-                  <div className="col-span-3 px-3 py-2.5 text-center font-mono">{fmt(detail.total_credit,3)}</div>
-                </div>
               </div>
-              {/* زر العكس في نافذة التفاصيل */}
-              {detail.status === 'posted' && !detail.reversed_by_je_id && (
-                <div className="flex justify-end">
+
+              {/* الأزرار */}
+              <div className="flex justify-end gap-3 pt-2">
+                {detail.status === 'posted' && !detail.reversed_by_je_id && (
                   <button onClick={()=>{setDetail(null);setSelected(entries.find(e=>e.id===detail.id)||detail)}}
                     className="px-6 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 flex items-center gap-2">
                     ↩️ عكس هذا القيد
                   </button>
-                </div>
-              )}
-              {detail.reversed_by_je_id && (
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600">
-                  <span>↩️</span>
-                  <span>هذا القيد تم عكسه مسبقاً</span>
-                </div>
-              )}
+                )}
+                {detail.reversed_by_je_id && (
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-500">
+                    <span>↩️</span><span>تم عكسه مسبقاً</span>
+                  </div>
+                )}
+                <button onClick={()=>setDetail(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">
+                  إغلاق
+                </button>
+              </div>
             </div>
           </div>
         </div>
