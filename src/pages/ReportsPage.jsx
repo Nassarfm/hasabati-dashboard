@@ -266,10 +266,166 @@ function BalanceSheetReport() {
     finally { setLoading(false) }
   }
 
+  // تاريخ نهاية الفترة
+  const asOfDate = data ? new Date(year, month-1, new Date(year, month, 0).getDate())
+    .toLocaleDateString('ar-SA', {year:'numeric', month:'long', day:'numeric'}) : ''
+
+  // تصدير Excel
+  const exportExcel = async () => {
+    if (!data) return
+    const s = data.sections
+    const rows = [
+      ['الميزانية العمومية كما في', asOfDate],
+      [],
+      ['الأصول','','المبلغ'],
+    ]
+    const addSection = (label, items) => {
+      rows.push([label])
+      items.forEach(r => rows.push(['', r.account_code+' — '+r.account_name, r.amount]))
+    }
+    // تصنيف الأصول
+    const currentAssets = (s.assets.rows||[]).filter(r=>r.account_code<'15')
+    const fixedAssets   = (s.assets.rows||[]).filter(r=>r.account_code>='15')
+    addSection('الأصول المتداولة', currentAssets)
+    rows.push(['مجموع الأصول المتداولة','',currentAssets.reduce((s,r)=>s+r.amount,0)])
+    addSection('الأصول غير المتداولة', fixedAssets)
+    rows.push(['مجموع الأصول غير المتداولة','',fixedAssets.reduce((s,r)=>s+r.amount,0)])
+    rows.push(['إجمالي الأصول','',data.total_assets])
+    rows.push([])
+    // الالتزامات
+    const currentLiab = (s.liabilities.rows||[]).filter(r=>r.account_code<'25')
+    const longLiab    = (s.liabilities.rows||[]).filter(r=>r.account_code>='25')
+    addSection('الالتزامات المتداولة', currentLiab)
+    rows.push(['مجموع الالتزامات المتداولة','',currentLiab.reduce((s,r)=>s+r.amount,0)])
+    addSection('الالتزامات غير المتداولة', longLiab)
+    rows.push(['مجموع الالتزامات غير المتداولة','',longLiab.reduce((s,r)=>s+r.amount,0)])
+    addSection('حقوق الملكية', s.equity.rows||[])
+    rows.push(['إجمالي الالتزامات + حقوق الملكية','',data.total_liab_equity])
+
+    const ws = window.XLSX?.utils?.aoa_to_sheet?.(rows) || null
+    if (!ws) { toast('XLSX غير متاح','error'); return }
+    const wb = window.XLSX.utils.book_new()
+    window.XLSX.utils.book_append_sheet(wb, ws, 'الميزانية')
+    window.XLSX.writeFile(wb, `balance_sheet_${year}_${month}.xlsx`)
+  }
+
+  // طباعة احترافية
+  const print = () => {
+    if (!data) return
+    const s = data.sections
+    const currentAssets = (s.assets.rows||[]).filter(r=>r.account_code<'15')
+    const fixedAssets   = (s.assets.rows||[]).filter(r=>r.account_code>='15')
+    const currentLiab   = (s.liabilities.rows||[]).filter(r=>r.account_code<'25')
+    const longLiab      = (s.liabilities.rows||[]).filter(r=>r.account_code>='25')
+
+    const rows2col = (leftRows, leftLabel, leftTotal, rightRows, rightLabel, rightTotal) => {
+      const maxLen = Math.max(leftRows.length, rightRows.length)
+      let html = ''
+      for (let i=0; i<maxLen; i++) {
+        const l = leftRows[i]
+        const r = rightRows[i]
+        html += `<tr>
+          <td style="padding:4px 8px;font-family:monospace;color:#1d4ed8;font-size:11px">${l?.account_code||''}</td>
+          <td style="padding:4px 8px;font-size:11px">${l?.account_name||''}</td>
+          <td style="padding:4px 8px;text-align:left;font-family:monospace;font-size:11px">${l?.amount!=null?l.amount.toLocaleString('ar-SA',{minimumFractionDigits:3}):''}</td>
+          <td style="padding:4px 8px;font-family:monospace;color:#dc2626;font-size:11px">${r?.account_code||''}</td>
+          <td style="padding:4px 8px;font-size:11px">${r?.account_name||''}</td>
+          <td style="padding:4px 8px;text-align:left;font-family:monospace;font-size:11px">${r?.amount!=null?r.amount.toLocaleString('ar-SA',{minimumFractionDigits:3}):''}</td>
+        </tr>`
+      }
+      return html
+    }
+
+    const now = new Date()
+    const pd = now.toLocaleDateString('ar-SA',{year:'numeric',month:'long',day:'numeric'})
+    const pt = now.toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/>
+    <title>الميزانية العمومية</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#1e293b;padding:20px}
+    .hdr{text-align:center;border-bottom:3px solid #1e40af;padding-bottom:12px;margin-bottom:16px}
+    .co{font-size:20px;font-weight:900;color:#1e40af}.ti{font-size:16px;font-weight:700;margin:4px 0}.pe{font-size:12px;color:#64748b}
+    table{width:100%;border-collapse:collapse}th{padding:8px;font-size:11px;font-weight:700;text-align:center}
+    .th-l{background:#1e40af;color:#fff}.th-r{background:#dc2626;color:#fff}
+    .sub-th{background:#1e3a5f;color:#bfdbfe;font-size:10px;padding:5px 8px}
+    .sub-th-r{background:#7f1d1d;color:#fecaca;font-size:10px;padding:5px 8px}
+    .total-row{font-weight:700;background:#dbeafe}.total-row-r{font-weight:700;background:#fee2e2}
+    .grand{background:#1e3a5f;color:#fff;font-weight:700}.grand td{padding:10px 8px;font-family:monospace}
+    .bal{background:${data.balanced?'#ecfdf5':'#fef2f2'};color:${data.balanced?'#059669':'#dc2626'};text-align:center;padding:8px;font-weight:700}
+    .foot{margin-top:24px;border-top:2px solid #1e40af;padding-top:12px;display:flex;justify-content:space-between}
+    .fl{font-size:11px;color:#64748b;line-height:1.9}.un{font-size:13px;font-weight:900;color:#1e3a5f}
+    @media print{body{padding:8px}}</style></head><body>
+    <div class="hdr"><div class="co">حساباتي ERP</div><div class="ti">الميزانية العمومية</div>
+    <div class="pe">كما في: ${asOfDate}</div></div>
+    <table>
+      <thead>
+        <tr><th colspan="3" class="th-l">الأصول</th><th colspan="3" class="th-r">الالتزامات وحقوق الملكية</th></tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="3" class="sub-th">الأصول المتداولة</td><td colspan="3" class="sub-th-r">الالتزامات المتداولة</td></tr>
+        ${rows2col(currentAssets,'',0,currentLiab,'',0)}
+        <tr class="total-row"><td colspan="2" style="padding:6px 8px">مجموع الأصول المتداولة</td>
+          <td style="padding:6px 8px;text-align:left;font-family:monospace">${currentAssets.reduce((s,r)=>s+r.amount,0).toLocaleString('ar-SA',{minimumFractionDigits:3})}</td>
+          <td colspan="2" class="total-row-r" style="padding:6px 8px">مجموع الالتزامات المتداولة</td>
+          <td class="total-row-r" style="padding:6px 8px;text-align:left;font-family:monospace">${currentLiab.reduce((s,r)=>s+r.amount,0).toLocaleString('ar-SA',{minimumFractionDigits:3})}</td>
+        </tr>
+        <tr><td colspan="3" class="sub-th">الأصول غير المتداولة</td><td colspan="3" class="sub-th-r">الالتزامات غير المتداولة</td></tr>
+        ${rows2col(fixedAssets,'',0,longLiab,'',0)}
+        <tr class="total-row"><td colspan="2" style="padding:6px 8px">مجموع الأصول غير المتداولة</td>
+          <td style="padding:6px 8px;text-align:left;font-family:monospace">${fixedAssets.reduce((s,r)=>s+r.amount,0).toLocaleString('ar-SA',{minimumFractionDigits:3})}</td>
+          <td colspan="2" class="total-row-r" style="padding:6px 8px">مجموع الالتزامات غير المتداولة</td>
+          <td class="total-row-r" style="padding:6px 8px;text-align:left;font-family:monospace">${longLiab.reduce((s,r)=>s+r.amount,0).toLocaleString('ar-SA',{minimumFractionDigits:3})}</td>
+        </tr>
+        <tr><td colspan="3" style="padding:4px"></td><td colspan="3" class="sub-th-r">حقوق الملكية</td></tr>
+        ${rows2col([],'',0,s.equity.rows||[],'',0)}
+      </tbody>
+      <tfoot>
+        <tr class="grand">
+          <td colspan="2">إجمالي الأصول</td>
+          <td style="text-align:left">${data.total_assets.toLocaleString('ar-SA',{minimumFractionDigits:3})}</td>
+          <td colspan="2">إجمالي الالتزامات + حقوق الملكية</td>
+          <td style="text-align:left">${data.total_liab_equity.toLocaleString('ar-SA',{minimumFractionDigits:3})}</td>
+        </tr>
+        <tr><td colspan="6" class="bal">${data.balanced?'✅ الميزانية متوازنة — الأصول = الالتزامات + حقوق الملكية':'⚠️ الميزانية غير متوازنة'}</td></tr>
+      </tfoot>
+    </table>
+    <div class="foot">
+      <div class="fl"><div class="un">طُبع بواسطة: مستخدم النظام</div><div>التاريخ: ${pd}</div><div>الوقت: ${pt}</div></div>
+      <div style="font-size:11px;color:#64748b;text-align:left"><div>حساباتي ERP v2.0</div><div>كما في: ${asOfDate}</div></div>
+    </div></body></html>`
+    const win = window.open('','_blank','width=1100,height=800')
+    win.document.write(html); win.document.close()
+    setTimeout(()=>{win.focus();win.print()},600)
+  }
+
   const s = data?.sections
+  const currentAssets = s ? (s.assets.rows||[]).filter(r=>r.account_code<'15') : []
+  const fixedAssets   = s ? (s.assets.rows||[]).filter(r=>r.account_code>='15') : []
+  const currentLiab   = s ? (s.liabilities.rows||[]).filter(r=>r.account_code<'25') : []
+  const longLiab      = s ? (s.liabilities.rows||[]).filter(r=>r.account_code>='25') : []
+
+  const BSSection = ({ title, rows, totalLabel, totalColor }) => (
+    <div>
+      <div className={`px-4 py-2 text-xs font-bold text-white ${totalColor||'bg-slate-600'}`}>{title}</div>
+      {rows.length===0 ? <div className="px-4 py-2 text-xs text-slate-400 italic">لا توجد بيانات</div>
+        : rows.map((r,i)=>(
+        <div key={i} className={`flex items-center justify-between px-4 py-2 border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-blue-700 text-xs w-14">{r.account_code}</span>
+            <span className="text-xs text-slate-700">{r.account_name}</span>
+          </div>
+          <span className={`font-mono text-xs font-semibold ${r.amount>=0?'text-slate-800':'text-red-600'}`}>{fmt(r.amount,3)}</span>
+        </div>
+      ))}
+      <div className={`flex items-center justify-between px-4 py-2.5 font-bold text-xs ${totalColor?totalColor+'/20 border-t border-slate-200':'bg-slate-100 border-t border-slate-200'}`}>
+        <span>{totalLabel}</span>
+        <span className="font-mono">{fmt(rows.reduce((s,r)=>s+r.amount,0),3)}</span>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-4">
+      {/* Controls */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
         <div className="flex gap-4 items-end flex-wrap">
           <div className="flex flex-col gap-1">
@@ -288,78 +444,66 @@ function BalanceSheetReport() {
             className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50">
             {loading?'⏳ جارٍ...':'📊 عرض التقرير'}
           </button>
+          {data&&<>
+            <button onClick={print}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">
+              🖨️ طباعة
+            </button>
+          </>}
         </div>
+        {data&&<div className="mt-2 text-xs text-slate-400">كما في: <span className="font-bold text-slate-700">{asOfDate}</span></div>}
       </div>
 
-      {data && (
-        <>
-          {/* توازن */}
-          <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium border ${data.balanced?'bg-emerald-50 border-emerald-200 text-emerald-700':'bg-red-50 border-red-200 text-red-700'}`}>
-            {data.balanced?'✅ الميزانية متوازنة — الأصول = الالتزامات + حقوق الملكية':`⚠️ غير متوازنة — الفرق: ${fmt(data.difference,3)}`}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* الأصول */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-3 bg-blue-700 text-white font-bold">الأصول</div>
-              {(s.assets.rows||[]).map((r,i)=>(
-                <div key={i} className={`flex items-center justify-between px-5 py-2.5 border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-blue-700 text-xs font-bold">{r.account_code}</span>
-                    <span className="text-sm text-slate-700 truncate">{r.account_name}</span>
-                  </div>
-                  <span className="font-mono text-sm font-semibold">{fmt(r.amount,3)}</span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between px-5 py-3 bg-blue-700 text-white font-bold">
-                <span>إجمالي الأصول</span>
-                <span className="font-mono text-base">{fmt(s.assets.total,3)}</span>
-              </div>
+      {/* KPIs */}
+      {data&&(
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            {label:'إجمالي الأصول',             v:fmt(data.total_assets,3),      c:'text-blue-700',    bg:'bg-blue-50',    b:'border-blue-200'},
+            {label:'إجمالي الالتزامات',          v:fmt(s.liabilities.total,3),    c:'text-red-600',     bg:'bg-red-50',     b:'border-red-200'},
+            {label:'حقوق الملكية',               v:fmt(s.equity.total,3),         c:'text-purple-700',  bg:'bg-purple-50',  b:'border-purple-200'},
+            {label:data.balanced?'✅ متوازنة':'⚠️ غير متوازنة', v:data.balanced?'الميزانية متوازنة':`فرق: ${fmt(data.difference,3)}`, c:data.balanced?'text-emerald-700':'text-red-600', bg:data.balanced?'bg-emerald-50':'bg-red-50', b:data.balanced?'border-emerald-200':'border-red-200'},
+          ].map(k=>(
+            <div key={k.label} className={`rounded-2xl border ${k.b} ${k.bg} py-3 px-4 shadow-sm`}>
+              <div className="text-xs text-slate-400 mb-1">{k.label}</div>
+              <div className={`text-sm font-bold font-mono ${k.c}`}>{k.v}</div>
             </div>
+          ))}
+        </div>
+      )}
 
-            {/* الالتزامات + حقوق الملكية */}
-            <div className="space-y-4">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 bg-red-700 text-white font-bold">الالتزامات</div>
-                {(s.liabilities.rows||[]).map((r,i)=>(
-                  <div key={i} className={`flex items-center justify-between px-5 py-2.5 border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-blue-700 text-xs font-bold">{r.account_code}</span>
-                      <span className="text-sm text-slate-700 truncate">{r.account_name}</span>
-                    </div>
-                    <span className="font-mono text-sm font-semibold">{fmt(r.amount,3)}</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-5 py-3 bg-red-700 text-white font-bold">
-                  <span>إجمالي الالتزامات</span>
-                  <span className="font-mono">{fmt(s.liabilities.total,3)}</span>
-                </div>
-              </div>
+      {/* توازن */}
+      {data&&(
+        <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium border ${data.balanced?'bg-emerald-50 border-emerald-200 text-emerald-700':'bg-red-50 border-red-200 text-red-700'}`}>
+          {data.balanced?'✅ الميزانية متوازنة — الأصول = الالتزامات + حقوق الملكية':`⚠️ غير متوازنة — الفرق: ${fmt(data.difference,3)}`}
+        </div>
+      )}
 
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 bg-purple-700 text-white font-bold">حقوق الملكية</div>
-                {(s.equity.rows||[]).map((r,i)=>(
-                  <div key={i} className={`flex items-center justify-between px-5 py-2.5 border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-blue-700 text-xs font-bold">{r.account_code}</span>
-                      <span className="text-sm text-slate-700 truncate">{r.account_name}</span>
-                    </div>
-                    <span className={`font-mono text-sm font-semibold ${r.amount>=0?'text-emerald-700':'text-red-600'}`}>{fmt(r.amount,3)}</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-5 py-3 bg-purple-700 text-white font-bold">
-                  <span>إجمالي حقوق الملكية</span>
-                  <span className="font-mono">{fmt(s.equity.total,3)}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between px-5 py-4 rounded-2xl bg-slate-800 text-white font-bold shadow-sm">
-                <span>إجمالي الالتزامات + حقوق الملكية</span>
-                <span className="font-mono text-lg">{fmt(data.total_liab_equity,3)}</span>
-              </div>
+      {/* جدول الميزانية */}
+      {data&&(
+        <div className="grid grid-cols-2 gap-4">
+          {/* الأصول */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-blue-700 text-white font-bold text-sm">الأصول</div>
+            <BSSection title="الأصول المتداولة" rows={currentAssets} totalLabel="مجموع الأصول المتداولة" totalColor="bg-blue-100 text-blue-700"/>
+            <BSSection title="الأصول غير المتداولة" rows={fixedAssets} totalLabel="مجموع الأصول غير المتداولة" totalColor="bg-blue-100 text-blue-700"/>
+            <div className="flex items-center justify-between px-5 py-3.5 bg-blue-700 text-white font-bold">
+              <span>إجمالي الأصول</span>
+              <span className="font-mono text-base">{fmt(data.total_assets,3)}</span>
             </div>
           </div>
-        </>
+
+          {/* الالتزامات + حقوق الملكية */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-red-700 text-white font-bold text-sm">الالتزامات وحقوق الملكية</div>
+            <BSSection title="الالتزامات المتداولة" rows={currentLiab} totalLabel="مجموع الالتزامات المتداولة" totalColor="bg-red-100 text-red-700"/>
+            <BSSection title="الالتزامات غير المتداولة" rows={longLiab} totalLabel="مجموع الالتزامات غير المتداولة" totalColor="bg-red-100 text-red-700"/>
+            <BSSection title="حقوق الملكية" rows={s.equity.rows||[]} totalLabel="مجموع حقوق الملكية" totalColor="bg-purple-100 text-purple-700"/>
+            <div className="flex items-center justify-between px-5 py-3.5 bg-slate-800 text-white font-bold">
+              <span>إجمالي الالتزامات + حقوق الملكية</span>
+              <span className="font-mono text-base">{fmt(data.total_liab_equity,3)}</span>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
