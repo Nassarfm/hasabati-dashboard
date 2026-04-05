@@ -106,11 +106,20 @@ export default function AllocationPage() {
 
   // رأس التوزيع
   const [header, setHeader] = useState({
-    name:         '',       // اسم التوزيع
+    name:         '',
     date:         TODAY,
-    description:  '',       // البيان
-    sourceAccount:{ code:'', name:'' }, // حساب المصدر
-    totalAmount:  '',       // المبلغ الإجمالي
+    description:  '',
+    sourceAccount:{ code:'', name:'' },
+    totalAmount:  '',
+    // أبعاد حساب المصدر
+    src_branch_code:       '',
+    src_branch_name:       '',
+    src_cost_center:       '',
+    src_cost_center_name:  '',
+    src_project_code:      '',
+    src_project_name:      '',
+    src_exp_class_code:    '',
+    src_exp_class_name:    '',
   })
 
   // أسطر التوزيع
@@ -123,11 +132,13 @@ export default function AllocationPage() {
       api.settings.listBranches(),
       api.settings.listCostCenters(),
       api.settings.listProjects(),
-    ]).then(([coa, br, cc, pr]) => {
+      api.settings.listExpenseClassifications?.() ?? Promise.resolve({ data:[] }),
+    ]).then(([coa, br, cc, pr, ec]) => {
       setAccounts((coa?.data||coa?.items||[]).filter(a => a.postable))
       setBranches(br?.data||br?.items||[])
       setCostCenters(cc?.data||cc?.items||[])
       setProjects(pr?.data||pr?.items||[])
+      setExpClass(ec?.data||ec?.items||[])
     }).catch(() => {})
     .finally(() => setLoading(false))
   }, [])
@@ -197,6 +208,14 @@ export default function AllocationPage() {
           description:  header.description || `توزيع — ${header.name}`,
           debit:        0,
           credit:       totalAmount,
+          branch_code:       header.src_branch_code       || undefined,
+          branch_name:       header.src_branch_name       || undefined,
+          cost_center:       header.src_cost_center       || undefined,
+          cost_center_name:  header.src_cost_center_name  || undefined,
+          project_code:      header.src_project_code      || undefined,
+          project_name:      header.src_project_name      || undefined,
+          expense_classification_code: header.src_exp_class_code || undefined,
+          expense_classification_name: header.src_exp_class_name || undefined,
         }
       ]
 
@@ -342,6 +361,49 @@ export default function AllocationPage() {
               <label className="text-sm font-semibold text-slate-700">البيان</label>
               <input className="input" placeholder="مثال: توزيع إيجار مكتب الدمام على المشاريع"
                 value={header.description} onChange={e => setHeader(p => ({...p, description:e.target.value}))}/>
+            </div>
+
+            {/* أبعاد حساب المصدر */}
+            <div className="col-span-2">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm font-semibold text-slate-700">أبعاد حساب المصدر (الدائن)</span>
+                <span className="text-xs text-slate-400">— اختياري</span>
+              </div>
+              <div className="grid grid-cols-4 gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+                {/* الفرع */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-slate-500">الفرع</label>
+                  <DimSelect value={header.src_branch_code} items={branches} nameKey="name_ar" valueKey="code"
+                    onChange={(v,obj)=>setHeader(p=>({...p,src_branch_code:v,src_branch_name:obj?.name_ar||''}))}/>
+                </div>
+                {/* مركز التكلفة */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-slate-500">مركز التكلفة</label>
+                  <DimSelect value={header.src_cost_center} items={costCenters} nameKey="name_ar" valueKey="code"
+                    onChange={(v,obj)=>setHeader(p=>({...p,src_cost_center:v,src_cost_center_name:obj?.name_ar||''}))}/>
+                </div>
+                {/* المشروع */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-slate-500">المشروع</label>
+                  <DimSelect value={header.src_project_code} items={projects} nameKey="name" valueKey="code"
+                    onChange={(v,obj)=>setHeader(p=>({...p,src_project_code:v,src_project_name:obj?.name||''}))}/>
+                </div>
+                {/* تصنيف المصروف */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-slate-500">تصنيف المصروف</label>
+                  <DimSelect value={header.src_exp_class_code} items={expClass} nameKey="name_ar" valueKey="code"
+                    onChange={(v,obj)=>setHeader(p=>({...p,src_exp_class_code:v,src_exp_class_name:obj?.name_ar||''}))}/>
+                </div>
+              </div>
+              {/* إظهار الأبعاد المختارة */}
+              {(header.src_branch_code||header.src_cost_center||header.src_project_code||header.src_exp_class_code)&&(
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {header.src_branch_code&&<span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full border border-blue-200">🏢 {header.src_branch_name||header.src_branch_code}</span>}
+                  {header.src_cost_center&&<span className="text-xs bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full border border-purple-200">💰 {header.src_cost_center_name||header.src_cost_center}</span>}
+                  {header.src_project_code&&<span className="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200">📁 {header.src_project_name||header.src_project_code}</span>}
+                  {header.src_exp_class_code&&<span className="text-xs bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full border border-amber-200">🏷️ {header.src_exp_class_name||header.src_exp_class_code}</span>}
+                </div>
+              )}
             </div>
           </div>
 
@@ -511,17 +573,26 @@ export default function AllocationPage() {
             </div>
 
             {/* سطر المصدر (دائن) — ثابت */}
-            <div className="grid items-center py-3 border-t border-dashed border-red-200 bg-red-50"
-              style={{gridTemplateColumns:'2rem 2fr 1.5fr 5rem 7rem auto'}}>
-              <div/>
-              <div className="px-3 flex items-center gap-2">
-                <span className="font-mono text-red-700 font-bold text-sm">{header.sourceAccount.code}</span>
-                <span className="text-sm text-red-600">{header.sourceAccount.name}</span>
-                <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">دائن — المصدر</span>
+            <div className="border-t border-dashed border-red-200 bg-red-50 px-4 py-3">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-red-700 font-bold">{header.sourceAccount.code}</span>
+                  <span className="text-sm text-red-600 font-medium">{header.sourceAccount.name}</span>
+                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold border border-red-200">دائن — المصدر</span>
+                </div>
+                <span className="text-xs text-red-400 italic">{header.description||header.name}</span>
+                <span className="font-mono font-bold text-red-700 text-base mr-auto">{fmt(totalAmount,3)}</span>
+                <span className="bg-red-100 text-red-600 font-mono font-bold text-xs px-2 py-0.5 rounded-full">100%</span>
               </div>
-              <div className="px-3 text-xs text-red-500 italic">{header.description||header.name}</div>
-              <div className="px-3 text-center font-mono font-bold text-red-600 text-sm">100%</div>
-              <div className="px-3 text-center font-mono font-bold text-red-700 text-base">{fmt(totalAmount,3)}</div>
+              {/* أبعاد المصدر */}
+              {(header.src_branch_code||header.src_cost_center||header.src_project_code||header.src_exp_class_code)&&(
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {header.src_branch_code&&<span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">🏢 {header.src_branch_name||header.src_branch_code}</span>}
+                  {header.src_cost_center&&<span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">💰 {header.src_cost_center_name||header.src_cost_center}</span>}
+                  {header.src_project_code&&<span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">📁 {header.src_project_name||header.src_project_code}</span>}
+                  {header.src_exp_class_code&&<span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">🏷️ {header.src_exp_class_name||header.src_exp_class_code}</span>}
+                </div>
+              )}
             </div>
           </div>
 
