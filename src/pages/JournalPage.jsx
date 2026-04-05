@@ -137,7 +137,7 @@ export default function JournalPage() {
       setProjects((pr?.data||[]).filter(p => p.is_active && p.status==='active'))
       const expDim = (dims?.data||[]).find(d => d.code==='expense_classification')
       setExpClass(expDim?.values||[])
-      setAllDimensions(dims?.data||[])
+      setAllDimensions((dims?.data||[]).filter(d=>d.is_visible!==false))
     }).catch(()=>{})
   }, [])
 

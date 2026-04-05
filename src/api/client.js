@@ -155,7 +155,8 @@ export const api = {
     listValues:  (dimId)            => get(`/dimensions/${dimId}/values`),
     createValue: (dimId, b)         => post(`/dimensions/${dimId}/values`, b),
     updateValue: (dimId, valId, b)  => put(`/dimensions/${dimId}/values/${valId}`, b),
-    deleteValue: (dimId, valId)     => del(`/dimensions/${dimId}/values/${valId}`),
+    deleteValue:    (dimId, valId)     => del(`/dimensions/${dimId}/values/${valId}`),
+    updateVisibility: (id, b)          => patch(`/dimensions/${id}/visibility`, b),
   },
 
   inventory: {

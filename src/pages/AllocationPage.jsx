@@ -124,22 +124,27 @@ export default function AllocationPage({ onBack }) {
       const ccs        = cc?.data||cc?.items||[]
       const projects   = pr?.data||pr?.items||[]
       // الأبعاد من جدول dimensions — نستبعد النظامية التي لها جداول خاصة
-      const customDims = (dims?.data||dims?.items||[])
-        .filter(d => !SYSTEM_CODES.includes(d.code))
+      const rawDims = dims?.data||dims?.items||[]
+      // الأبعاد المخصصة المرئية فقط
+      const customDims = rawDims.filter(d => !SYSTEM_CODES.includes(d.code) && d.is_visible!==false)
+      // هل الأبعاد النظامية مرئية؟
+      const branchVisible = rawDims.find(d=>d.code==='branch')?.is_visible!==false
+      const ccVisible     = rawDims.find(d=>d.code==='cost_center')?.is_visible!==false
+      const projVisible   = rawDims.find(d=>d.code==='project')?.is_visible!==false
       // بناء قائمة موحدة للأبعاد
       const allDims = [
-        {
+        ...(branchVisible ? [{
           id:'sys-branch', code:'branch', name_ar:'الفرع', is_system:true,
           values: branches.map(b=>({code:b.code, name_ar:b.name_ar||b.name_en||b.code, is_active:b.is_active!==false}))
-        },
-        {
+        }] : []),
+        ...(ccVisible ? [{
           id:'sys-cc', code:'cost_center', name_ar:'مركز التكلفة', is_system:true,
           values: ccs.map(c=>({code:c.code, name_ar:c.name_ar||c.name_en||c.code, is_active:c.is_active!==false}))
-        },
-        {
+        }] : []),
+        ...(projVisible ? [{
           id:'sys-proj', code:'project', name_ar:'المشروع', is_system:true,
           values: projects.map(p=>({code:String(p.code), name_ar:p.name||String(p.code), is_active:p.status!=='closed'}))
-        },
+        }] : []),
         // تصنيف المصروف + أي أبعاد مخصصة (بدون النظامية المكررة)
         ...customDims,
       ]
