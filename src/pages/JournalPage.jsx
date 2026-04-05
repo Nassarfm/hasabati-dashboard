@@ -41,6 +41,7 @@ export default function JournalPage() {
   const [costCenters,  setCostCenters]  = useState([])
   const [projects,     setProjects]     = useState([])
   const [expClass,     setExpClass]     = useState([])
+  const [allDimensions,setAllDimensions]= useState([]) // كل الأبعاد ديناميكية
   const [loading,      setLoading]      = useState(true)
   const [viewJE,       setViewJE]       = useState(null)
   const [currentUser,  setCurrentUser]  = useState(null)
@@ -136,6 +137,7 @@ export default function JournalPage() {
       setProjects((pr?.data||[]).filter(p => p.is_active && p.status==='active'))
       const expDim = (dims?.data||[]).find(d => d.code==='expense_classification')
       setExpClass(expDim?.values||[])
+      setAllDimensions(dims?.data||[])
     }).catch(()=>{})
   }, [])
 
@@ -214,13 +216,15 @@ export default function JournalPage() {
 
   if (mode==='edit' && editJE) {
     return <NewJEPage accounts={accounts} jeTypes={jeTypes} branches={branches}
-      costCenters={costCenters} projects={projects} expClass={expClass} editJE={editJE}
+      costCenters={costCenters} projects={projects} expClass={expClass}
+      allDimensions={allDimensions} editJE={editJE}
       onBack={() => { setMode('list'); setEditJE(null) }}
       onSaved={() => { setMode('list'); setEditJE(null); load(1,filters); loadStatusCounts() }}/>
   }
   if (mode==='new') {
     return <NewJEPage accounts={accounts} jeTypes={jeTypes} branches={branches}
       costCenters={costCenters} projects={projects} expClass={expClass}
+      allDimensions={allDimensions}
       onBack={() => setMode('list')}
       onSaved={() => { setMode('list'); load(1,filters); loadStatusCounts() }}/>
   }

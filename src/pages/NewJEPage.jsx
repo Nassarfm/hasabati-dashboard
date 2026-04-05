@@ -226,12 +226,13 @@ function HotkeyOverlay({ onClose }) {
 // ══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════
-export default function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, onBack, onSaved, editJE = null }) {
+export default function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, allDimensions=[], onBack, onSaved, editJE = null }) {
   const emptyLine = useCallback(() => ({
     id:Math.random(), account_code:'', account_name:'', account:null,
     description:'', debit:'', credit:'', branch_code:'', branch_name:'',
     cost_center:'', cost_center_name:'', project_code:'', project_name:'',
     expense_classification_code:'', expense_classification_name:'',
+    extraDims: {}, // أبعاد مخصصة { [dimCode]: { value_code, value_name } }
   }), [])
 
   const [periodState, setPeriodState] = useState({ status:'idle', periodName:'', yearName:'' })
@@ -250,6 +251,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
         project_code:l.project_code||'', project_name:l.project_name||'',
         expense_classification_code:l.expense_classification_code||'',
         expense_classification_name:l.expense_classification_name||'',
+        extraDims: l.extraDims||{},
       }))
     }
     return [emptyLine(), emptyLine()]
@@ -335,6 +337,11 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
           account_code:l.account_code, description:l.description||form.description,
           debit:parseFloat(l.debit)||0, credit:parseFloat(l.credit)||0,
           branch_code:l.branch_code||null, branch_name:l.branch_name||null,
+          // أبعاد مخصصة — نمررها إذا كانت موجودة
+          ...(l.extraDims ? Object.fromEntries(
+            Object.entries(l.extraDims).filter(([,v])=>v?.value_code)
+              .map(([k,v])=>[`extra_dim_${k}`, v.value_code])
+          ) : {}),
           cost_center:l.cost_center||null, cost_center_name:l.cost_center_name||null,
           project_code:l.project_code||null, project_name:l.project_name||null,
           expense_classification_code:l.expense_classification_code||null,
@@ -397,8 +404,10 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
     return <span className={`inline-flex items-center mt-1.5 ${configs[periodState.status]||''}`}>{labels[periodState.status]||''}</span>
   }
 
-  // ── Grid column template
-  const COLS = '32px 2fr 1.5fr 90px 90px 110px 110px 110px 100px 36px'
+  // ── Grid column template — ديناميكي حسب عدد الأبعاد
+  // الأبعاد المخصصة (غير الـ 4 الثابتة)
+  const customDims = allDimensions.filter(d => !['branch','cost_center','expense_classification','project'].includes(d.code))
+  const COLS = `32px 2fr 1.5fr 90px 90px 110px 110px 110px 100px ${customDims.map(()=>'100px').join(' ')} 36px`
 
   return (
     <div className="page-enter space-y-5">
@@ -571,6 +580,9 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
               <div className="px-3 py-3.5 text-center">م. التكلفة</div>
               <div className="px-3 py-3.5 text-center">تصنيف</div>
               <div className="px-3 py-3.5 text-center">مشروع</div>
+              {customDims.map(d=>(
+                <div key={d.id} className="px-2 py-3.5 text-center truncate">{d.name_ar}</div>
+              ))}
               <div className="px-3 py-3.5"/>
             </div>
 
@@ -716,6 +728,29 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                           <div className="text-xs text-emerald-600 mt-0.5 truncate px-0.5">{projName}</div>
                         )}
                       </div>
+
+                      {/* الأبعاد المخصصة */}
+                      {customDims.map(dim => {
+                        const val = line.extraDims?.[dim.code]
+                        return(
+                          <div key={dim.id} className="px-1 py-2">
+                            <select className="select text-xs w-full"
+                              value={val?.value_code||''}
+                              onChange={e => {
+                                const v=(dim.values||[]).find(v=>v.code===e.target.value)
+                                setLine(line.id,{extraDims:{...line.extraDims,
+                                  [dim.code]:e.target.value?{value_code:e.target.value,value_name:v?.name_ar||''}:undefined
+                                }})
+                              }}>
+                              <option value="">—</option>
+                              {(dim.values||[]).filter(v=>v.is_active).map(v=>(
+                                <option key={v.code} value={v.code}>{v.name_ar}</option>
+                              ))}
+                            </select>
+                            {val?.value_name&&<div className="text-xs text-slate-500 mt-0.5 truncate px-0.5">{val.value_name}</div>}
+                          </div>
+                        )
+                      })}
 
                       {/* حذف */}
                       <div className="px-1 py-2 text-center">
