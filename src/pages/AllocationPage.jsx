@@ -119,10 +119,13 @@ export default function AllocationPage({ onBack }) {
     ]).then(([coa, dims, br, cc, pr]) => {
       setAccounts((coa?.data||coa?.items||[]).filter(a => a.postable))
       // دمج الأبعاد: النظامية (من جداول منفصلة) + المخصصة (من dimensions)
-      const customDims = (dims?.data||dims?.items||[])
+      const SYSTEM_CODES = ['branch','cost_center','project']
       const branches   = br?.data||br?.items||[]
       const ccs        = cc?.data||cc?.items||[]
       const projects   = pr?.data||pr?.items||[]
+      // الأبعاد من جدول dimensions — نستبعد النظامية التي لها جداول خاصة
+      const customDims = (dims?.data||dims?.items||[])
+        .filter(d => !SYSTEM_CODES.includes(d.code))
       // بناء قائمة موحدة للأبعاد
       const allDims = [
         {
@@ -137,7 +140,7 @@ export default function AllocationPage({ onBack }) {
           id:'sys-proj', code:'project', name_ar:'المشروع', is_system:true,
           values: projects.map(p=>({code:String(p.code), name_ar:p.name||String(p.code), is_active:p.status!=='closed'}))
         },
-        // الأبعاد المخصصة من جدول dimensions (تصنيف المصروف + أي أبعاد مخصصة)
+        // تصنيف المصروف + أي أبعاد مخصصة (بدون النظامية المكررة)
         ...customDims,
       ]
       setDimensions(allDims)
@@ -691,6 +694,9 @@ export default function AllocationPage({ onBack }) {
                     <th className="px-4 py-3 text-right text-xs">اسم الحساب</th>
                     <th className="px-4 py-3 text-right text-xs">البيان</th>
                     <th className="px-4 py-3 text-center w-24 text-xs">النسبة</th>
+                    {dimensions.map(d=>(
+                      <th key={d.id} className="px-3 py-3 text-center text-xs w-24">{d.name_ar}</th>
+                    ))}
                     <th className="px-4 py-3 text-center w-36 text-xs" style={{color:'#93c5fd'}}>مدين</th>
                     <th className="px-4 py-3 text-center w-36 text-xs" style={{color:'#fca5a5'}}>دائن</th>
                   </tr>
@@ -705,6 +711,16 @@ export default function AllocationPage({ onBack }) {
                       <td className="px-4 py-3 text-center">
                         <span className="bg-blue-100 text-blue-700 font-mono font-bold text-xs px-2 py-0.5 rounded-full">{l.pct}%</span>
                       </td>
+                      {dimensions.map(d => {
+                        const val = l.dims?.[d.code]
+                        return(
+                          <td key={d.id} className="px-3 py-3 text-center">
+                            {val?.value_name
+                              ? <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">{val.value_name}</span>
+                              : <span className="text-slate-200 text-xs">—</span>}
+                          </td>
+                        )
+                      })}
                       <td className="px-4 py-3 text-center">
                         <span className="font-mono font-bold text-blue-700 text-base bg-blue-50 px-3 py-1 rounded-lg">{fmt(l.debit,3)}</span>
                       </td>
@@ -720,6 +736,16 @@ export default function AllocationPage({ onBack }) {
                     <td className="px-4 py-3 text-center">
                       <span className="bg-red-100 text-red-600 font-mono font-bold text-xs px-2 py-0.5 rounded-full">100%</span>
                     </td>
+                    {dimensions.map(d => {
+                      const val = header.srcDims?.[d.code]
+                      return(
+                        <td key={d.id} className="px-3 py-3 text-center">
+                          {val?.value_name
+                            ? <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{val.value_name}</span>
+                            : <span className="text-slate-200 text-xs">—</span>}
+                        </td>
+                      )
+                    })}
                     <td className="px-4 py-3 text-center text-slate-200">—</td>
                     <td className="px-4 py-3 text-center">
                       <span className="font-mono font-bold text-red-600 text-base bg-red-50 px-3 py-1 rounded-lg">{fmt(totalAmount,3)}</span>
@@ -728,7 +754,7 @@ export default function AllocationPage({ onBack }) {
                 </tbody>
                 <tfoot>
                   <tr style={{background:'#1e3a5f'}} className="text-white">
-                    <td colSpan={5} className="px-4 py-3 text-sm font-bold">الإجمالي ({lines.length+1} سطر)</td>
+                    <td colSpan={5+dimensions.length} className="px-4 py-3 text-sm font-bold">الإجمالي ({lines.length+1} سطر)</td>
                     <td className="px-4 py-3 text-center font-mono font-bold text-lg" style={{color:'#93c5fd'}}>{fmt(totalDebit,3)}</td>
                     <td className="px-4 py-3 text-center font-mono font-bold text-lg" style={{color:'#fca5a5'}}>{fmt(totalAmount,3)}</td>
                   </tr>
