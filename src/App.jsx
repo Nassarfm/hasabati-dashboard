@@ -15,9 +15,10 @@ import FiscalPeriodsPage from './pages/FiscalPeriodsPage'
 import TrialBalancePage from './pages/TrialBalancePage'
 import LedgerPage from './pages/LedgerPage'
 import RecurringPage from './pages/RecurringPage'
+import ReportsPage from './pages/ReportsPage'
 import {
   SalesPage, PurchasesPage, InventoryPage, HRPage,
-  ReportsPage, VATPage, AssetsPage, TreasuryPage,
+  VATPage, AssetsPage, TreasuryPage,
 } from './pages/OtherPages'
 
 const PAGE_LABELS = {
