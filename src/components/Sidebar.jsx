@@ -19,7 +19,8 @@ const SECTIONS = [
     items: [
       { id:'journal',   icon:'📒', label:'القيود اليومية' },
       { id:'reversing', icon:'↩️', label:'القيود العكسية' },
-      { id:'recurring', icon:'🔄', label:'القيود المتكررة' },
+      { id:'recurring',  icon:'🔄', label:'القيود المتكررة' },
+      { id:'allocation', icon:'🔀', label:'قيد التوزيع' },
     ]
   },
   {

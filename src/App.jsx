@@ -16,6 +16,7 @@ import TrialBalancePage from './pages/TrialBalancePage'
 import LedgerPage from './pages/LedgerPage'
 import RecurringPage from './pages/RecurringPage'
 import ReversingPage from './pages/ReversingPage'
+import AllocationPage from './pages/AllocationPage'
 import IncomeReportPage from './pages/IncomeReportPage'
 import BalanceReportPage from './pages/BalanceReportPage'
 import CashFlowReportPage from './pages/CashFlowReportPage'
@@ -38,6 +39,7 @@ const PAGE_LABELS = {
   journal:            'القيود اليومية',
   reversing:          'القيود العكسية',
   recurring:          'القيود المتكررة',
+  allocation:         'قيد التوزيع',
   trialbal:           'ميزان المراجعة',
   ledger:             'الأستاذ العام',
   income_report:      'قائمة الدخل',
@@ -93,6 +95,7 @@ function AppContent() {
       case 'journal':            return <JournalPage/>
       case 'reversing':          return <ReversingPage onNavigateToJournal={()=>navigate('journal')}/>
       case 'recurring':          return <RecurringPage/>
+      case 'allocation':         return <AllocationPage/>
       case 'trialbal':           return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
       case 'ledger':             return <LedgerPage initialAccountCode={ledgerAccount.code} initialAccountName={ledgerAccount.name}/>
       case 'income_report':      return <IncomeReportPage/>
