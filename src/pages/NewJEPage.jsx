@@ -571,7 +571,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
       {/* ── Lines Grid ── */}
       {isFormOpen && (
         <>
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-visible">
 
             {/* Grid Header */}
             <div className="grid text-white text-xs font-semibold"
@@ -593,7 +593,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
             </div>
 
             {/* Grid Rows */}
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 overflow-visible">
               {lines.map((line, idx) => {
                 const acct     = accounts.find(a => a.code===line.account_code)
                 const needsDim = acct?.dimension_required||false
