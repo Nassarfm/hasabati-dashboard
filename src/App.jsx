@@ -29,6 +29,7 @@ import {
 } from './pages/OtherPages'
 import VATPage from './pages/VATPage'
 import VATSettingsPage from './pages/VATSettingsPage'
+import CompanySettingsPage from './pages/CompanySettingsPage'
 
 const PAGE_LABELS = {
   dashboard:          'لوحة التحكم',
@@ -51,6 +52,7 @@ const PAGE_LABELS = {
   compare_report:     'مقارنة الفترات',
   charts_report:      'الرسوم البيانية',
   vat:                'ضريبة القيمة المضافة',
+  company_settings:   'إعدادات المنشأة',
   vat_settings:       'إعدادات الضريبة (VAT)',
   currency_settings:  'العملات',
   localization:       'الإقليمية والتوطين',
@@ -110,6 +112,7 @@ function AppContent() {
       case 'compare_report':     return <CompareReportPage/>
       case 'charts_report':      return <ChartsReportPage/>
       case 'vat':                return <VATPage/>
+      case 'company_settings': return <CompanySettingsPage/>
       case 'vat_settings':    return <VATSettingsPage/>
       case 'currency_settings': return <VATSettingsPage/>  // placeholder
       case 'localization':      return <VATSettingsPage/>  // placeholder

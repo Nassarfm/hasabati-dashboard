@@ -195,6 +195,10 @@ export const api = {
     salesSummary:       (p={}) => get('/reports/sales-summary', p),
     inventoryValuation: (p={}) => get('/reports/inventory-valuation', p),
   },
+  company: {
+    get:    ()  => get('/settings/company'),
+    update: (b) => put('/settings/company', b),
+  },
   tax: {
     list:   (p={}) => get('/accounting/tax-types', p),
     create: (b)    => post('/accounting/tax-types', b),

@@ -40,6 +40,7 @@ const SECTIONS = [
   {
     id: 'fin_settings', label: 'الإعدادات المالية', icon: '⚙️',
     items: [
+      { id:'company_settings',  icon:'🏢', label:'إعدادات المنشأة' },
       { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة (VAT)' },
       { id:'currency_settings', icon:'💱', label:'العملات',             badge:'قريباً' },
       { id:'localization',      icon:'🌍', label:'الإقليمية والتوطين',  badge:'قريباً' },
