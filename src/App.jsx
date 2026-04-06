@@ -51,7 +51,9 @@ const PAGE_LABELS = {
   compare_report:     'مقارنة الفترات',
   charts_report:      'الرسوم البيانية',
   vat:                'ضريبة القيمة المضافة',
-  vat_settings:       'إعدادات الضريبة',
+  vat_settings:       'إعدادات الضريبة (VAT)',
+  currency_settings:  'العملات',
+  localization:       'الإقليمية والتوطين',
   sales:              'المبيعات',
   purchases:          'المشتريات',
   inventory:          'المخزون',
@@ -109,6 +111,8 @@ function AppContent() {
       case 'charts_report':      return <ChartsReportPage/>
       case 'vat':                return <VATPage/>
       case 'vat_settings':    return <VATSettingsPage/>
+      case 'currency_settings': return <VATSettingsPage/>  // placeholder
+      case 'localization':      return <VATSettingsPage/>  // placeholder
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>

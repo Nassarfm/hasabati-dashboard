@@ -6,19 +6,19 @@ const SECTIONS = [
   {
     id: 'master', label: 'البيانات الأساسية', icon: '🗂️',
     items: [
-      { id:'coa',        icon:'📊', label:'دليل الحسابات' },
-      { id:'dimensions', icon:'🏷️', label:'الأبعاد المحاسبية' },
-      { id:'branches',   icon:'🏢', label:'الفروع' },
-      { id:'costcenters',icon:'💰', label:'مراكز التكلفة' },
-      { id:'projects',   icon:'📁', label:'المشاريع' },
-      { id:'fiscal',     icon:'📅', label:'الفترات المالية' },
+      { id:'coa',         icon:'📊', label:'دليل الحسابات' },
+      { id:'dimensions',  icon:'🏷️', label:'الأبعاد المحاسبية' },
+      { id:'branches',    icon:'🏢', label:'الفروع' },
+      { id:'costcenters', icon:'💰', label:'مراكز التكلفة' },
+      { id:'projects',    icon:'📁', label:'المشاريع' },
+      { id:'fiscal',      icon:'📅', label:'الفترات المالية' },
     ]
   },
   {
     id: 'transactions', label: 'العمليات والمدخلات', icon: '📝',
     items: [
-      { id:'journal',   icon:'📒', label:'القيود اليومية' },
-      { id:'reversing', icon:'↩️', label:'القيود العكسية' },
+      { id:'journal',    icon:'📒', label:'القيود اليومية' },
+      { id:'reversing',  icon:'↩️', label:'القيود العكسية' },
       { id:'recurring',  icon:'🔄', label:'القيود المتكررة' },
       { id:'allocation', icon:'🔀', label:'قيد التوزيع' },
     ]
@@ -35,8 +35,15 @@ const SECTIONS = [
       { id:'compare_report',     icon:'🔀', label:'مقارنة الفترات' },
       { id:'charts_report',      icon:'📉', label:'الرسوم البيانية' },
       { id:'vat',                icon:'🧮', label:'ضريبة القيمة المضافة' },
-
-          { page:'vat_settings', label:'⚙️ إعدادات الضريبة', icon:'⚙️' },    ]
+    ]
+  },
+  {
+    id: 'fin_settings', label: 'الإعدادات المالية', icon: '⚙️',
+    items: [
+      { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة (VAT)' },
+      { id:'currency_settings', icon:'💱', label:'العملات',             badge:'قريباً' },
+      { id:'localization',      icon:'🌍', label:'الإقليمية والتوطين',  badge:'قريباً' },
+    ]
   },
   {
     id: 'other', label: 'الوحدات الأخرى', icon: '🏭',
@@ -54,7 +61,7 @@ const SECTIONS = [
 export default function Sidebar({ activePage, onNavigate, collapsed, onToggle }) {
   const { user, logout } = useAuth()
   const [openSections, setOpenSections] = useState({
-    master:true, transactions:true, reports:true, other:false
+    master:true, transactions:true, reports:true, fin_settings:true, other:false
   })
 
   const toggle = (id) => setOpenSections(p => ({...p, [id]:!p[id]}))
@@ -78,78 +85,88 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
       {/* Dashboard */}
       <div className="px-2 pt-2 shrink-0">
         <button onClick={() => onNavigate('dashboard')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all
-            ${activePage==='dashboard' ? 'bg-blue-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all
+            ${activePage==='dashboard'
+              ? 'bg-blue-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'}`}>
           <span className="text-base shrink-0">🏠</span>
           {!collapsed && <span>لوحة التحكم</span>}
         </button>
       </div>
 
-      {/* Sections */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2 mt-1">
+      {/* Scrollable Nav */}
+      <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
         {SECTIONS.map(section => (
-          <div key={section.id}>
-            {!collapsed ? (
+          <div key={section.id} className="mb-1">
+            {!collapsed && (
               <button onClick={() => toggle(section.id)}
-                className="w-full flex items-center justify-between px-3 py-2 mt-2 text-xs font-bold text-slate-400 uppercase tracking-wider hover:text-slate-600">
-                <div className="flex items-center gap-1.5"><span>{section.icon}</span><span>{section.label}</span></div>
-                <span className="text-slate-300">{openSections[section.id]?'▲':'▼'}</span>
+                className="w-full flex items-center justify-between px-2 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors">
+                <span className="flex items-center gap-1.5">
+                  <span>{section.icon}</span>
+                  <span>{section.label}</span>
+                </span>
+                <span className="text-slate-300 text-xs">{openSections[section.id] ? '▲' : '▼'}</span>
               </button>
-            ) : <div className="my-1.5 border-t border-slate-100"/>}
+            )}
 
-            {(openSections[section.id] || collapsed) && (
+            {(collapsed || openSections[section.id]) && (
               <div className="space-y-0.5">
-                {section.items.map(item => (
-                  <button key={item.id} onClick={() => onNavigate(item.id)}
-                    title={collapsed ? item.label : undefined}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all relative
-                      ${activePage===item.id ? 'bg-blue-700 text-white font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
-                    <span className="text-base shrink-0">{item.icon}</span>
-                    {!collapsed && <>
-                      <span className="flex-1 text-right text-xs">{item.label}</span>
-                      {item.badge && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${activePage===item.id?'bg-white/20 text-white':'bg-amber-100 text-amber-600'}`}>
+                {section.items.map(item => {
+                  const isActive = activePage === item.id
+                  return (
+                    <button key={item.id}
+                      onClick={() => !item.badge && onNavigate(item.id)}
+                      disabled={!!item.badge}
+                      title={collapsed ? item.label : undefined}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all
+                        ${isActive
+                          ? 'bg-blue-700 text-white shadow-sm'
+                          : item.badge
+                            ? 'text-slate-300 cursor-not-allowed'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'}`}>
+                      <span className="text-sm shrink-0">{item.icon}</span>
+                      {!collapsed && (
+                        <span className="flex-1 text-right truncate">{item.label}</span>
+                      )}
+                      {!collapsed && item.badge && (
+                        <span className="text-xs bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full shrink-0">
                           {item.badge}
                         </span>
                       )}
-                    </>}
-                    {activePage===item.id && !collapsed && (
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-full"/>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
         ))}
-      </div>
+      </nav>
 
-      {/* Footer */}
-      <div className="border-t border-slate-100 shrink-0">
+      {/* User Footer */}
+      <div className="border-t border-slate-100 p-3 shrink-0">
         {!collapsed ? (
-          <div className="px-3 py-3 space-y-2">
-            <div className="flex items-center gap-2 px-2">
-              <div className="w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center shrink-0">
-                <span className="text-white text-xs font-bold">{user?.email?.[0]?.toUpperCase()||'U'}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-slate-700 truncate">{user?.email?.split('@')[0]||'مستخدم'}</div>
-                <div className="text-xs text-slate-400 truncate">{user?.email}</div>
-              </div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-700 flex items-center justify-center text-white font-bold text-sm shrink-0">
+              {user?.email?.[0]?.toUpperCase() || 'U'}
             </div>
-            <button onClick={async()=>{try{await logout()}catch{}}}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 border border-red-100">
-              <span>🚪</span><span>تسجيل الخروج</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-slate-700 truncate">
+                {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'مستخدم'}
+              </div>
+              <div className="text-xs text-slate-400 truncate">{user?.email}</div>
+            </div>
+            <button onClick={logout}
+              className="text-xs text-red-400 hover:text-red-600 shrink-0 px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors"
+              title="تسجيل الخروج">
+              ⏻
             </button>
           </div>
         ) : (
-          <div className="px-2 py-3 flex flex-col items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-blue-700 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">{user?.email?.[0]?.toUpperCase()||'U'}</span>
-            </div>
-            <button onClick={async()=>{try{await logout()}catch{}}} title="تسجيل الخروج"
-              className="w-8 h-8 rounded-xl text-red-500 hover:bg-red-50 flex items-center justify-center">🚪</button>
-          </div>
+          <button onClick={logout}
+            className="w-full flex items-center justify-center py-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+            title="تسجيل الخروج">
+            ⏻
+          </button>
         )}
       </div>
     </div>
