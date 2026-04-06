@@ -1,6 +1,7 @@
 /* ChartsReportPage.jsx — الرسوم البيانية المالية */
 import { useState } from 'react'
 import { toast } from '../components/UI'
+import DimensionFilter from '../components/DimensionFilter'
 import api from '../api/client'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 

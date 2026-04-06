@@ -1,19 +1,19 @@
-/* DimensionsPage.jsx — صفحة الأبعاد المحاسبية مع toggle الإظهار */
+/* DimensionsPage.jsx — الأبعاد المحاسبية */
 import { useState, useEffect } from 'react'
-import { toast, fmt } from '../components/UI'
+import { toast } from '../components/UI'
 import api from '../api/client'
 
 const CLASSIFICATION_LABELS = {
-  where:        { label:'أين؟',          color:'bg-blue-100 text-blue-700',    icon:'📍' },
-  who:          { label:'من؟',           color:'bg-purple-100 text-purple-700', icon:'👤' },
-  why:          { label:'لماذا؟',         color:'bg-amber-100 text-amber-700',  icon:'🎯' },
-  expense_only: { label:'تصنيف المصروف', color:'bg-orange-100 text-orange-700',icon:'🏷️' },
+  where:        { label:'أين؟',           color:'bg-blue-100 text-blue-700',    icon:'📍' },
+  who:          { label:'من؟',            color:'bg-purple-100 text-purple-700', icon:'👤' },
+  why:          { label:'لماذا؟',          color:'bg-amber-100 text-amber-700',  icon:'🎯' },
+  expense_only: { label:'تصنيف المصروف',  color:'bg-orange-100 text-orange-700',icon:'🏷️' },
 }
 
-// ── Toggle Switch ──
 function Toggle({ checked, onChange, disabled }) {
   return (
     <button
+      type="button"
       onClick={() => !disabled && onChange(!checked)}
       disabled={disabled}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200
@@ -25,20 +25,18 @@ function Toggle({ checked, onChange, disabled }) {
   )
 }
 
-// ── قسم الحالة ──
 function StatusBadge({ dim }) {
-  if (!dim.is_active) return <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full border border-red-200">معطّل</span>
-  if (!dim.is_visible) return <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">مخفي</span>
-  if (dim.is_required) return <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">⚡ إجباري</span>
+  if (!dim.is_active)   return <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full border border-red-200">معطّل</span>
+  if (!dim.is_visible)  return <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">مخفي</span>
+  if (dim.is_required)  return <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">⚡ إجباري</span>
   return <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">✓ اختياري</span>
 }
 
-// ── DimensionCard ──
-function DimensionCard({ dim, onUpdate, onAddValue, onDeleteValue, onToggleValue }) {
-  const [expanded, setExpanded]     = useState(false)
-  const [saving,   setSaving]       = useState(false)
-  const [newVal,   setNewVal]       = useState({ code:'', name_ar:'' })
-  const [addingVal,setAddingVal]    = useState(false)
+function DimensionCard({ dim, onUpdate, onRefresh, onToggleValue }) {
+  const [expanded,   setExpanded]   = useState(false)
+  const [saving,     setSaving]     = useState(false)
+  const [addingVal,  setAddingVal]  = useState(false)
+  const [newVal,     setNewVal]     = useState({ code:'', name_ar:'' })
 
   const cl = CLASSIFICATION_LABELS[dim.classification] || { label: dim.classification||'—', color:'bg-slate-100 text-slate-600', icon:'📌' }
 
@@ -69,20 +67,23 @@ function DimensionCard({ dim, onUpdate, onAddValue, onDeleteValue, onToggleValue
       await api.dimensions.createValue(dim.id, newVal)
       setNewVal({ code:'', name_ar:'' })
       setAddingVal(false)
-      onAddValue(dim.id)
+      onRefresh(dim.id)
       toast('✅ تم إضافة القيمة', 'success')
     } catch(e) { toast(e.message, 'error') }
     finally { setSaving(false) }
   }
 
-  return (
-    <div className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all
-      ${!dim.is_visible ? 'border-slate-200 opacity-60' :
-        dim.is_required ? 'border-amber-300' : 'border-emerald-200'}`}>
+  const borderColor = !dim.is_visible ? 'border-slate-200'
+    : dim.is_required ? 'border-amber-300' : 'border-emerald-200'
+  const headerBg = !dim.is_visible ? 'bg-slate-50'
+    : dim.is_required ? 'bg-amber-50' : 'bg-emerald-50/50'
 
-      {/* Header */}
-      <div className={`px-5 py-4 ${!dim.is_visible ? 'bg-slate-50' : dim.is_required ? 'bg-amber-50' : 'bg-emerald-50/50'}`}>
+  return (
+    <div className={`bg-white rounded-2xl border-2 ${borderColor} shadow-sm overflow-hidden transition-all`}>
+      {/* Card Header */}
+      <div className={`px-5 py-4 ${headerBg}`}>
         <div className="flex items-start justify-between gap-3">
+          {/* Info */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0
               ${!dim.is_visible ? 'bg-slate-200' : 'bg-white shadow-sm'}`}>
@@ -102,23 +103,20 @@ function DimensionCard({ dim, onUpdate, onAddValue, onDeleteValue, onToggleValue
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="flex flex-col gap-3 shrink-0">
-            {/* إظهار/إخفاء */}
-            <div className="flex items-center gap-2.5 justify-end">
+          {/* Toggles */}
+          <div className="flex flex-col gap-2.5 shrink-0">
+            <div className="flex items-center gap-2 justify-end">
               <span className={`text-xs font-medium ${dim.is_visible ? 'text-emerald-700' : 'text-slate-400'}`}>
-                {dim.is_visible ? '👁️ ظاهر في القيود' : '🙈 مخفي'}
+                {dim.is_visible ? '👁️ ظاهر' : '🙈 مخفي'}
               </span>
-              <Toggle checked={dim.is_visible} onChange={handleVisibility} disabled={saving}/>
+              <Toggle checked={!!dim.is_visible} onChange={handleVisibility} disabled={saving}/>
             </div>
-
-            {/* إجباري/اختياري — يظهر فقط إذا كان مرئياً */}
             {dim.is_visible && (
-              <div className="flex items-center gap-2.5 justify-end">
+              <div className="flex items-center gap-2 justify-end">
                 <span className={`text-xs font-medium ${dim.is_required ? 'text-amber-700' : 'text-slate-400'}`}>
                   {dim.is_required ? '⚡ إجباري' : '○ اختياري'}
                 </span>
-                <Toggle checked={dim.is_required} onChange={handleRequired} disabled={saving}/>
+                <Toggle checked={!!dim.is_required} onChange={handleRequired} disabled={saving}/>
               </div>
             )}
           </div>
@@ -131,8 +129,7 @@ function DimensionCard({ dim, onUpdate, onAddValue, onDeleteValue, onToggleValue
           <span className="text-xs font-semibold text-slate-500">القيم ({(dim.values||[]).length})</span>
           <div className="flex gap-2">
             {(dim.values||[]).length > 0 && (
-              <button onClick={() => setExpanded(p=>!p)}
-                className="text-xs text-blue-600 hover:text-blue-800">
+              <button onClick={() => setExpanded(p=>!p)} className="text-xs text-blue-600 hover:text-blue-800">
                 {expanded ? 'إخفاء ▲' : 'عرض الكل ▼'}
               </button>
             )}
@@ -143,7 +140,7 @@ function DimensionCard({ dim, onUpdate, onAddValue, onDeleteValue, onToggleValue
           </div>
         </div>
 
-        {/* Preview: أول 3 قيم */}
+        {/* Preview first 3 */}
         {!expanded && (dim.values||[]).slice(0,3).length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {(dim.values||[]).slice(0,3).filter(v=>v.is_active).map(v => (
@@ -160,16 +157,17 @@ function DimensionCard({ dim, onUpdate, onAddValue, onDeleteValue, onToggleValue
           </div>
         )}
 
-        {/* All values when expanded */}
+        {/* All values */}
         {expanded && (
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {(dim.values||[]).map(v => (
-              <div key={v.id||v.code} className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs
-                ${v.is_active ? 'bg-slate-50 border border-slate-200' : 'bg-red-50 border border-red-200 opacity-60'}`}>
+              <div key={v.id||v.code}
+                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs
+                  ${v.is_active ? 'bg-slate-50 border border-slate-200' : 'bg-red-50 border border-red-200 opacity-60'}`}>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-blue-700 font-bold w-12">{v.code}</span>
                   <span className="text-slate-700">{v.name_ar}</span>
-                  {!v.is_active && <span className="text-red-500 text-xs">معطّلة</span>}
+                  {!v.is_active && <span className="text-red-500">معطّلة</span>}
                 </div>
                 <button onClick={() => onToggleValue(dim.id, v.id||v.code, !v.is_active)}
                   className={`text-xs px-2 py-0.5 rounded-full transition-colors
@@ -181,12 +179,13 @@ function DimensionCard({ dim, onUpdate, onAddValue, onDeleteValue, onToggleValue
           </div>
         )}
 
-        {/* نموذج إضافة قيمة */}
+        {/* Add value form */}
         {addingVal && (
           <div className="flex gap-2 mt-2.5 bg-blue-50 border border-blue-200 rounded-xl p-3">
-            <input className="input text-xs w-24" placeholder="الكود" value={newVal.code}
-              onChange={e=>setNewVal(p=>({...p,code:e.target.value}))}/>
-            <input className="input text-xs flex-1" placeholder="الاسم بالعربي" value={newVal.name_ar}
+            <input className="input text-xs w-24" placeholder="الكود"
+              value={newVal.code} onChange={e=>setNewVal(p=>({...p,code:e.target.value}))}/>
+            <input className="input text-xs flex-1" placeholder="الاسم بالعربي"
+              value={newVal.name_ar}
               onChange={e=>setNewVal(p=>({...p,name_ar:e.target.value}))}
               onKeyDown={e=>e.key==='Enter'&&handleAddValue()}/>
             <button onClick={handleAddValue} disabled={!newVal.code||!newVal.name_ar||saving}
@@ -194,81 +193,115 @@ function DimensionCard({ dim, onUpdate, onAddValue, onDeleteValue, onToggleValue
               {saving?'⏳':'إضافة'}
             </button>
             <button onClick={()=>{setAddingVal(false);setNewVal({code:'',name_ar:''})}}
-              className="px-2 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-xs hover:bg-slate-50">✕</button>
+              className="px-2 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-xs hover:bg-slate-50">
+              ✕
+            </button>
           </div>
         )}
       </div>
+    </div>
+  )
+}
 
-      {/* Modal إنشاء بُعد جديد */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setShowCreate(false)}/>
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
-              <div className="flex items-center justify-between">
-                <h2 className="text-white font-bold text-lg">+ بُعد محاسبي جديد</h2>
-                <button onClick={()=>setShowCreate(false)} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">✕</button>
+// ── Create Dimension Modal ──
+function CreateDimModal({ onSave, onClose }) {
+  const [form, setForm] = useState({
+    code:'', name_ar:'', name_en:'', classification:'',
+    is_required:false, is_visible:true, sort_order:0
+  })
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    if (!form.code.trim() || !form.name_ar.trim()) {
+      toast('يرجى إدخال الكود والاسم على الأقل','error'); return
+    }
+    setSaving(true)
+    try {
+      await api.dimensions.create(form)
+      toast(`✅ تم إنشاء البُعد "${form.name_ar}"`, 'success')
+      onSave()
+    } catch(e) { toast(e.message,'error') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-100"
+          style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-white font-bold text-lg">+ بُعد محاسبي جديد</h2>
+            <button onClick={onClose}
+              className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">✕</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-slate-700">كود البُعد <span className="text-red-500">*</span></label>
+              <input className="input" placeholder="مثال: region"
+                value={form.code}
+                onChange={e=>setForm(p=>({...p,code:e.target.value.toLowerCase().replace(/\s/g,'_')}))}/>
+              <span className="text-xs text-slate-400">بالإنجليزية، بدون مسافات</span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-slate-700">الاسم بالعربي <span className="text-red-500">*</span></label>
+              <input className="input" placeholder="مثال: المنطقة الجغرافية"
+                value={form.name_ar} onChange={e=>setForm(p=>({...p,name_ar:e.target.value}))}/>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-slate-700">الاسم بالإنجليزي</label>
+              <input className="input" placeholder="Region"
+                value={form.name_en} onChange={e=>setForm(p=>({...p,name_en:e.target.value}))}/>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-slate-700">التصنيف</label>
+              <select className="select" value={form.classification}
+                onChange={e=>setForm(p=>({...p,classification:e.target.value}))}>
+                <option value="">— اختر</option>
+                <option value="where">📍 أين؟ (Where)</option>
+                <option value="who">👤 من؟ (Who)</option>
+                <option value="why">🎯 لماذا؟ (Why)</option>
+                <option value="expense_only">🏷️ تصنيف المصروف</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+              <Toggle checked={form.is_visible} onChange={v=>setForm(p=>({...p,is_visible:v}))}/>
+              <div>
+                <div className="text-sm font-semibold text-slate-700">ظاهر في القيود</div>
+                <div className="text-xs text-slate-400">يظهر عند إدخال القيود</div>
               </div>
             </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-slate-700">كود البُعد <span className="text-red-500">*</span></label>
-                  <input className="input" placeholder="مثال: region" value={newDim.code}
-                    onChange={e=>setNewDim(p=>({...p,code:e.target.value.toLowerCase().replace(/\s/g,'_')}))}/>
-                  <span className="text-xs text-slate-400">بالإنجليزية، بدون مسافات</span>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-slate-700">الاسم بالعربي <span className="text-red-500">*</span></label>
-                  <input className="input" placeholder="مثال: المنطقة الجغرافية" value={newDim.name_ar}
-                    onChange={e=>setNewDim(p=>({...p,name_ar:e.target.value}))}/>
-                </div>
+            <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <Toggle checked={form.is_required} onChange={v=>setForm(p=>({...p,is_required:v}))} disabled={!form.is_visible}/>
+              <div>
+                <div className="text-sm font-semibold text-slate-700">إجباري</div>
+                <div className="text-xs text-slate-400">يجب تعبئته قبل الترحيل</div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-slate-700">الاسم بالإنجليزي</label>
-                  <input className="input" placeholder="Region" value={newDim.name_en}
-                    onChange={e=>setNewDim(p=>({...p,name_en:e.target.value}))}/>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-slate-700">التصنيف</label>
-                  <select className="select" value={newDim.classification}
-                    onChange={e=>setNewDim(p=>({...p,classification:e.target.value}))}>
-                    <option value="">— اختر</option>
-                    <option value="where">📍 أين؟ (Where)</option>
-                    <option value="who">👤 من؟ (Who)</option>
-                    <option value="why">🎯 لماذا؟ (Why)</option>
-                    <option value="expense_only">🏷️ تصنيف المصروف</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                  <Toggle checked={newDim.is_visible} onChange={v=>setNewDim(p=>({...p,is_visible:v}))}/>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-700">ظاهر في القيود</div>
-                    <div className="text-xs text-slate-400">يظهر عند إدخال القيود</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <Toggle checked={newDim.is_required} onChange={v=>setNewDim(p=>({...p,is_required:v}))} disabled={!newDim.is_visible}/>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-700">إجباري</div>
-                    <div className="text-xs text-slate-400">يجب تعبئته قبل الترحيل</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end">
-              <button onClick={()=>setShowCreate(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">إلغاء</button>
-              <button onClick={createDimension} disabled={!newDim.code||!newDim.name_ar||creating}
-                className="px-6 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-40">
-                {creating?'⏳ جارٍ...':'✅ إنشاء البُعد'}
-              </button>
             </div>
           </div>
         </div>
-      )}
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">
+            إلغاء
+          </button>
+          <button onClick={save} disabled={!form.code||!form.name_ar||saving}
+            className="px-6 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-40">
+            {saving?'⏳ جارٍ...':'✅ إنشاء البُعد'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -281,23 +314,19 @@ export default function DimensionsPage() {
   const [loading,    setLoading]    = useState(true)
   const [filter,     setFilter]     = useState('all')
   const [showCreate, setShowCreate] = useState(false)
-  const [creating,   setCreating]   = useState(false)
-  const [newDim,     setNewDim]     = useState({
-    code:'', name_ar:'', name_en:'', classification:'',
-    is_required:false, is_visible:true, sort_order:0
-  })
 
-  useEffect(() => {
+  const loadDims = () => {
     setLoading(true)
     api.dimensions.list({ active_only: false })
       .then(d => setDimensions(d?.data||d?.items||[]))
       .catch(e => toast(e.message,'error'))
       .finally(() => setLoading(false))
-  }, [])
-
-  const updateDim = (id, patch) => {
-    setDimensions(p => p.map(d => d.id===id ? {...d,...patch} : d))
   }
+
+  useEffect(() => { loadDims() }, [])
+
+  const updateDim = (id, patch) =>
+    setDimensions(p => p.map(d => d.id===id ? {...d,...patch} : d))
 
   const refreshDim = async (dimId) => {
     try {
@@ -329,23 +358,6 @@ export default function DimensionsPage() {
   const hiddenCount   = dimensions.filter(d=>!d.is_visible).length
   const requiredCount = dimensions.filter(d=>d.is_required).length
 
-  const createDimension = async () => {
-    if (!newDim.code.trim() || !newDim.name_ar.trim()) {
-      toast('يرجى إدخال الكود والاسم على الأقل','error'); return
-    }
-    setCreating(true)
-    try {
-      await api.dimensions.create(newDim)
-      toast(`✅ تم إنشاء البُعد "${newDim.name_ar}"`, 'success')
-      setShowCreate(false)
-      setNewDim({code:'',name_ar:'',name_en:'',classification:'',is_required:false,is_visible:true,sort_order:0})
-      // إعادة تحميل
-      const d = await api.dimensions.list({ active_only: false })
-      setDimensions(d?.data||d?.items||[])
-    } catch(e) { toast(e.message,'error') }
-    finally { setCreating(false) }
-  }
-
   if (loading) return (
     <div className="flex items-center justify-center py-20">
       <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin"/>
@@ -369,10 +381,10 @@ export default function DimensionsPage() {
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          {label:'إجمالي الأبعاد',  v:dimensions.length, c:'text-slate-800', bg:'bg-white',        b:'border-slate-200', icon:'📌'},
-          {label:'ظاهرة في القيود', v:visibleCount,       c:'text-emerald-700', bg:'bg-emerald-50', b:'border-emerald-200', icon:'👁️'},
-          {label:'مخفية',           v:hiddenCount,        c:'text-slate-500',   bg:'bg-slate-50',   b:'border-slate-200', icon:'🙈'},
-          {label:'إجبارية',         v:requiredCount,      c:'text-amber-700',   bg:'bg-amber-50',   b:'border-amber-200', icon:'⚡'},
+          {label:'إجمالي الأبعاد',  v:dimensions.length, c:'text-slate-800',   bg:'bg-white',       b:'border-slate-200',  icon:'📌'},
+          {label:'ظاهرة في القيود', v:visibleCount,       c:'text-emerald-700', bg:'bg-emerald-50',  b:'border-emerald-200',icon:'👁️'},
+          {label:'مخفية',           v:hiddenCount,        c:'text-slate-500',   bg:'bg-slate-50',    b:'border-slate-200',  icon:'🙈'},
+          {label:'إجبارية',         v:requiredCount,      c:'text-amber-700',   bg:'bg-amber-50',    b:'border-amber-200',  icon:'⚡'},
         ].map(k=>(
           <div key={k.label} className={`rounded-2xl border-2 ${k.b} ${k.bg} py-3 px-4 shadow-sm`}>
             <div className="flex items-center justify-between mb-1">
@@ -384,14 +396,14 @@ export default function DimensionsPage() {
         ))}
       </div>
 
-      {/* فلتر */}
+      {/* Filter */}
       <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
         <span className="text-xs text-slate-500 font-medium ml-2">عرض:</span>
         {[
-          {id:'all',      label:'الكل',             count:dimensions.length},
-          {id:'visible',  label:'👁️ الظاهرة',       count:visibleCount},
-          {id:'hidden',   label:'🙈 المخفية',         count:hiddenCount},
-          {id:'required', label:'⚡ الإجبارية',       count:requiredCount},
+          {id:'all',      label:'الكل',         count:dimensions.length},
+          {id:'visible',  label:'👁️ الظاهرة',   count:visibleCount},
+          {id:'hidden',   label:'🙈 المخفية',    count:hiddenCount},
+          {id:'required', label:'⚡ الإجبارية',  count:requiredCount},
         ].map(f=>(
           <button key={f.id} onClick={()=>setFilter(f.id)}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-all
@@ -400,8 +412,6 @@ export default function DimensionsPage() {
             <span className={`text-xs px-1.5 py-0.5 rounded-full ${filter===f.id?'bg-white/20':'bg-white text-slate-500'}`}>{f.count}</span>
           </button>
         ))}
-
-        {/* شرح سريع */}
         <div className="mr-auto flex items-center gap-2 text-xs text-slate-400 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
           <span>💡</span>
           <span>الأبعاد الظاهرة فقط تظهر في القيود اليومية والتوزيع والمتكررة</span>
@@ -421,15 +431,14 @@ export default function DimensionsPage() {
               key={dim.id}
               dim={dim}
               onUpdate={updateDim}
-              onAddValue={refreshDim}
-              onDeleteValue={refreshDim}
+              onRefresh={refreshDim}
               onToggleValue={toggleValue}
             />
           ))}
         </div>
       )}
 
-      {/* توضيح */}
+      {/* How it works */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
         <div className="text-sm font-bold text-slate-700 mb-3">🎯 كيف يعمل نظام الأبعاد؟</div>
         <div className="grid grid-cols-3 gap-4 text-xs text-slate-600">
@@ -448,75 +457,12 @@ export default function DimensionsPage() {
         </div>
       </div>
 
-      {/* Modal إنشاء بُعد جديد */}
+      {/* Create Modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={()=>setShowCreate(false)}/>
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
-              <div className="flex items-center justify-between">
-                <h2 className="text-white font-bold text-lg">+ بُعد محاسبي جديد</h2>
-                <button onClick={()=>setShowCreate(false)} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">✕</button>
-              </div>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-slate-700">كود البُعد <span className="text-red-500">*</span></label>
-                  <input className="input" placeholder="مثال: region" value={newDim.code}
-                    onChange={e=>setNewDim(p=>({...p,code:e.target.value.toLowerCase().replace(/\s/g,'_')}))}/>
-                  <span className="text-xs text-slate-400">بالإنجليزية، بدون مسافات</span>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-slate-700">الاسم بالعربي <span className="text-red-500">*</span></label>
-                  <input className="input" placeholder="مثال: المنطقة الجغرافية" value={newDim.name_ar}
-                    onChange={e=>setNewDim(p=>({...p,name_ar:e.target.value}))}/>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-slate-700">الاسم بالإنجليزي</label>
-                  <input className="input" placeholder="Region" value={newDim.name_en}
-                    onChange={e=>setNewDim(p=>({...p,name_en:e.target.value}))}/>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-semibold text-slate-700">التصنيف</label>
-                  <select className="select" value={newDim.classification}
-                    onChange={e=>setNewDim(p=>({...p,classification:e.target.value}))}>
-                    <option value="">— اختر</option>
-                    <option value="where">📍 أين؟ (Where)</option>
-                    <option value="who">👤 من؟ (Who)</option>
-                    <option value="why">🎯 لماذا؟ (Why)</option>
-                    <option value="expense_only">🏷️ تصنيف المصروف</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                  <Toggle checked={newDim.is_visible} onChange={v=>setNewDim(p=>({...p,is_visible:v}))}/>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-700">ظاهر في القيود</div>
-                    <div className="text-xs text-slate-400">يظهر عند إدخال القيود</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <Toggle checked={newDim.is_required} onChange={v=>setNewDim(p=>({...p,is_required:v}))} disabled={!newDim.is_visible}/>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-700">إجباري</div>
-                    <div className="text-xs text-slate-400">يجب تعبئته قبل الترحيل</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end">
-              <button onClick={()=>setShowCreate(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">إلغاء</button>
-              <button onClick={createDimension} disabled={!newDim.code||!newDim.name_ar||creating}
-                className="px-6 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-40">
-                {creating?'⏳ جارٍ...':'✅ إنشاء البُعد'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <CreateDimModal
+          onSave={() => { setShowCreate(false); loadDims() }}
+          onClose={() => setShowCreate(false)}
+        />
       )}
     </div>
   )
