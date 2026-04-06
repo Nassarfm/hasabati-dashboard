@@ -40,6 +40,8 @@ const SECTIONS = [
   {
     id: 'fin_settings', label: 'الإعدادات المالية', icon: '⚙️',
     items: [
+      { id:'users',             icon:'👥', label:'إدارة المستخدمين' },
+      { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات' },
       { id:'company_settings',  icon:'🏢', label:'إعدادات المنشأة' },
       { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة (VAT)' },
       { id:'currency_settings', icon:'💱', label:'العملات',             badge:'قريباً' },
