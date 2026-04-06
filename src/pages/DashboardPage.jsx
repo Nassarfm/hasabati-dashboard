@@ -71,18 +71,15 @@ export default function DashboardPage({ onNavigate }) {
   const loadAll = async () => {
     setLoading(true)
     try {
-      // استعلامات متوازية
-      const [
-        accDash,
-        incomeThis,
-        incomePrev,
-        balance,
-        pendingJEs,
-        recentJEs,
-      ] = await Promise.allSettled([
+      // المجموعة الأولى: البيانات الأساسية
+      const [accDash, incomeThis, incomePrev] = await Promise.allSettled([
         api.accounting.getDashboard({ fiscal_year: CURRENT_YEAR }),
         api.reports.incomeStatement({ year:CURRENT_YEAR, month_from:1, month_to:CURRENT_MONTH }),
         api.reports.incomeStatement({ year:CURRENT_YEAR, month_from:1, month_to:Math.max(CURRENT_MONTH-1,1) }),
+      ])
+
+      // المجموعة الثانية: الميزانية والقيود (بعد المجموعة الأولى)
+      const [balance, pendingJEs, recentJEs] = await Promise.allSettled([
         api.reports.balanceSheet({ year:CURRENT_YEAR, month:CURRENT_MONTH }),
         api.accounting.getJEs({ status:'pending_review', limit:5 }),
         api.accounting.getJEs({ limit:8, offset:0 }),
