@@ -348,7 +348,7 @@ export default function VATSettingsPage() {
         <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-16 text-center">
           <div className="text-5xl mb-3">🧾</div>
           <div className="text-base font-medium text-slate-600 mb-1">لا توجد أنواع ضريبة</div>
-          <div className="text-sm text-slate-400 mb-4">شغّل الـ SQL Migration في Supabase أولاً لإضافة الأنواع الافتراضية</div>
+          <div className="text-sm text-slate-400 mb-4">أضف نوع ضريبة جديداً للبدء</div>
           <button onClick={() => setModal('create')}
             className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">
             + إضافة نوع ضريبة
@@ -364,17 +364,7 @@ export default function VATSettingsPage() {
         </div>
       )}
 
-      {/* تنبيه مهم */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3 text-xs text-amber-800">
-        <span className="text-xl shrink-0">⚠️</span>
-        <div className="space-y-1">
-          <div className="font-bold">خطوات تفعيل نظام الضريبة الكاملة:</div>
-          <div>1. شغّل ملف <code className="bg-amber-100 px-1 rounded">vat_migration.sql</code> في Supabase</div>
-          <div>2. تأكد من وجود حساب <strong>2201</strong> (ضريبة المبيعات) وحساب <strong>1401</strong> (ضريبة المشتريات) في دليل الحسابات</div>
-          <div>3. ارفع <code className="bg-amber-100 px-1 rounded">tax_router.py</code> و <code className="bg-amber-100 px-1 rounded">tax_models.py</code> للـ Backend</div>
-          <div>4. في الجلسة القادمة: نضيف عمود الضريبة في صفحة القيود اليومية</div>
-        </div>
-      </div>
+
 
       {/* Modal */}
       {modal && (

@@ -116,7 +116,9 @@ export default function AllocationPage({ onBack }) {
       api.settings.listBranches(),
       api.settings.listCostCenters(),
       api.settings.listProjects(),
-    ]).then(([coa, dims, br, cc, pr]) => {
+      api.tax?.list?.({ active_only: true }) ?? Promise.resolve({ data:[] }),
+    ]).then(([coa, dims, br, cc, pr, tx]) => {
+      setTaxTypes(tx?.data||tx?.items||[])
       setAccounts((coa?.data||coa?.items||[]).filter(a => a.postable))
       // دمج الأبعاد: النظامية (من جداول منفصلة) + المخصصة (من dimensions)
       const SYSTEM_CODES = ['branch','cost_center','project']

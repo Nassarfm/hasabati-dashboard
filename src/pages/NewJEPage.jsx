@@ -226,12 +226,13 @@ function HotkeyOverlay({ onClose }) {
 // ══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════
-export default function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, allDimensions=[], onBack, onSaved, editJE = null }) {
+export default function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, allDimensions=[], taxTypes=[], onBack, onSaved, editJE = null }) {
   const emptyLine = useCallback(() => ({
     id:Math.random(), account_code:'', account_name:'', account:null,
     description:'', debit:'', credit:'', branch_code:'', branch_name:'',
     cost_center:'', cost_center_name:'', project_code:'', project_name:'',
     expense_classification_code:'', expense_classification_name:'',
+    tax_type_code:'', vat_amount:0, net_amount:0,
     extraDims: {}, // أبعاد مخصصة { [dimCode]: { value_code, value_name } }
   }), [])
 
@@ -251,6 +252,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
         project_code:l.project_code||'', project_name:l.project_name||'',
         expense_classification_code:l.expense_classification_code||'',
         expense_classification_name:l.expense_classification_name||'',
+        tax_type_code:l.tax_type_code||'', vat_amount:l.vat_amount||0, net_amount:l.net_amount||0,
         extraDims: l.extraDims||{},
       }))
     }
@@ -346,6 +348,9 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
           project_code:l.project_code||null, project_name:l.project_name||null,
           expense_classification_code:l.expense_classification_code||null,
           expense_classification_name:l.expense_classification_name||null,
+          tax_type_code:l.tax_type_code||null,
+          vat_amount:parseFloat(l.vat_amount)||0,
+          net_amount:parseFloat(l.net_amount)||0,
         }))
       }
       const jeRes = editJE ? await api.accounting.updateJE(editJE.id,payload) : await api.accounting.createJE(payload)
@@ -407,7 +412,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
   // ── Grid column template — ديناميكي حسب عدد الأبعاد
   // الأبعاد المخصصة (غير الـ 4 الثابتة)
   const customDims = allDimensions.filter(d => !['branch','cost_center','expense_classification','project'].includes(d.code))
-  const COLS = `32px 2fr 1.5fr 90px 90px 110px 110px 110px 100px ${customDims.map(()=>'100px').join(' ')} 36px`
+  const COLS = `32px 2fr 1.5fr 90px 90px 110px 110px 110px 100px 100px ${customDims.map(()=>'100px').join(' ')} 36px`
 
   return (
     <div className="page-enter space-y-5">
@@ -580,6 +585,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
               <div className="px-3 py-3.5 text-center">م. التكلفة</div>
               <div className="px-3 py-3.5 text-center">تصنيف</div>
               <div className="px-3 py-3.5 text-center">مشروع</div>
+              <div className="px-3 py-3.5 text-center">الضريبة</div>
               {customDims.map(d=>(
                 <div key={d.id} className="px-2 py-3.5 text-center truncate">{d.name_ar}</div>
               ))}
@@ -723,10 +729,36 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                           <option value="">—</option>
                           {projects.map(p => <option key={p.id} value={String(p.code)}>{p.code}</option>)}
                         </select>
-                        {/* اسم المشروع */}
                         {line.project_code && projName && (
                           <div className="text-xs text-emerald-600 mt-0.5 truncate px-0.5">{projName}</div>
                         )}
+                      </div>
+
+                      {/* الضريبة */}
+                      <div className="px-2 py-2">
+                        {taxTypes.length > 0 ? (
+                          <>
+                            <select className={`select text-xs w-full ${line.tax_type_code?'border-blue-400 bg-blue-50/40':''}`}
+                              value={line.tax_type_code||''}
+                              onChange={e => {
+                                const tx = taxTypes.find(t=>t.code===e.target.value)
+                                const base = parseFloat(line.debit||line.credit||0)
+                                const vatAmt = tx ? parseFloat((base * tx.rate / (100 + tx.rate)).toFixed(3)) : 0
+                                const netAmt = tx ? parseFloat((base - vatAmt).toFixed(3)) : 0
+                                setLine(line.id,{tax_type_code:e.target.value, vat_amount:vatAmt, net_amount:netAmt})
+                              }}>
+                              <option value="">—</option>
+                              {taxTypes.map(tx=>(
+                                <option key={tx.code} value={tx.code}>{tx.code} {tx.rate}%</option>
+                              ))}
+                            </select>
+                            {line.tax_type_code && line.vat_amount>0 && (
+                              <div className="text-xs text-blue-600 font-mono mt-0.5 px-0.5">
+                                ض: {parseFloat(line.vat_amount).toFixed(3)}
+                              </div>
+                            )}
+                          </>
+                        ) : <div className="text-center text-slate-200 text-xs py-2">—</div>}
                       </div>
 
                       {/* الأبعاد المخصصة */}

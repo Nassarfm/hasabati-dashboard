@@ -42,6 +42,7 @@ export default function JournalPage() {
   const [projects,     setProjects]     = useState([])
   const [expClass,     setExpClass]     = useState([])
   const [allDimensions,setAllDimensions]= useState([]) // كل الأبعاد ديناميكية
+  const [taxTypes,     setTaxTypes]     = useState([])  // أنواع الضريبة
   const [loading,      setLoading]      = useState(true)
   const [viewJE,       setViewJE]       = useState(null)
   const [currentUser,  setCurrentUser]  = useState(null)
@@ -129,7 +130,8 @@ export default function JournalPage() {
       api.settings.listCostCenters(),
       api.settings.listProjects(),
       api.dimensions?.list?.() ?? Promise.resolve({ data:[] }),
-    ]).then(([coa,jt,br,cc,pr,dims]) => {
+      api.tax?.list?.({ active_only: true }) ?? Promise.resolve({ data:[] }),
+    ]).then(([coa,jt,br,cc,pr,dims,tx]) => {
       setAccounts((coa?.data||coa?.items||[]).filter(a => a.postable))
       setJeTypes(jt?.data||[])
       setBranches((br?.data||[]).filter(b => b.is_active))
@@ -138,6 +140,7 @@ export default function JournalPage() {
       const expDim = (dims?.data||[]).find(d => d.code==='expense_classification')
       setExpClass(expDim?.values||[])
       setAllDimensions((dims?.data||[]).filter(d=>d.is_visible!==false))
+      setTaxTypes(tx?.data||tx?.items||[])
     }).catch(()=>{})
   }, [])
 
@@ -217,14 +220,14 @@ export default function JournalPage() {
   if (mode==='edit' && editJE) {
     return <NewJEPage accounts={accounts} jeTypes={jeTypes} branches={branches}
       costCenters={costCenters} projects={projects} expClass={expClass}
-      allDimensions={allDimensions} editJE={editJE}
+      allDimensions={allDimensions} taxTypes={taxTypes} editJE={editJE}
       onBack={() => { setMode('list'); setEditJE(null) }}
       onSaved={() => { setMode('list'); setEditJE(null); load(1,filters); loadStatusCounts() }}/>
   }
   if (mode==='new') {
     return <NewJEPage accounts={accounts} jeTypes={jeTypes} branches={branches}
       costCenters={costCenters} projects={projects} expClass={expClass}
-      allDimensions={allDimensions}
+      allDimensions={allDimensions} taxTypes={taxTypes}
       onBack={() => setMode('list')}
       onSaved={() => { setMode('list'); load(1,filters); loadStatusCounts() }}/>
   }
