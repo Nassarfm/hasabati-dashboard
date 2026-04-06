@@ -28,6 +28,7 @@ import {
   AssetsPage, TreasuryPage,
 } from './pages/OtherPages'
 import VATPage from './pages/VATPage'
+import VATSettingsPage from './pages/VATSettingsPage'
 
 const PAGE_LABELS = {
   dashboard:          'لوحة التحكم',
@@ -50,6 +51,7 @@ const PAGE_LABELS = {
   compare_report:     'مقارنة الفترات',
   charts_report:      'الرسوم البيانية',
   vat:                'ضريبة القيمة المضافة',
+  vat_settings:       'إعدادات الضريبة',
   sales:              'المبيعات',
   purchases:          'المشتريات',
   inventory:          'المخزون',
@@ -106,6 +108,7 @@ function AppContent() {
       case 'compare_report':     return <CompareReportPage/>
       case 'charts_report':      return <ChartsReportPage/>
       case 'vat':                return <VATPage/>
+      case 'vat_settings':    return <VATSettingsPage/>
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>

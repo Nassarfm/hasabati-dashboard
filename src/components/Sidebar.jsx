@@ -35,7 +35,8 @@ const SECTIONS = [
       { id:'compare_report',     icon:'🔀', label:'مقارنة الفترات' },
       { id:'charts_report',      icon:'📉', label:'الرسوم البيانية' },
       { id:'vat',                icon:'🧮', label:'ضريبة القيمة المضافة' },
-    ]
+
+          { page:'vat_settings', label:'⚙️ إعدادات الضريبة', icon:'⚙️' },    ]
   },
   {
     id: 'other', label: 'الوحدات الأخرى', icon: '🏭',
