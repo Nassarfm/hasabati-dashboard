@@ -194,6 +194,7 @@ function CreateRecurringForm({ onBack }) {
   const [branches,   setBranches]   = useState([])
   const [ccs,        setCcs]        = useState([])
   const [projects,   setProjects]   = useState([])
+  const [taxTypes,   setTaxTypes]   = useState([])
   const [saving,     setSaving]     = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [preview,    setPreview]    = useState(null)
@@ -207,8 +208,8 @@ function CreateRecurringForm({ onBack }) {
   })
 
   const [lines, setLines] = useState([
-    { account_code:'', account_name:'', debit_pct:'', credit_pct:'', description:'', branch_code:'', cost_center:'', project_code:'' },
-    { account_code:'', account_name:'', debit_pct:'', credit_pct:'', description:'', branch_code:'', cost_center:'', project_code:'' },
+    { account_code:'', account_name:'', debit_pct:'', credit_pct:'', description:'', branch_code:'', cost_center:'', project_code:'', tax_type_code:'' },
+    { account_code:'', account_name:'', debit_pct:'', credit_pct:'', description:'', branch_code:'', cost_center:'', project_code:'', tax_type_code:'' },
   ])
 
   useEffect(() => {
@@ -217,11 +218,13 @@ function CreateRecurringForm({ onBack }) {
       api.settings.listBranches(),
       api.settings.listCostCenters(),
       api.settings.listProjects(),
-    ]).then(([coa,br,cc,pr]) => {
+      api.tax?.list?.({ active_only: true }) ?? Promise.resolve({ data:[] }),
+    ]).then(([coa,br,cc,pr,tx]) => {
       setAccounts((coa?.data||coa?.items||[]).filter(a=>a.postable))
       setBranches((br?.data||[]).filter(b=>b.is_active))
       setCcs((cc?.data||[]).filter(c=>c.is_active))
       setProjects((pr?.data||[]).filter(p=>p.is_active))
+      setTaxTypes(tx?.data||tx?.items||[])
     }).catch(()=>{})
   }, [])
 
@@ -266,9 +269,10 @@ function CreateRecurringForm({ onBack }) {
           debit_pct:    parseFloat(l.debit_pct)||0,
           credit_pct:   parseFloat(l.credit_pct)||0,
           description:  l.description||'',
-          branch_code:  l.branch_code||null,
-          cost_center:  l.cost_center||null,
-          project_code: l.project_code||null,
+          branch_code:   l.branch_code||null,
+          cost_center:   l.cost_center||null,
+          project_code:  l.project_code||null,
+          tax_type_code: l.tax_type_code||null,
         }))
       })
       toast('✅ تم إنشاء القيد المتكرر وجدول الإطفاء','success')
@@ -376,19 +380,20 @@ function CreateRecurringForm({ onBack }) {
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="grid text-white text-xs font-semibold"
-              style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 1fr 36px', background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+              style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 90px 1fr 36px', background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
               <div className="px-3 py-3">الحساب</div>
               <div className="px-3 py-3 text-center">% مدين</div>
               <div className="px-3 py-3 text-center">% دائن</div>
               <div className="px-3 py-3 text-center">الفرع</div>
               <div className="px-3 py-3 text-center">م. التكلفة</div>
+              <div className="px-3 py-3 text-center">الضريبة</div>
               <div className="px-3 py-3">البيان</div>
               <div className="px-2 py-3"/>
             </div>
 
             {lines.map((line,idx)=>(
               <div key={idx} className="grid border-b border-slate-100 items-center"
-                style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 1fr 36px'}}>
+                style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 90px 1fr 36px'}}>
                 <div className="px-2 py-2">
                   <select className="select text-xs w-full" value={line.account_code}
                     onChange={e=>{
@@ -421,6 +426,26 @@ function CreateRecurringForm({ onBack }) {
                     {ccs.map(c=><option key={c.id} value={c.code}>{c.code}</option>)}
                   </select>
                 </div>
+                {/* الضريبة */}
+                <div className="px-2 py-2">
+                  {taxTypes.length > 0 ? (
+                    <>
+                      <select className={`select text-xs w-full ${line.tax_type_code?'border-blue-400 bg-blue-50/40':''}`}
+                        value={line.tax_type_code||''}
+                        onChange={e=>setLine(idx,{tax_type_code:e.target.value})}>
+                        <option value="">—</option>
+                        {taxTypes.map(tx=>(
+                          <option key={tx.code} value={tx.code}>{tx.code} {tx.rate}%</option>
+                        ))}
+                      </select>
+                      {line.tax_type_code && (
+                        <div className="text-xs text-blue-600 mt-0.5 px-0.5">
+                          {taxTypes.find(t=>t.code===line.tax_type_code)?.rate}%
+                        </div>
+                      )}
+                    </>
+                  ) : <div className="text-center text-slate-200 text-xs py-2">—</div>}
+                </div>
                 <div className="px-2 py-2">
                   <input className="input text-xs w-full" placeholder="بيان" value={line.description}
                     onChange={e=>setLine(idx,{description:e.target.value})}/>
@@ -435,7 +460,7 @@ function CreateRecurringForm({ onBack }) {
             ))}
 
             <div className="px-3 py-2 border-t border-slate-100">
-              <button onClick={()=>setLines(p=>[...p,{account_code:'',account_name:'',debit_pct:'',credit_pct:'',description:'',branch_code:'',cost_center:'',project_code:''}])}
+              <button onClick={()=>setLines(p=>[...p,{account_code:'',account_name:'',debit_pct:'',credit_pct:'',description:'',branch_code:'',cost_center:'',project_code:'',tax_type_code:''}])}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ إضافة سطر</button>
             </div>
           </div>
