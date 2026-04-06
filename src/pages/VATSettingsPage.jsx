@@ -194,22 +194,36 @@ function TaxModal({ tax, accounts, onSave, onClose }) {
                 <select className="select text-sm" value={form.output_account_code}
                   onChange={e=>setForm(p=>({...p,output_account_code:e.target.value}))}>
                   <option value="">— اختر حساباً</option>
-                  {accounts.filter(a=>a.account_type==='liability'||a.code?.startsWith('22')).map(a=>(
-                    <option key={a.code} value={a.code}>{a.code} — {a.name_ar}</option>
-                  ))}
+                  <optgroup label="الالتزامات (الأكثر شيوعاً)">
+                    {accounts.filter(a=>a.account_type==='liability').map(a=>(
+                      <option key={a.code} value={a.code}>{a.code} — {a.name_ar}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="حسابات أخرى">
+                    {accounts.filter(a=>a.account_type!=='liability').map(a=>(
+                      <option key={a.code} value={a.code}>{a.code} — {a.name_ar}</option>
+                    ))}
+                  </optgroup>
                 </select>
-                <span className="text-xs text-slate-400">عادةً: 2201</span>
+                <span className="text-xs text-slate-400">عادةً: 2201 (ضريبة المبيعات المستحقة)</span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-600">📥 حساب ضريبة المدخلات (مشتريات)</label>
                 <select className="select text-sm" value={form.input_account_code}
                   onChange={e=>setForm(p=>({...p,input_account_code:e.target.value}))}>
                   <option value="">— اختر حساباً</option>
-                  {accounts.filter(a=>a.account_type==='asset'||a.code?.startsWith('14')).map(a=>(
-                    <option key={a.code} value={a.code}>{a.code} — {a.name_ar}</option>
-                  ))}
+                  <optgroup label="الأصول (الأكثر شيوعاً)">
+                    {accounts.filter(a=>a.account_type==='asset').map(a=>(
+                      <option key={a.code} value={a.code}>{a.code} — {a.name_ar}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="حسابات أخرى">
+                    {accounts.filter(a=>a.account_type!=='asset').map(a=>(
+                      <option key={a.code} value={a.code}>{a.code} — {a.name_ar}</option>
+                    ))}
+                  </optgroup>
                 </select>
-                <span className="text-xs text-slate-400">عادةً: 1401</span>
+                <span className="text-xs text-slate-400">عادةً: 1401 (ضريبة المدخلات القابلة للاسترداد)</span>
               </div>
             </div>
           </div>
