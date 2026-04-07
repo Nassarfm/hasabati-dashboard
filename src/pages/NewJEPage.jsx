@@ -233,6 +233,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
     cost_center:'', cost_center_name:'', project_code:'', project_name:'',
     expense_classification_code:'', expense_classification_name:'',
     tax_type_code:'', vat_amount:0, net_amount:0,
+    is_tax_line:false, parent_line_id:null, // سطر ضريبة تلقائي
     extraDims: {}, // أبعاد مخصصة { [dimCode]: { value_code, value_name } }
   }), [])
 
@@ -277,6 +278,49 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
 
   const setLine    = useCallback((id,updates) => setLines(ls => ls.map(l => l.id===id ? {...l,...updates} : l)), [])
   const addLine    = useCallback(() => { if (isFormOpen) setLines(ls => [...ls, emptyLine()]) }, [isFormOpen,emptyLine])
+  // ── توليد سطر الضريبة تلقائياً ──
+  const applyTax = useCallback((lineId, taxCode, baseDebit, baseCredit) => {
+    const tx = taxTypes.find(t => t.code === taxCode)
+    setLines(prev => {
+      // احذف السطر الضريبي القديم المرتبط بهذا السطر
+      const filtered = prev.filter(l => l.parent_line_id !== lineId)
+      if (!tx || !taxCode) return filtered
+
+      const base = parseFloat(baseDebit || baseCredit || 0)
+      if (base === 0) return filtered
+
+      const vatAmt   = parseFloat((base * tx.rate / 100).toFixed(3))
+      const isDebit  = parseFloat(baseDebit || 0) > 0
+
+      // حساب الضريبة من إعدادات نوع الضريبة
+      const taxAccCode = isDebit
+        ? (tx.input_account_code  || '1401')  // ضريبة مدخلات (مشتريات/مصاريف)
+        : (tx.output_account_code || '2201')  // ضريبة مخرجات (إيرادات)
+
+      const taxLine = {
+        id:             Math.random(),
+        parent_line_id: lineId,
+        is_tax_line:    true,
+        account_code:   taxAccCode,
+        account_name:   isDebit ? `ضريبة المدخلات (${tx.rate}%)` : `ضريبة المخرجات (${tx.rate}%)`,
+        account:        null,
+        description:    `ضريبة ${tx.name_ar} ${tx.rate}% — تلقائي`,
+        debit:          isDebit  ? String(vatAmt) : '',
+        credit:         !isDebit ? String(vatAmt) : '',
+        branch_code:'', branch_name:'', cost_center:'', cost_center_name:'',
+        project_code:'', project_name:'', expense_classification_code:'',
+        expense_classification_name:'', tax_type_code:'', vat_amount:0, net_amount:0,
+        extraDims:{},
+      }
+
+      // أضف السطر الضريبي مباشرة بعد السطر الأصلي
+      const parentIdx = filtered.findIndex(l => l.id === lineId)
+      const result = [...filtered]
+      result.splice(parentIdx + 1, 0, taxLine)
+      return result
+    })
+  }, [taxTypes])
+
   const removeLine = useCallback((id) => { if (lines.length>2) setLines(ls => ls.filter(l => l.id!==id)) }, [lines.length])
 
   const checkPeriod = useCallback(async (dateStr) => {
@@ -319,6 +363,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
     if (!isFormOpen) { setError('الفترة المالية غير مفتوحة'); return }
     if (!form.description || !form.entry_date) { setError('أدخل التاريخ والبيان'); return }
     const validLines = lines.filter(l => l.account_code && (parseFloat(l.debit)>0 || parseFloat(l.credit)>0))
+    const nonTaxLines = validLines.filter(l => !l.is_tax_line)
     if (validLines.length<2) { setError('يجب أن يحتوي القيد على سطرين على الأقل'); return }
     if (!balanced) { setError('القيد غير متوازن — استخدم Alt+B'); return }
     const dimErrors = []
@@ -612,7 +657,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
 
                 return (
                   <div key={line.id}
-                    className={`transition-colors ${needsDim ? 'bg-amber-50/40' : idx%2===0 ? 'bg-white' : 'bg-slate-50/40'} hover:bg-blue-50/30`}>
+                    className={`transition-colors ${line.is_tax_line ? 'bg-blue-50/60 border-r-2 border-blue-400' : needsDim ? 'bg-amber-50/40' : idx%2===0 ? 'bg-white' : 'bg-slate-50/40'} hover:bg-blue-50/30`}>
                     <div className="grid items-center" style={{gridTemplateColumns:COLS}}>
 
                       {/* # */}
@@ -622,9 +667,18 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
 
                       {/* الحساب */}
                       <div className="px-2 py-2">
-                        <SmartAccountSelector accounts={accounts} value={line.account_code}
-                          onChange={a => { setLine(line.id,{account_code:a.code,account_name:a.name_ar,account:a}); if(isLastRow&&a.code) addLine() }}
-                          onKeyDown={e => {}}/>
+                        {line.is_tax_line ? (
+                          <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-50 rounded-xl border border-blue-200">
+                            <span className="text-blue-500 text-xs">🧾</span>
+                            <span className="text-xs text-blue-700 font-semibold">{line.account_code}</span>
+                            <span className="text-xs text-blue-500 truncate">{line.account_name}</span>
+                            <span className="text-xs bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded-full mr-auto">تلقائي</span>
+                          </div>
+                        ) : (
+                          <SmartAccountSelector accounts={accounts} value={line.account_code}
+                            onChange={a => { setLine(line.id,{account_code:a.code,account_name:a.name_ar,account:a}); if(isLastRow&&a.code) addLine() }}
+                            onKeyDown={e => {}}/>
+                        )}
                         {acct && tc.color && (
                           <div className="flex items-center gap-1 mt-1 flex-wrap">
                             <span className={`text-xs px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5 ${tc.color}`}>
@@ -656,16 +710,24 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                       {/* مدين */}
                       <div className="px-2 py-2">
                         <input type="number" placeholder="0.00" value={line.debit}
-                          className="input text-xs text-center w-full num font-mono"
-                          onChange={e => setLine(line.id,{debit:e.target.value,...(e.target.value?{credit:''}:{})})}
+                          disabled={line.is_tax_line}
+                          className={`input text-xs text-center w-full num font-mono ${line.is_tax_line?'bg-blue-50 text-blue-700 font-bold border-blue-200':''}`}
+                          onChange={e => {
+                            setLine(line.id,{debit:e.target.value,...(e.target.value?{credit:''}:{})})
+                            if(line.tax_type_code) applyTax(line.id, line.tax_type_code, e.target.value, '')
+                          }}
                           onFocus={e => e.target.select()}/>
                       </div>
 
                       {/* دائن */}
                       <div className="px-2 py-2">
                         <input type="number" placeholder="0.00" value={line.credit}
-                          className="input text-xs text-center w-full num font-mono"
-                          onChange={e => setLine(line.id,{credit:e.target.value,...(e.target.value?{debit:''}:{})})}
+                          disabled={line.is_tax_line}
+                          className={`input text-xs text-center w-full num font-mono ${line.is_tax_line?'bg-blue-50 text-blue-700 font-bold border-blue-200':''}`}
+                          onChange={e => {
+                            setLine(line.id,{credit:e.target.value,...(e.target.value?{debit:''}:{})})
+                            if(line.tax_type_code) applyTax(line.id, line.tax_type_code, '', e.target.value)
+                          }}
                           onFocus={e => e.target.select()}/>
                       </div>
 
@@ -736,16 +798,19 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
 
                       {/* الضريبة */}
                       <div className="px-2 py-2">
-                        {taxTypes.length > 0 ? (
+                        {line.is_tax_line ? (
+                          <div className="text-center text-blue-400 text-xs py-2">—</div>
+                        ) : taxTypes.length > 0 ? (
                           <>
                             <select className={`select text-xs w-full ${line.tax_type_code?'border-blue-400 bg-blue-50/40':''}`}
                               value={line.tax_type_code||''}
                               onChange={e => {
-                                const tx = taxTypes.find(t=>t.code===e.target.value)
-                                const base = parseFloat(line.debit||line.credit||0)
-                                const vatAmt = tx ? parseFloat((base * tx.rate / (100 + tx.rate)).toFixed(3)) : 0
-                                const netAmt = tx ? parseFloat((base - vatAmt).toFixed(3)) : 0
-                                setLine(line.id,{tax_type_code:e.target.value, vat_amount:vatAmt, net_amount:netAmt})
+                                const taxCode = e.target.value
+                                setLine(line.id, {tax_type_code: taxCode, vat_amount:0, net_amount:0})
+                                // نستخدم القيم الحالية للمبلغ
+                                const currentDebit  = line.debit  || ''
+                                const currentCredit = line.credit || ''
+                                applyTax(line.id, taxCode, currentDebit, currentCredit)
                               }}>
                               <option value="">—</option>
                               {taxTypes.map(tx=>(
