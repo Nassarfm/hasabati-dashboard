@@ -696,15 +696,21 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
 
                       {/* البيان */}
                       <div className="px-2 py-2">
-                        <textarea className="input text-xs w-full resize-none leading-snug"
-                          placeholder="بيان السطر" rows={1}
-                          style={{minHeight:'30px',maxHeight:'72px',overflowY:'hidden'}}
-                          value={line.description}
-                          onChange={e => {
-                            setLine(line.id,{description:e.target.value})
-                            e.target.style.height='auto'
-                            e.target.style.height=Math.min(e.target.scrollHeight,72)+'px'
-                          }}/>
+                        {line.is_tax_line ? (
+                          <div className="text-xs text-blue-600 italic px-1 py-1.5 truncate">
+                            {line.description}
+                          </div>
+                        ) : (
+                          <textarea className="input text-xs w-full resize-none leading-snug"
+                            placeholder="بيان السطر" rows={1}
+                            style={{minHeight:'30px',maxHeight:'72px',overflowY:'hidden'}}
+                            value={line.description}
+                            onChange={e => {
+                              setLine(line.id,{description:e.target.value})
+                              e.target.style.height='auto'
+                              e.target.style.height=Math.min(e.target.scrollHeight,72)+'px'
+                            }}/>
+                        )}
                       </div>
 
                       {/* مدين */}
@@ -851,8 +857,13 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
 
                       {/* حذف */}
                       <div className="px-1 py-2 text-center">
-                        {lines.length>2 && (
-                          <button onClick={() => removeLine(line.id)}
+                        {line.is_tax_line ? (
+                          <div className="text-blue-300 text-xs text-center" title="سيُحذف تلقائياً مع السطر الأصلي">🔒</div>
+                        ) : lines.length>2 && (
+                          <button onClick={() => {
+                            // احذف سطر الضريبة المرتبط أيضاً
+                            setLines(prev => prev.filter(l => l.id !== line.id && l.parent_line_id !== line.id))
+                          }}
                             className="w-6 h-6 rounded-full bg-red-100 text-red-400 hover:bg-red-200 hover:text-red-600 text-xs flex items-center justify-center mx-auto transition-colors">✕</button>
                         )}
                       </div>
