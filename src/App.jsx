@@ -1,37 +1,71 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
 import Sidebar from './components/Sidebar'
 import NotificationBell from './components/NotificationBell'
 import { ToastProvider } from './components/UI'
-import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
-import COAPage from './pages/COAPage'
-import JournalPage from './pages/JournalPage'
-import DimensionsPage from './pages/DimensionsPage'
-import BranchesPage from './pages/BranchesPage'
-import CostCentersPage from './pages/CostCentersPage'
-import ProjectsPage from './pages/ProjectsPage'
-import FiscalPeriodsPage from './pages/FiscalPeriodsPage'
-import TrialBalancePage from './pages/TrialBalancePage'
-import LedgerPage from './pages/LedgerPage'
-import RecurringPage from './pages/RecurringPage'
-import ReversingPage from './pages/ReversingPage'
-import AllocationPage from './pages/AllocationPage'
-import IncomeReportPage from './pages/IncomeReportPage'
-import BalanceReportPage from './pages/BalanceReportPage'
-import CashFlowReportPage from './pages/CashFlowReportPage'
-import FinancialAnalysisPage from './pages/FinancialAnalysisPage'
-import CompareReportPage from './pages/CompareReportPage'
-import ChartsReportPage from './pages/ChartsReportPage'
-import {
-  SalesPage, PurchasesPage, InventoryPage, HRPage,
-  AssetsPage, TreasuryPage,
-} from './pages/OtherPages'
-import VATPage from './pages/VATPage'
-import VATSettingsPage from './pages/VATSettingsPage'
-import CompanySettingsPage from './pages/CompanySettingsPage'
-import UserManagementPage from './pages/UserManagementPage'
-import RolesPermissionsPage from './pages/RolesPermissionsPage'
+
+// ── Lazy imports — كل صفحة تُحمَّل عند الحاجة فقط ──────────
+const LoginPage             = lazy(() => import('./pages/LoginPage'))
+const DashboardPage         = lazy(() => import('./pages/DashboardPage'))
+const COAPage               = lazy(() => import('./pages/COAPage'))
+const JournalPage           = lazy(() => import('./pages/JournalPage'))
+const DimensionsPage        = lazy(() => import('./pages/DimensionsPage'))
+const BranchesPage          = lazy(() => import('./pages/BranchesPage'))
+const CostCentersPage       = lazy(() => import('./pages/CostCentersPage'))
+const ProjectsPage          = lazy(() => import('./pages/ProjectsPage'))
+const FiscalPeriodsPage     = lazy(() => import('./pages/FiscalPeriodsPage'))
+const TrialBalancePage      = lazy(() => import('./pages/TrialBalancePage'))
+const LedgerPage            = lazy(() => import('./pages/LedgerPage'))
+const RecurringPage         = lazy(() => import('./pages/RecurringPage'))
+const ReversingPage         = lazy(() => import('./pages/ReversingPage'))
+const AllocationPage        = lazy(() => import('./pages/AllocationPage'))
+const IncomeReportPage      = lazy(() => import('./pages/IncomeReportPage'))
+const BalanceReportPage     = lazy(() => import('./pages/BalanceReportPage'))
+const CashFlowReportPage    = lazy(() => import('./pages/CashFlowReportPage'))
+const FinancialAnalysisPage = lazy(() => import('./pages/FinancialAnalysisPage'))
+const CompareReportPage     = lazy(() => import('./pages/CompareReportPage'))
+const ChartsReportPage      = lazy(() => import('./pages/ChartsReportPage'))
+const VATPage               = lazy(() => import('./pages/VATPage'))
+const VATSettingsPage       = lazy(() => import('./pages/VATSettingsPage'))
+const CompanySettingsPage   = lazy(() => import('./pages/CompanySettingsPage'))
+const UserManagementPage    = lazy(() => import('./pages/UserManagementPage'))
+const RolesPermissionsPage  = lazy(() => import('./pages/RolesPermissionsPage'))
+
+// OtherPages — named exports → نحوّل كل واحد بـ .then()
+const SalesPage    = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.SalesPage })))
+const PurchasesPage= lazy(() => import('./pages/OtherPages').then(m => ({ default: m.PurchasesPage })))
+const InventoryPage= lazy(() => import('./pages/OtherPages').then(m => ({ default: m.InventoryPage })))
+const HRPage       = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.HRPage })))
+const AssetsPage   = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.AssetsPage })))
+const TreasuryPage = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.TreasuryPage })))
+
+
+// ── Suspense Fallback — شاشة تحميل الصفحة ───────────────────
+function PageLoader() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto mb-3"/>
+        <p className="text-sm text-slate-400">جارٍ التحميل...</p>
+      </div>
+    </div>
+  )
+}
+
+// ── AppLoader — شاشة تحميل Auth الأولية ─────────────────────
+function AppLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <span className="text-white text-2xl font-bold">ح</span>
+        </div>
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/>
+      </div>
+    </div>
+  )
+}
+
 
 const PAGE_LABELS = {
   dashboard:          'لوحة التحكم',
@@ -69,28 +103,21 @@ const PAGE_LABELS = {
 }
 
 
-
 function AppContent() {
   const { user, loading } = useAuth()
   const [page,      setPage]      = useState('dashboard')
   const [collapsed, setCollapsed] = useState(false)
-  const [ledgerAccount, setLedgerAccount] = useState({ code:'', name:'' })
+  const [ledgerAccount, setLedgerAccount] = useState({ code: '', name: '' })
 
-  const navigateToLedger = (code, name) => { setLedgerAccount({code,name}); setPage('ledger') }
-  const navigate = (p) => { if (p!=='ledger') setLedgerAccount({code:'',name:''}); setPage(p) }
+  const navigateToLedger = (code, name) => { setLedgerAccount({ code, name }); setPage('ledger') }
+  const navigate = (p) => { if (p !== 'ledger') setLedgerAccount({ code: '', name: '' }); setPage(p) }
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="text-center">
-        <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <span className="text-white text-2xl font-bold">ح</span>
-        </div>
-        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/>
-      </div>
-    </div>
+  if (loading) return <AppLoader/>
+  if (!user) return (
+    <Suspense fallback={<AppLoader/>}>
+      <LoginPage/>
+    </Suspense>
   )
-
-  if (!user) return <LoginPage/>
 
   const sideWidth = collapsed ? 64 : 240
 
@@ -104,9 +131,9 @@ function AppContent() {
       case 'projects':           return <ProjectsPage/>
       case 'fiscal':             return <FiscalPeriodsPage/>
       case 'journal':            return <JournalPage/>
-      case 'reversing':          return <ReversingPage onNavigateToJournal={()=>navigate('journal')}/>
+      case 'reversing':          return <ReversingPage onNavigateToJournal={() => navigate('journal')}/>
       case 'recurring':          return <RecurringPage/>
-      case 'allocation':         return <AllocationPage onBack={()=>navigate('journal')}/>
+      case 'allocation':         return <AllocationPage onBack={() => navigate('journal')}/>
       case 'trialbal':           return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
       case 'ledger':             return <LedgerPage initialAccountCode={ledgerAccount.code} initialAccountName={ledgerAccount.name}/>
       case 'income_report':      return <IncomeReportPage/>
@@ -116,12 +143,12 @@ function AppContent() {
       case 'compare_report':     return <CompareReportPage/>
       case 'charts_report':      return <ChartsReportPage/>
       case 'vat':                return <VATPage/>
-      case 'users':             return <UserManagementPage/>
-      case 'roles_permissions':return <RolesPermissionsPage/>
-      case 'company_settings': return <CompanySettingsPage/>
-      case 'vat_settings':    return <VATSettingsPage/>
-      case 'currency_settings': return <VATSettingsPage/>  // placeholder
-      case 'localization':      return <VATSettingsPage/>  // placeholder
+      case 'users':              return <UserManagementPage/>
+      case 'roles_permissions':  return <RolesPermissionsPage/>
+      case 'company_settings':   return <CompanySettingsPage/>
+      case 'vat_settings':       return <VATSettingsPage/>
+      case 'currency_settings':  return <VATSettingsPage/>   // placeholder
+      case 'localization':       return <VATSettingsPage/>   // placeholder
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>
@@ -133,11 +160,11 @@ function AppContent() {
   }
 
   const getBreadcrumb = () => {
-    if (page==='ledger'&&ledgerAccount.code) return (
+    if (page === 'ledger' && ledgerAccount.code) return (
       <div className="flex items-center gap-2 text-sm">
         <span className="font-bold text-slate-700">حساباتي</span>
         <span className="text-slate-300">ERP v2.0 /</span>
-        <button onClick={()=>navigate('trialbal')} className="text-slate-500 hover:text-blue-700">ميزان المراجعة</button>
+        <button onClick={() => navigate('trialbal')} className="text-slate-500 hover:text-blue-700">ميزان المراجعة</button>
         <span className="text-slate-300">/</span>
         <span className="font-mono text-blue-700 font-bold">{ledgerAccount.code}</span>
         <span className="text-slate-600 text-xs">{ledgerAccount.name}</span>
@@ -147,20 +174,20 @@ function AppContent() {
       <div className="flex items-center gap-2 text-sm">
         <span className="font-bold text-slate-700">حساباتي</span>
         <span className="text-slate-300">ERP v2.0 /</span>
-        <span className="text-slate-800 font-medium">{PAGE_LABELS[page]||page}</span>
+        <span className="text-slate-800 font-medium">{PAGE_LABELS[page] || page}</span>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Sidebar activePage={page} onNavigate={navigate} collapsed={collapsed} onToggle={()=>setCollapsed(p=>!p)}/>
-      <main className="min-h-screen transition-all duration-300" style={{marginRight:sideWidth}}>
+      <Sidebar activePage={page} onNavigate={navigate} collapsed={collapsed} onToggle={() => setCollapsed(p => !p)}/>
+      <main className="min-h-screen transition-all duration-300" style={{ marginRight: sideWidth }}>
         <header className="bg-white border-b border-slate-100 sticky top-0 z-20 px-6 py-3 flex items-center justify-between">
           {getBreadcrumb()}
           <div className="flex items-center gap-3">
-            {page==='ledger'&&ledgerAccount.code&&(
-              <button onClick={()=>navigate('trialbal')}
+            {page === 'ledger' && ledgerAccount.code && (
+              <button onClick={() => navigate('trialbal')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">
                 ← ميزان المراجعة
               </button>
@@ -172,7 +199,13 @@ function AppContent() {
             </div>
           </div>
         </header>
-        <div className="p-6" key={page}>{renderPage()}</div>
+
+        {/* Suspense يلتقط كل صفحة lazy */}
+        <div className="p-6" key={page}>
+          <Suspense fallback={<PageLoader/>}>
+            {renderPage()}
+          </Suspense>
+        </div>
       </main>
       <ToastProvider/>
     </div>
