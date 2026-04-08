@@ -221,6 +221,14 @@ export const api = {
     delete: (id)   => del(`/accounting/tax-types/${id}`),
   },
 
+  // ✅ سجل النشاط والتدقيق
+  audit: {
+    activities:   (p={})         => get('/audit/activities', p),
+    usersSummary: (date)         => get('/audit/users-summary', date ? {target_date:date} : {}),
+    userDetail:   (email, p={})  => get(`/audit/user/${encodeURIComponent(email)}`, p),
+    stats:        (p={})         => get('/audit/stats', p),
+  },
+
   // ✅ العملات وأسعار الصرف
   currency: {
     list:         (p={})    => get('/settings/currencies', p),

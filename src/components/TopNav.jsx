@@ -153,6 +153,7 @@ const NAV_CONFIG = [
         items: [
           { id:'users',             icon:'👥', label:'إدارة المستخدمين',  sub:'User Management' },
           { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات', sub:'Roles & Permissions' },
+          { id:'audit_trail',       icon:'🔍', label:'سجل النشاط والتدقيق', sub:'Audit Trail' },
         ]
       },
       {
