@@ -4,33 +4,41 @@ import SlideOver, { SlideOverFooter } from '../components/SlideOver'
 import api from '../api/client'
 
 const STATUS_CONFIG = {
-  open:   { label: 'مفتوحة',  color: 'bg-emerald-100 text-emerald-700', icon: '🟢' },
-  closed: { label: 'مغلقة',   color: 'bg-red-100 text-red-700',         icon: '🔴' },
+  open:   { label: 'مفتوحة', color: 'bg-emerald-100 text-emerald-700', icon: '🟢' },
+  closed: { label: 'مغلقة',  color: 'bg-red-100 text-red-700',         icon: '🔴' },
 }
 
 const MONTHS_AR = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو',
                     'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 
+function fmtNum(n) {
+  return Number(n||0).toLocaleString('en',{minimumFractionDigits:3,maximumFractionDigits:3})
+}
+
 export default function FiscalPeriodsPage() {
-  const [years,      setYears]      = useState([])
-  const [selected,   setSelected]   = useState(null)
-  const [periods,    setPeriods]     = useState([])
-  const [loading,    setLoading]     = useState(true)
-  const [showNew,    setShowNew]     = useState(false)
-  const [auditPeriod,setAuditPeriod] = useState(null)
-  const [auditLog,   setAuditLog]    = useState([])
-  const [reopenItem, setReopenItem]  = useState(null)
-  const [reopenNote, setReopenNote]  = useState('')
+  const [years,         setYears]         = useState([])
+  const [selected,      setSelected]      = useState(null)
+  const [periods,       setPeriods]       = useState([])
+  const [loading,       setLoading]       = useState(true)
+  const [showNew,       setShowNew]       = useState(false)
+  const [auditPeriod,   setAuditPeriod]   = useState(null)
+  const [auditLog,      setAuditLog]      = useState([])
+  const [reopenItem,    setReopenItem]    = useState(null)
+  const [reopenNote,    setReopenNote]    = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+
+  // ── Pre-close modal state ──────────────────
+  const [closeModal,    setCloseModal]    = useState(null) // { period, check }
+  const [closeAllModal, setCloseAllModal] = useState(false)
+  const [closeNotes,    setCloseNotes]    = useState('')
+  const [checkLoading,  setCheckLoading]  = useState(false)
 
   const loadYears = async () => {
     setLoading(true)
     try {
       const d = await api.fiscal.listYears()
       setYears(d?.data || [])
-      if (!selected && d?.data?.length > 0) {
-        setSelected(d.data[0])
-      }
+      if (!selected && d?.data?.length > 0) setSelected(d.data[0])
     } catch (e) { toast(e.message, 'error') }
     finally { setLoading(false) }
   }
@@ -46,17 +54,46 @@ export default function FiscalPeriodsPage() {
   useEffect(() => { loadYears() }, [])
   useEffect(() => { if (selected) loadPeriods(selected) }, [selected])
 
-  const handleClose = async (period) => {
-    if (!confirm(`هل تريد إغلاق الفترة "${period.period_name}"؟\nلن يمكن الترحيل عليها بعد الإغلاق.`)) return
+  // ── Pre-close check ────────────────────────
+  const handleCloseClick = async (period) => {
+    setCheckLoading(true)
+    try {
+      const d = await api.fiscal.preCloseCheck(period.id)
+      setCloseModal({ period, check: d?.data })
+      setCloseNotes('')
+    } catch (e) { toast(e.message, 'error') }
+    finally { setCheckLoading(false) }
+  }
+
+  // ── Confirm close period ───────────────────
+  const handleConfirmClose = async () => {
+    if (!closeModal) return
     setActionLoading(true)
     try {
-      await api.fiscal.closePeriod(period.id, {})
-      toast(`تم إغلاق ${period.period_name}`, 'success')
+      await api.fiscal.closePeriod(closeModal.period.id, { notes: closeNotes })
+      toast(`تم إغلاق ${closeModal.period.period_name}`, 'success')
+      setCloseModal(null)
       loadPeriods(selected)
+      loadYears()
     } catch (e) { toast(e.message, 'error') }
     finally { setActionLoading(false) }
   }
 
+  // ── Close all periods ──────────────────────
+  const handleCloseAll = async () => {
+    setActionLoading(true)
+    try {
+      await api.fiscal.closeAllPeriods(selected.id, { notes: closeNotes })
+      toast('تم إغلاق كل فترات السنة المالية', 'success')
+      setCloseAllModal(false)
+      setCloseNotes('')
+      loadPeriods(selected)
+      loadYears()
+    } catch (e) { toast(e.message, 'error') }
+    finally { setActionLoading(false) }
+  }
+
+  // ── Reopen period ──────────────────────────
   const handleReopen = async () => {
     if (!reopenNote.trim()) { toast('يجب إدخال سبب إعادة الفتح', 'error'); return }
     setActionLoading(true)
@@ -65,6 +102,7 @@ export default function FiscalPeriodsPage() {
       toast(`تم إعادة فتح ${reopenItem.period_name}`, 'success')
       setReopenItem(null); setReopenNote('')
       loadPeriods(selected)
+      loadYears()
     } catch (e) { toast(e.message, 'error') }
     finally { setActionLoading(false) }
   }
@@ -77,7 +115,6 @@ export default function FiscalPeriodsPage() {
     } catch {}
   }
 
-  // إحصائيات السنة المختارة
   const stats = {
     total:  periods.length,
     open:   periods.filter(p => p.status === 'open').length,
@@ -85,15 +122,25 @@ export default function FiscalPeriodsPage() {
     adj:    periods.filter(p => p.is_adjustment_period).length,
   }
 
+  const hasOpenPeriods = periods.some(p => p.status === 'open')
+
   return (
-    <div className="page-enter space-y-5">
+    <div className="page-enter space-y-5" dir="rtl">
       <PageHeader
         title="الفترات المالية"
         subtitle="إدارة السنوات والفترات المالية والتحكم بالإغلاق"
         actions={
-          <button onClick={() => setShowNew(true)} className="btn-primary">
-            + سنة مالية جديدة
-          </button>
+          <div className="flex gap-2">
+            {selected && hasOpenPeriods && (
+              <button onClick={() => { setCloseAllModal(true); setCloseNotes('') }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700">
+                🔒 إغلاق السنة كاملة
+              </button>
+            )}
+            <button onClick={() => setShowNew(true)} className="btn-primary">
+              + سنة مالية جديدة
+            </button>
+          </div>
         }
       />
 
@@ -101,8 +148,7 @@ export default function FiscalPeriodsPage() {
         {/* ── قائمة السنوات ── */}
         <div className="col-span-3">
           <div className="card p-0 overflow-hidden">
-            <div className="px-4 py-3 border-b text-xs font-bold text-slate-500 uppercase tracking-wide"
-              style={{background:'#f8fafc'}}>
+            <div className="px-4 py-3 border-b text-xs font-bold text-slate-500 uppercase tracking-wide bg-slate-50">
               السنوات المالية
             </div>
             {loading ? (
@@ -113,10 +159,9 @@ export default function FiscalPeriodsPage() {
                 لا توجد سنوات مالية
               </div>
             ) : years.map(fy => (
-              <div key={fy.id}
-                onClick={() => setSelected(fy)}
+              <div key={fy.id} onClick={() => setSelected(fy)}
                 className={`px-4 py-3 cursor-pointer border-b border-slate-50 hover:bg-blue-50 transition-colors
-                  ${selected?.id === fy.id ? 'bg-primary-50 border-r-4 border-r-primary-500' : ''}`}>
+                  ${selected?.id === fy.id ? 'bg-blue-50 border-r-4 border-r-blue-500' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold text-slate-800">{fy.year_name}</div>
@@ -145,10 +190,10 @@ export default function FiscalPeriodsPage() {
               {/* إحصائيات */}
               <div className="grid grid-cols-4 gap-3">
                 {[
-                  { label: 'إجمالي الفترات', value: stats.total, color: 'text-slate-700', bg: 'bg-slate-50' },
-                  { label: 'مفتوحة', value: stats.open, color: 'text-emerald-700', bg: 'bg-emerald-50' },
-                  { label: 'مغلقة', value: stats.closed, color: 'text-red-700', bg: 'bg-red-50' },
-                  { label: 'فترة تسوية', value: stats.adj, color: 'text-amber-700', bg: 'bg-amber-50' },
+                  { label: 'إجمالي الفترات', value: stats.total,  color: 'text-slate-700',   bg: 'bg-slate-50' },
+                  { label: 'مفتوحة',         value: stats.open,   color: 'text-emerald-700', bg: 'bg-emerald-50' },
+                  { label: 'مغلقة',          value: stats.closed, color: 'text-red-700',     bg: 'bg-red-50' },
+                  { label: 'فترة تسوية',     value: stats.adj,    color: 'text-amber-700',   bg: 'bg-amber-50' },
                 ].map(s => (
                   <div key={s.label} className={`card ${s.bg} text-center py-3`}>
                     <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
@@ -180,7 +225,7 @@ export default function FiscalPeriodsPage() {
                       <div className="col-span-3 px-3 py-3">
                         <div className="text-sm font-medium text-slate-800">{p.period_name_ar}</div>
                         {p.is_adjustment_period && (
-                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">فترة تسوية</span>
+                          <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">تسوية</span>
                         )}
                       </div>
                       <div className="col-span-2 px-3 py-3 text-sm text-slate-600 font-mono">{p.start_date}</div>
@@ -195,21 +240,20 @@ export default function FiscalPeriodsPage() {
                       </div>
                       <div className="col-span-2 px-3 py-3">
                         <div className="flex items-center justify-center gap-1">
-                          {/* زر الإغلاق */}
                           {p.status === 'open' && (
-                            <button onClick={() => handleClose(p)} disabled={actionLoading}
+                            <button
+                              onClick={() => handleCloseClick(p)}
+                              disabled={actionLoading || checkLoading}
                               className="text-xs px-2 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50">
-                              🔒 إغلاق
+                              {checkLoading ? '⏳' : '🔒'} إغلاق
                             </button>
                           )}
-                          {/* زر إعادة الفتح */}
                           {p.status === 'closed' && (
                             <button onClick={() => setReopenItem(p)}
                               className="text-xs px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
                               🔓 فتح
                             </button>
                           )}
-                          {/* زر السجل */}
                           <button onClick={() => handleViewAudit(p)}
                             className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">
                             📋
@@ -224,6 +268,140 @@ export default function FiscalPeriodsPage() {
           )}
         </div>
       </div>
+
+      {/* ══════════════════════════════════════
+          Modal: Pre-Close Check
+      ══════════════════════════════════════ */}
+      {closeModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl w-[520px] overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 text-white font-bold flex items-center gap-2" style={{background:'#1e3a5f'}}>
+              🔒 تأكيد إغلاق الفترة
+              <span className="text-blue-200 font-normal text-sm mr-1">— {closeModal.check.period_name}</span>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* إحصائيات الفترة */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-emerald-700">{closeModal.check.posted_count}</div>
+                  <div className="text-xs text-slate-500 mt-1">قيد مرحَّل</div>
+                </div>
+                <div className={`rounded-xl p-3 text-center ${closeModal.check.draft_count > 0 ? 'bg-red-50' : 'bg-slate-50'}`}>
+                  <div className={`text-2xl font-bold ${closeModal.check.draft_count > 0 ? 'text-red-700' : 'text-slate-400'}`}>
+                    {closeModal.check.draft_count}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">مسودة</div>
+                </div>
+                <div className={`rounded-xl p-3 text-center ${closeModal.check.pending_count > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                  <div className={`text-2xl font-bold ${closeModal.check.pending_count > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
+                    {closeModal.check.pending_count}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">في الانتظار</div>
+                </div>
+              </div>
+
+              {/* إجماليات */}
+              <div className="bg-slate-50 rounded-xl p-3 grid grid-cols-2 gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">إجمالي المدين</span>
+                  <span className="font-mono font-bold text-slate-700">{fmtNum(closeModal.check.total_debit)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">إجمالي الدائن</span>
+                  <span className="font-mono font-bold text-slate-700">{fmtNum(closeModal.check.total_credit)}</span>
+                </div>
+                <div className="col-span-2 flex justify-between border-t border-slate-200 pt-2 mt-1">
+                  <span className="text-slate-500">التوازن</span>
+                  <span className={`font-bold ${closeModal.check.is_balanced ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {closeModal.check.is_balanced ? '✅ متوازن' : '❌ غير متوازن'}
+                  </span>
+                </div>
+              </div>
+
+              {/* تحذيرات */}
+              {closeModal.check.warnings.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-1">
+                  {closeModal.check.warnings.map((w, i) => (
+                    <div key={i} className="text-sm text-red-700">⚠️ {w}</div>
+                  ))}
+                </div>
+              )}
+
+              {/* يمكن الإغلاق */}
+              {closeModal.check.can_close && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-700">
+                  ✅ الفترة جاهزة للإغلاق — لا توجد قيود معلقة
+                </div>
+              )}
+
+              {/* ملاحظات */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">ملاحظات الإغلاق (اختياري)</label>
+                <input type="text" value={closeNotes} onChange={e => setCloseNotes(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="مثال: إغلاق نهاية الشهر..."/>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t flex justify-between items-center">
+              <button onClick={() => setCloseModal(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-white">
+                إلغاء
+              </button>
+              <button
+                onClick={handleConfirmClose}
+                disabled={actionLoading || !closeModal.check.can_close}
+                className={`px-5 py-2 rounded-xl text-white text-sm font-medium
+                  ${closeModal.check.can_close
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-slate-300 cursor-not-allowed'}`}>
+                {actionLoading ? '⏳ جارٍ الإغلاق...' : '🔒 تأكيد الإغلاق'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
+          Modal: Close All
+      ══════════════════════════════════════ */}
+      {closeAllModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl w-[460px] overflow-hidden">
+            <div className="px-6 py-4 text-white font-bold" style={{background:'#1e3a5f'}}>
+              🔒 إغلاق السنة المالية كاملة
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <div className="text-sm font-bold text-red-700 mb-1">⚠️ تحذير</div>
+                <div className="text-sm text-red-600">
+                  سيتم إغلاق <strong>{stats.open} فترة مفتوحة</strong> في {selected?.year_name}.
+                  لن يمكن الترحيل عليها بعد الإغلاق.
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">ملاحظات (اختياري)</label>
+                <input type="text" value={closeNotes} onChange={e => setCloseNotes(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="مثال: إغلاق السنة المالية 2024..."/>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t flex justify-between">
+              <button onClick={() => setCloseAllModal(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-white">
+                إلغاء
+              </button>
+              <button onClick={handleCloseAll} disabled={actionLoading}
+                className="px-5 py-2 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                {actionLoading ? '⏳ جارٍ الإغلاق...' : `🔒 إغلاق ${stats.open} فترة`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── إنشاء سنة مالية ── */}
       {showNew && (
@@ -295,10 +473,9 @@ function NewFiscalYearSlideOver({ onClose, onSaved }) {
     has_adjustment_period: false,
   })
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [error,  setError]  = useState('')
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  // حساب تواريخ السنة للمعاينة
   const endMonth = form.start_month === 1 ? 12 : form.start_month - 1
   const endYear  = form.start_month === 1 ? form.start_year : form.start_year + 1
 
@@ -329,18 +506,17 @@ function NewFiscalYearSlideOver({ onClose, onSaved }) {
             <select className="select" value={form.start_month}
               onChange={e => set('start_month', parseInt(e.target.value))}>
               {Array.from({length:12},(_,i)=>i+1).map(m => (
-                <option key={m} value={m}>{m} — {['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][m]}</option>
+                <option key={m} value={m}>{m} — {MONTHS_AR[m]}</option>
               ))}
             </select>
           </Field>
         </div>
 
-        {/* معاينة */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <div className="text-xs font-semibold text-blue-700 mb-2">📅 معاينة السنة المالية</div>
           <div className="text-sm text-blue-800">
-            من <strong>{['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][form.start_month]} {form.start_year}</strong>
-            {' '}إلى <strong>{['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][endMonth]} {endYear}</strong>
+            من <strong>{MONTHS_AR[form.start_month]} {form.start_year}</strong>
+            {' '}إلى <strong>{MONTHS_AR[endMonth]} {endYear}</strong>
           </div>
           <div className="text-xs text-blue-600 mt-1">
             سيتم توليد {form.has_adjustment_period ? 13 : 12} فترة تلقائياً

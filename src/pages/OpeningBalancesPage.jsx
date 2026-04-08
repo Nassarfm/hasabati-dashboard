@@ -3,9 +3,7 @@
  * صفحة الأرصدة الافتتاحية — حساباتي ERP
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-
-const API = 'https://hasabati-erp-production.up.railway.app/api/v1'
-const TENANT = '00000000-0000-0000-0000-000000000001'
+import api from '../api/client'
 
 const ACCOUNT_TYPE_LABELS = {
   asset:     'أصول',
@@ -24,28 +22,28 @@ const ACCOUNT_TYPE_COLORS = {
 }
 
 function fmt(n) {
-  if (n === 0 || n === '0' || n === null || n === undefined) return ''
+  if (!n || n === 0) return ''
   return Number(n).toLocaleString('en', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
-
 function fmtNum(n) {
   return Number(n || 0).toLocaleString('en', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
 export default function OpeningBalancesPage() {
   const currentYear = new Date().getFullYear()
-  const [fiscalYear,    setFiscalYear]    = useState(currentYear)
-  const [data,          setData]          = useState(null)
-  const [loading,       setLoading]       = useState(false)
-  const [saving,        setSaving]        = useState(false)
-  const [posting,       setPosting]       = useState(false)
-  const [search,        setSearch]        = useState('')
-  const [typeFilter,    setTypeFilter]    = useState('all')
-  const [showNonZero,   setShowNonZero]   = useState(false)
-  const [editedLines,   setEditedLines]   = useState({}) // { account_code: { debit, credit, notes } }
-  const [toast,         setToast]         = useState(null)
-  const [confirmModal,  setConfirmModal]  = useState(null) // { type: 'post'|'unpost' }
-  const [isDirty,       setIsDirty]       = useState(false)
+  const [fiscalYear,   setFiscalYear]   = useState(currentYear)
+  const [data,         setData]         = useState(null)
+  const [loading,      setLoading]      = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [posting,      setPosting]      = useState(false)
+  const [search,       setSearch]       = useState('')
+  const [typeFilter,   setTypeFilter]   = useState('all')
+  const [showNonZero,  setShowNonZero]  = useState(false)
+  const [editedLines,  setEditedLines]  = useState({})
+  const [toast,        setToast]        = useState(null)
+  const [confirmModal, setConfirmModal] = useState(null)
+  const [isDirty,      setIsDirty]      = useState(false)
+  const fileRef = useRef()
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
@@ -56,15 +54,12 @@ export default function OpeningBalancesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API}/opening-balances?fiscal_year=${fiscalYear}`, {
-        headers: { 'X-Tenant-ID': TENANT }
-      })
-      const json = await res.json()
-      setData(json)
+      const d = await api.openingBalances.list(fiscalYear)
+      setData(d?.data || d)
       setEditedLines({})
       setIsDirty(false)
-    } catch {
-      showToast('خطأ في تحميل البيانات', 'error')
+    } catch (e) {
+      showToast(e.message || 'خطأ في تحميل البيانات', 'error')
     } finally {
       setLoading(false)
     }
@@ -75,16 +70,12 @@ export default function OpeningBalancesPage() {
   // ── Edit cell ──────────────────────────────────────────
   const handleEdit = (code, field, value) => {
     const num = parseFloat(value) || 0
-    setEditedLines(prev => ({
-      ...prev,
-      [code]: { ...(prev[code] || {}), [field]: num }
-    }))
+    setEditedLines(prev => ({ ...prev, [code]: { ...(prev[code] || {}), [field]: num } }))
     setIsDirty(true)
   }
 
-  // ── Merge lines with edits ─────────────────────────────
   const getMergedLines = () => {
-    if (!data) return []
+    if (!data?.lines) return []
     return data.lines.map(l => ({
       ...l,
       debit:  editedLines[l.account_code]?.debit  ?? l.debit,
@@ -93,7 +84,6 @@ export default function OpeningBalancesPage() {
     }))
   }
 
-  // ── Filter lines ───────────────────────────────────────
   const getFilteredLines = () => {
     return getMergedLines().filter(l => {
       if (typeFilter !== 'all' && l.account_type !== typeFilter) return false
@@ -106,7 +96,6 @@ export default function OpeningBalancesPage() {
     })
   }
 
-  // ── Totals ─────────────────────────────────────────────
   const getTotals = () => {
     const merged = getMergedLines()
     const td = merged.reduce((s, l) => s + (l.debit  || 0), 0)
@@ -119,16 +108,9 @@ export default function OpeningBalancesPage() {
     if (!isDirty) return showToast('لا توجد تغييرات للحفظ', 'info')
     setSaving(true)
     try {
-      const merged = getMergedLines()
-      const nonZero = merged.filter(l => l.debit > 0 || l.credit > 0)
-      const res = await fetch(`${API}/opening-balances/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT },
-        body: JSON.stringify({ fiscal_year: fiscalYear, lines: nonZero }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.detail || 'خطأ في الحفظ')
-      showToast(json.message)
+      const nonZero = getMergedLines().filter(l => l.debit > 0 || l.credit > 0)
+      const res = await api.openingBalances.batch({ fiscal_year: fiscalYear, lines: nonZero })
+      showToast(res?.message || res?.data?.message || 'تم الحفظ بنجاح')
       await load()
     } catch (e) {
       showToast(e.message, 'error')
@@ -142,17 +124,9 @@ export default function OpeningBalancesPage() {
     setConfirmModal(null)
     setPosting(true)
     try {
-      // حفظ أولاً إذا كان هناك تغييرات
       if (isDirty) await handleSave()
-
-      const res = await fetch(`${API}/opening-balances/post`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT },
-        body: JSON.stringify({ fiscal_year: fiscalYear }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.detail || 'خطأ في الترحيل')
-      showToast(json.message)
+      const res = await api.openingBalances.post(fiscalYear)
+      showToast(res?.message || res?.data?.message || 'تم الترحيل بنجاح')
       await load()
     } catch (e) {
       showToast(e.message, 'error')
@@ -166,14 +140,8 @@ export default function OpeningBalancesPage() {
     setConfirmModal(null)
     setPosting(true)
     try {
-      const res = await fetch(`${API}/opening-balances/unpost`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT },
-        body: JSON.stringify({ fiscal_year: fiscalYear }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.detail || 'خطأ في إلغاء الترحيل')
-      showToast(json.message)
+      const res = await api.openingBalances.unpost(fiscalYear)
+      showToast(res?.message || res?.data?.message || 'تم إلغاء الترحيل')
       await load()
     } catch (e) {
       showToast(e.message, 'error')
@@ -197,9 +165,9 @@ export default function OpeningBalancesPage() {
           const code = String(row['رمز الحساب'] || row['account_code'] || '').trim()
           if (!code) return
           newEdits[code] = {
-            debit:  parseFloat(row['مدين'] || row['debit']  || 0),
-            credit: parseFloat(row['دائن'] || row['credit'] || 0),
-            notes:  String(row['ملاحظات'] || row['notes'] || ''),
+            debit:  parseFloat(row['مدين']    || row['debit']  || 0),
+            credit: parseFloat(row['دائن']    || row['credit'] || 0),
+            notes:  String(row['ملاحظات']     || row['notes']  || ''),
           }
         })
         setEditedLines(prev => ({ ...prev, ...newEdits }))
@@ -215,14 +183,13 @@ export default function OpeningBalancesPage() {
 
   // ── Export Excel ───────────────────────────────────────
   const handleExportExcel = () => {
-    const merged = getMergedLines()
-    const rows = merged.map(l => ({
-      'رمز الحساب':  l.account_code,
-      'اسم الحساب':  l.account_name,
-      'نوع الحساب':  ACCOUNT_TYPE_LABELS[l.account_type] || l.account_type,
-      'مدين':         l.debit  || 0,
-      'دائن':         l.credit || 0,
-      'ملاحظات':      l.notes  || '',
+    const rows = getMergedLines().map(l => ({
+      'رمز الحساب': l.account_code,
+      'اسم الحساب': l.account_name,
+      'نوع الحساب': ACCOUNT_TYPE_LABELS[l.account_type] || l.account_type,
+      'مدين':        l.debit  || 0,
+      'دائن':        l.credit || 0,
+      'ملاحظات':     l.notes  || '',
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
@@ -230,10 +197,9 @@ export default function OpeningBalancesPage() {
     XLSX.writeFile(wb, `opening_balances_${fiscalYear}.xlsx`)
   }
 
-  const isPosted   = data?.status === 'posted'
-  const totals     = getTotals()
-  const filtered   = getFilteredLines()
-  const fileRef    = useRef()
+  const isPosted = data?.status === 'posted'
+  const totals   = getTotals()
+  const filtered = getFilteredLines()
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -242,8 +208,7 @@ export default function OpeningBalancesPage() {
       {toast && (
         <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium
           ${toast.type === 'error' ? 'bg-red-500 text-white' :
-            toast.type === 'info'  ? 'bg-blue-500 text-white' :
-            'bg-emerald-500 text-white'}`}>
+            toast.type === 'info'  ? 'bg-blue-500 text-white' : 'bg-emerald-500 text-white'}`}>
           {toast.msg}
         </div>
       )}
@@ -258,9 +223,8 @@ export default function OpeningBalancesPage() {
             </h3>
             <p className="text-sm text-slate-500 mb-5">
               {confirmModal.type === 'post'
-                ? `سيتم ترحيل الأرصدة الافتتاحية لسنة ${fiscalYear} إلى دفتر الأستاذ. هذا الإجراء لا يمكن التراجع عنه إلا بإلغاء الترحيل.`
-                : `سيتم حذف الأرصدة الافتتاحية لسنة ${fiscalYear} من دفتر الأستاذ. يمكنك إعادة الترحيل بعد التعديل.`
-              }
+                ? `سيتم ترحيل الأرصدة الافتتاحية لسنة ${fiscalYear} إلى دفتر الأستاذ.`
+                : `سيتم حذف الأرصدة الافتتاحية لسنة ${fiscalYear} من دفتر الأستاذ.`}
             </p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmModal(null)}
@@ -285,19 +249,14 @@ export default function OpeningBalancesPage() {
             <h1 className="text-xl font-bold text-slate-800">الأرصدة الافتتاحية</h1>
             <p className="text-sm text-slate-400 mt-0.5">إدخال وترحيل أرصدة بداية السنة المالية</p>
           </div>
-
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Year Selector */}
-            <select
-              value={fiscalYear}
-              onChange={e => setFiscalYear(Number(e.target.value))}
-              className="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(y => (
+            <select value={fiscalYear} onChange={e => setFiscalYear(Number(e.target.value))}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              {[currentYear-2, currentYear-1, currentYear, currentYear+1].map(y => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
 
-            {/* Status Badge */}
             {data && (
               <span className={`px-3 py-1.5 rounded-xl text-xs font-bold
                 ${isPosted ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -305,7 +264,6 @@ export default function OpeningBalancesPage() {
               </span>
             )}
 
-            {/* Import Excel */}
             {!isPosted && (
               <>
                 <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportExcel}/>
@@ -316,13 +274,11 @@ export default function OpeningBalancesPage() {
               </>
             )}
 
-            {/* Export Excel */}
             <button onClick={handleExportExcel}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">
               📤 تصدير Excel
             </button>
 
-            {/* Save */}
             {!isPosted && (
               <button onClick={handleSave} disabled={saving || !isDirty}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white
@@ -331,7 +287,6 @@ export default function OpeningBalancesPage() {
               </button>
             )}
 
-            {/* Post / Unpost */}
             {!isPosted ? (
               <button onClick={() => setConfirmModal({ type: 'post' })} disabled={posting}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700">
@@ -351,12 +306,12 @@ export default function OpeningBalancesPage() {
       {data && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'إجمالي المدين',   value: fmtNum(totals.td),   color: 'blue'   },
-            { label: 'إجمالي الدائن',   value: fmtNum(totals.tc),   color: 'purple' },
-            { label: 'الفرق',           value: fmtNum(Math.abs(totals.diff)),
-              color: totals.balanced ? 'emerald' : 'red'                              },
-            { label: 'حالة التوازن',    value: totals.balanced ? 'متوازن ✅' : 'غير متوازن ❌',
-              color: totals.balanced ? 'emerald' : 'red'                              },
+            { label: 'إجمالي المدين',  value: fmtNum(totals.td), color: 'blue'    },
+            { label: 'إجمالي الدائن',  value: fmtNum(totals.tc), color: 'purple'  },
+            { label: 'الفرق',          value: fmtNum(Math.abs(totals.diff)),
+              color: totals.balanced ? 'emerald' : 'red' },
+            { label: 'حالة التوازن',   value: totals.balanced ? 'متوازن ✅' : 'غير متوازن ❌',
+              color: totals.balanced ? 'emerald' : 'red' },
           ].map((c, i) => (
             <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4">
               <div className={`text-xs text-${c.color}-600 font-medium mb-1`}>{c.label}</div>
@@ -368,11 +323,9 @@ export default function OpeningBalancesPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-center">
-        <input
-          type="text" placeholder="بحث بالرمز أو الاسم..." value={search}
+        <input type="text" placeholder="بحث بالرمز أو الاسم..." value={search}
           onChange={e => setSearch(e.target.value)}
           className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"/>
-
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
           className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="all">كل الأنواع</option>
@@ -380,16 +333,11 @@ export default function OpeningBalancesPage() {
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
-
         <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-          <input type="checkbox" checked={showNonZero} onChange={e => setShowNonZero(e.target.checked)}
-            className="rounded"/>
+          <input type="checkbox" checked={showNonZero} onChange={e => setShowNonZero(e.target.checked)} className="rounded"/>
           الحسابات ذات الرصيد فقط
         </label>
-
-        <span className="text-xs text-slate-400 mr-auto">
-          {filtered.length} حساب
-        </span>
+        <span className="text-xs text-slate-400 mr-auto">{filtered.length} حساب</span>
       </div>
 
       {/* Table */}
@@ -418,14 +366,10 @@ export default function OpeningBalancesPage() {
                   const isEdited = !!edited
                   const dr = edited?.debit  ?? line.debit
                   const cr = edited?.credit ?? line.credit
-
                   return (
                     <tr key={line.account_code}
-                      className={`border-b border-slate-50 hover:bg-slate-50 transition-colors
-                        ${isEdited ? 'bg-blue-50/40' : ''}`}>
-                      <td className="px-4 py-2.5 font-mono text-blue-700 font-bold text-xs">
-                        {line.account_code}
-                      </td>
+                      className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${isEdited ? 'bg-blue-50/40' : ''}`}>
+                      <td className="px-4 py-2.5 font-mono text-blue-700 font-bold text-xs">{line.account_code}</td>
                       <td className="px-4 py-2.5 text-slate-700">{line.account_name}</td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ACCOUNT_TYPE_COLORS[line.account_type] || 'bg-slate-100 text-slate-600'}`}>
@@ -436,12 +380,10 @@ export default function OpeningBalancesPage() {
                         {isPosted ? (
                           <span className="font-mono text-slate-700">{fmt(dr)}</span>
                         ) : (
-                          <input
-                            type="number" min="0" step="0.001"
-                            value={dr || ''}
+                          <input type="number" min="0" step="0.001" value={dr || ''}
                             onChange={e => handleEdit(line.account_code, 'debit', e.target.value)}
                             onFocus={e => e.target.select()}
-                            className="w-full text-center font-mono border border-slate-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                            className="w-full text-center font-mono border border-slate-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                             placeholder="0.000"/>
                         )}
                       </td>
@@ -449,12 +391,10 @@ export default function OpeningBalancesPage() {
                         {isPosted ? (
                           <span className="font-mono text-slate-700">{fmt(cr)}</span>
                         ) : (
-                          <input
-                            type="number" min="0" step="0.001"
-                            value={cr || ''}
+                          <input type="number" min="0" step="0.001" value={cr || ''}
                             onChange={e => handleEdit(line.account_code, 'credit', e.target.value)}
                             onFocus={e => e.target.select()}
-                            className="w-full text-center font-mono border border-slate-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                            className="w-full text-center font-mono border border-slate-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                             placeholder="0.000"/>
                         )}
                       </td>
@@ -462,9 +402,7 @@ export default function OpeningBalancesPage() {
                         {isPosted ? (
                           <span className="text-xs text-slate-400">{line.notes}</span>
                         ) : (
-                          <input
-                            type="text"
-                            value={edited?.notes ?? line.notes ?? ''}
+                          <input type="text" value={edited?.notes ?? line.notes ?? ''}
                             onChange={e => handleEdit(line.account_code, 'notes', e.target.value)}
                             className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
                             placeholder="ملاحظة اختيارية"/>
@@ -473,7 +411,6 @@ export default function OpeningBalancesPage() {
                     </tr>
                   )
                 })}
-
                 {/* Total Row */}
                 <tr className="bg-slate-800 text-white font-bold">
                   <td className="px-4 py-3 text-xs" colSpan={3}>الإجمالي</td>
@@ -482,17 +419,13 @@ export default function OpeningBalancesPage() {
                   <td className="px-4 py-3 text-center text-xs">
                     {totals.balanced
                       ? <span className="text-emerald-300">متوازن ✅</span>
-                      : <span className="text-red-300">فرق: {fmtNum(Math.abs(totals.diff))}</span>
-                    }
+                      : <span className="text-red-300">فرق: {fmtNum(Math.abs(totals.diff))}</span>}
                   </td>
                 </tr>
               </tbody>
             </table>
-
             {filtered.length === 0 && !loading && (
-              <div className="text-center py-12 text-slate-400 text-sm">
-                لا توجد نتائج للعرض
-              </div>
+              <div className="text-center py-12 text-slate-400 text-sm">لا توجد نتائج للعرض</div>
             )}
           </div>
         )}
