@@ -134,7 +134,7 @@ const NAV_CONFIG = [
         items: [
           { id:'company_settings', icon:'🏢', label:'إعدادات الشركة',       sub:'Company Settings' },
           { id:'company_settings', icon:'🌍', label:'الإقليمية والتوطين',   sub:'Localization', subTab:'locale' },
-          { id:'currency_settings',icon:'💱', label:'العملات',              sub:'Multi Currency', badge:'قريباً' },
+          { id:'currency_settings',icon:'💱', label:'العملات',              sub:'Multi Currency' },
         ]
       },
       {
