@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import api from '../api/client'
+import { useAuth } from '../AuthContext'
 
 const TYPE_ICON = {
   pending_review: '📤',
@@ -18,6 +19,7 @@ const TYPE_COLOR = {
 }
 
 export default function NotificationBell({ onNavigate }) {
+  const { user } = useAuth()   // ← guard: لا نطلب API إلا بعد اكتمال Auth
   const [open,          setOpen]          = useState(false)
   const [notifications, setNotifications] = useState([])
   const [unread,        setUnread]        = useState(0)
@@ -41,10 +43,13 @@ export default function NotificationBell({ onNavigate }) {
   }
 
   useEffect(() => {
+    // لا تطلب API إذا لم يكن المستخدم مسجلاً دخوله بعد
+    if (!user) return
+
     loadCount()
     const interval = setInterval(loadCount, 30000) // كل 30 ثانية
     return () => clearInterval(interval)
-  }, [])
+  }, [user]) // ← يعيد التشغيل عند تغيّر حالة المستخدم
 
   useEffect(() => {
     if (open) loadAll()
