@@ -1,146 +1,302 @@
 /**
- * TopNav.jsx — شريط التنقل العلوي لنظام حساباتي ERP
- * تصميم Enterprise: Logo + Mega Menus + User Profile
+ * TopNav.jsx — شريط التنقل العلوي المؤسسي
+ * نمط ERPNext / SAP — Mega Menu منظّم بأقسام
+ *
+ * البنية:
+ *   الرئيسية | المحاسبة ▾ | التقارير ▾ | الإعداد ▾ | الوحدات ▾
+ *             └──────────────────────────────────────┘
+ *              Mega Menu: عمود لكل تصنيف فرعي
  */
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAuth } from '../AuthContext'
 
-// ── تعريف الأقسام والصفحات ─────────────────────────────
-const NAV_SECTIONS = [
+// ══════════════════════════════════════════════════════════
+// بنية التنقل — مُصمَّمة وفق معايير ERP الاحترافية
+// ══════════════════════════════════════════════════════════
+const NAV_CONFIG = [
+  // ─────────────────────────────────────────────────────
+  // 1. المحاسبة — Accounting
+  // ─────────────────────────────────────────────────────
   {
-    id: 'master',
-    label: 'البيانات الأساسية',
-    icon: '🗂️',
-    color: 'blue',
-    items: [
-      { id:'coa',              icon:'📊', label:'دليل الحسابات',       desc:'شجرة الحسابات المحاسبية' },
-      { id:'dimensions',       icon:'🏷️', label:'الأبعاد المحاسبية',   desc:'الأبعاد والتصنيفات' },
-      { id:'opening_balances', icon:'🏦', label:'الأرصدة الافتتاحية',  desc:'أرصدة بداية السنة' },
-      { id:'fiscal',           icon:'📅', label:'الفترات المالية',      desc:'السنوات والفترات والإغلاق' },
-      { id:'branches',         icon:'🏢', label:'الفروع',               desc:'إدارة فروع المنشأة' },
-      { id:'costcenters',      icon:'💰', label:'مراكز التكلفة',        desc:'تقسيمات مراكز التكلفة' },
-      { id:'projects',         icon:'📁', label:'المشاريع',             desc:'متابعة المشاريع' },
+    id:    'accounting',
+    label: 'المحاسبة',
+    icon:  '📊',
+    color: { nav: '#3b82f6', light: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+    columns: [
+      {
+        title: 'أستاذ الحسابات',
+        subtitle: 'Accounting Masters',
+        icon: '📋',
+        items: [
+          { id:'coa',         icon:'📊', label:'دليل الحسابات',      sub:'Chart of Accounts' },
+          { id:'dimensions',  icon:'🏷️', label:'الأبعاد المحاسبية',  sub:'Dimensions' },
+          { id:'branches',    icon:'🏢', label:'الفروع',              sub:'Branches' },
+          { id:'costcenters', icon:'💰', label:'مراكز التكلفة',       sub:'Cost Centers' },
+          { id:'projects',    icon:'📁', label:'المشاريع',            sub:'Projects' },
+        ]
+      },
+      {
+        title: 'دفتر الأستاذ',
+        subtitle: 'General Ledger',
+        icon: '📒',
+        items: [
+          { id:'journal',    icon:'📒', label:'القيود اليومية',   sub:'Journal Entry' },
+          { id:'reversing',  icon:'↩️', label:'القيود العكسية',   sub:'Reverse Entries' },
+          { id:'recurring',  icon:'🔄', label:'القيود المتكررة',  sub:'Recurring Entries' },
+          { id:'allocation', icon:'🔀', label:'قيد التوزيع',      sub:'Allocation Entry' },
+        ]
+      },
+      {
+        title: 'الذمم والخزينة',
+        subtitle: 'AR / AP / Treasury',
+        icon: '💳',
+        items: [
+          { id:'sales',     icon:'🧾', label:'الذمم المدينة',    sub:'Accounts Receivable', badge:'قريباً' },
+          { id:'purchases', icon:'🛒', label:'الذمم الدائنة',    sub:'Accounts Payable',    badge:'قريباً' },
+          { id:'treasury',  icon:'🏦', label:'الخزينة والبنوك',  sub:'Treasury & Banking',  badge:'قريباً' },
+        ]
+      },
+      {
+        title: 'إعدادات المحاسبة',
+        subtitle: 'Accounting Settings',
+        icon: '⚙️',
+        items: [
+          { id:'fiscal',           icon:'📅', label:'السنوات والفترات المالية', sub:'Fiscal Periods' },
+          { id:'opening_balances', icon:'🏦', label:'الأرصدة الافتتاحية',       sub:'Opening Balances' },
+          { id:'vat_settings',     icon:'🧾', label:'إعدادات الضريبة',          sub:'Tax Settings' },
+        ]
+      },
     ]
   },
+
+  // ─────────────────────────────────────────────────────
+  // 2. التقارير — Reports
+  // ─────────────────────────────────────────────────────
   {
-    id: 'transactions',
-    label: 'العمليات',
-    icon: '📝',
-    color: 'emerald',
-    items: [
-      { id:'journal',    icon:'📒', label:'القيود اليومية',   desc:'إدخال وإدارة القيود' },
-      { id:'reversing',  icon:'↩️', label:'القيود العكسية',   desc:'عكس القيود المرحّلة' },
-      { id:'recurring',  icon:'🔄', label:'القيود المتكررة',  desc:'القيود الدورية التلقائية' },
-      { id:'allocation', icon:'🔀', label:'قيد التوزيع',      desc:'توزيع المبالغ على الأبعاد' },
-    ]
-  },
-  {
-    id: 'reports',
+    id:    'reports',
     label: 'التقارير',
-    icon: '📈',
-    color: 'purple',
-    items: [
-      { id:'trialbal',           icon:'⚖️', label:'ميزان المراجعة',     desc:'أرصدة الحسابات' },
-      { id:'ledger',             icon:'📋', label:'الأستاذ العام',       desc:'حركة كل حساب' },
-      { id:'income_report',      icon:'📈', label:'قائمة الدخل',         desc:'الإيرادات والمصاريف' },
-      { id:'balance_report',     icon:'🏛️', label:'الميزانية العمومية',  desc:'الأصول والالتزامات' },
-      { id:'cashflow_report',    icon:'💵', label:'التدفقات النقدية',    desc:'تدفقات الأموال' },
-      { id:'financial_analysis', icon:'📐', label:'التحليل المالي',      desc:'مؤشرات الأداء' },
-      { id:'compare_report',     icon:'🔀', label:'مقارنة الفترات',      desc:'المقارنة الزمنية' },
-      { id:'charts_report',      icon:'📉', label:'الرسوم البيانية',     desc:'تصور بياني للبيانات' },
-      { id:'vat',                icon:'🧮', label:'ضريبة القيمة المضافة', desc:'الإقرار الضريبي ZATCA' },
+    icon:  '📈',
+    color: { nav: '#8b5cf6', light: '#f5f3ff', text: '#6d28d9', border: '#ddd6fe' },
+    columns: [
+      {
+        title: 'القوائم المالية',
+        subtitle: 'Financial Statements',
+        icon: '🏛️',
+        items: [
+          { id:'income_report',   icon:'📈', label:'قائمة الدخل',        sub:'Income Statement' },
+          { id:'balance_report',  icon:'🏛️', label:'الميزانية العمومية', sub:'Balance Sheet' },
+          { id:'cashflow_report', icon:'💵', label:'التدفقات النقدية',   sub:'Cash Flow Statement' },
+        ]
+      },
+      {
+        title: 'الميزان والأستاذ',
+        subtitle: 'Ledger & Trial Balance',
+        icon: '⚖️',
+        items: [
+          { id:'trialbal', icon:'⚖️', label:'ميزان المراجعة', sub:'Trial Balance' },
+          { id:'ledger',   icon:'📋', label:'الأستاذ العام',  sub:'General Ledger' },
+        ]
+      },
+      {
+        title: 'التحليل والمقارنة',
+        subtitle: 'Analysis & Comparison',
+        icon: '📐',
+        items: [
+          { id:'financial_analysis', icon:'📐', label:'التحليل المالي',   sub:'Financial Analysis' },
+          { id:'compare_report',     icon:'🔀', label:'مقارنة الفترات',   sub:'Period Comparison' },
+          { id:'charts_report',      icon:'📉', label:'الرسوم البيانية',  sub:'Charts & Graphs' },
+        ]
+      },
+      {
+        title: 'الضريبة',
+        subtitle: 'Tax Reports',
+        icon: '🧮',
+        items: [
+          { id:'vat', icon:'🧮', label:'ضريبة القيمة المضافة', sub:'VAT Return — ZATCA' },
+        ]
+      },
     ]
   },
+
+  // ─────────────────────────────────────────────────────
+  // 3. الإعداد — Setup
+  // ─────────────────────────────────────────────────────
   {
-    id: 'settings',
-    label: 'الإعدادات',
-    icon: '⚙️',
-    color: 'slate',
-    items: [
-      { id:'company_settings',  icon:'🏢', label:'إعدادات المنشأة',    desc:'البيانات والإقليمية' },
-      { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة',    desc:'أنواع الضريبة والحسابات' },
-      { id:'users',             icon:'👥', label:'إدارة المستخدمين',   desc:'الحسابات والصلاحيات' },
-      { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات', desc:'تحديد صلاحيات الأدوار' },
-      { id:'currency_settings', icon:'💱', label:'العملات',            desc:'إدارة العملات', badge:'قريباً' },
+    id:    'setup',
+    label: 'الإعداد',
+    icon:  '⚙️',
+    color: { nav: '#475569', light: '#f8fafc', text: '#334155', border: '#cbd5e1' },
+    columns: [
+      {
+        title: 'المنشأة والنظام',
+        subtitle: 'Company & System',
+        icon: '🏢',
+        items: [
+          { id:'company_settings', icon:'🏢', label:'إعدادات الشركة',       sub:'Company Settings' },
+          { id:'company_settings', icon:'🌍', label:'الإقليمية والتوطين',   sub:'Localization', subTab:'locale' },
+          { id:'currency_settings',icon:'💱', label:'العملات',              sub:'Multi Currency', badge:'قريباً' },
+        ]
+      },
+      {
+        title: 'الفترات والأرصدة',
+        subtitle: 'Periods & Balances',
+        icon: '📅',
+        items: [
+          { id:'fiscal',           icon:'📅', label:'السنوات المالية والفترات', sub:'Fiscal Years & Periods' },
+          { id:'opening_balances', icon:'🏦', label:'الأرصدة الافتتاحية',        sub:'Opening Balances' },
+        ]
+      },
+      {
+        title: 'المستخدمون والصلاحيات',
+        subtitle: 'Users & Permissions',
+        icon: '👥',
+        items: [
+          { id:'users',             icon:'👥', label:'إدارة المستخدمين',  sub:'User Management' },
+          { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات', sub:'Roles & Permissions' },
+        ]
+      },
+      {
+        title: 'الضريبة',
+        subtitle: 'Tax Configuration',
+        icon: '🧾',
+        items: [
+          { id:'vat_settings', icon:'🧾', label:'إعدادات VAT',          sub:'VAT Settings' },
+          { id:'vat_settings', icon:'📊', label:'أنواع الضريبة',         sub:'Tax Types' },
+        ]
+      },
     ]
   },
+
+  // ─────────────────────────────────────────────────────
+  // 4. الوحدات — Modules (Future)
+  // ─────────────────────────────────────────────────────
   {
-    id: 'modules',
+    id:    'modules',
     label: 'الوحدات',
-    icon: '🏭',
-    color: 'amber',
-    items: [
-      { id:'sales',     icon:'🧾', label:'المبيعات',        desc:'الفواتير والعملاء',  badge:'قريباً' },
-      { id:'purchases', icon:'🛒', label:'المشتريات',       desc:'الموردون والطلبات',  badge:'قريباً' },
-      { id:'inventory', icon:'📦', label:'المخزون',         desc:'المواد والمستودعات', badge:'قريباً' },
-      { id:'hr',        icon:'👥', label:'الموارد البشرية', desc:'الموظفون والرواتب',  badge:'قريباً' },
-      { id:'assets',    icon:'🏗️', label:'الأصول الثابتة', desc:'إدارة الأصول',       badge:'قريباً' },
-      { id:'treasury',  icon:'🏦', label:'الخزينة',         desc:'النقد والتحويلات',   badge:'قريباً' },
+    icon:  '🏭',
+    color: { nav: '#d97706', light: '#fffbeb', text: '#92400e', border: '#fde68a' },
+    columns: [
+      {
+        title: 'الإيرادات والمبيعات',
+        subtitle: 'Revenue & Sales',
+        icon: '🧾',
+        items: [
+          { id:'sales',     icon:'🧾', label:'المبيعات',         sub:'Sales',            badge:'قريباً' },
+          { id:'purchases', icon:'🛒', label:'المشتريات',        sub:'Purchases',         badge:'قريباً' },
+        ]
+      },
+      {
+        title: 'المخزون والأصول',
+        subtitle: 'Stock & Assets',
+        icon: '📦',
+        items: [
+          { id:'inventory', icon:'📦', label:'إدارة المخزون',    sub:'Inventory',         badge:'قريباً' },
+          { id:'assets',    icon:'🏗️', label:'الأصول الثابتة',  sub:'Fixed Assets',      badge:'قريباً' },
+        ]
+      },
+      {
+        title: 'الموارد والخزينة',
+        subtitle: 'HR & Treasury',
+        icon: '👥',
+        items: [
+          { id:'hr',       icon:'👥', label:'الموارد البشرية',  sub:'Human Resources',   badge:'قريباً' },
+          { id:'treasury', icon:'🏦', label:'الخزينة والبنوك',  sub:'Treasury & Banking', badge:'قريباً' },
+        ]
+      },
     ]
   },
 ]
 
-const COLOR_MAP = {
-  blue:    { bg: 'bg-blue-600',    hover: 'hover:bg-blue-700',    light: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
-  emerald: { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700', light: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-  purple:  { bg: 'bg-purple-600',  hover: 'hover:bg-purple-700',  light: 'bg-purple-50',  text: 'text-purple-700',  border: 'border-purple-200' },
-  slate:   { bg: 'bg-slate-600',   hover: 'hover:bg-slate-700',   light: 'bg-slate-50',   text: 'text-slate-700',   border: 'border-slate-200' },
-  amber:   { bg: 'bg-amber-600',   hover: 'hover:bg-amber-700',   light: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
+// ── تحديد القسم النشط من الصفحة الحالية ────────────────
+function getActiveSectionId(activePage) {
+  for (const section of NAV_CONFIG) {
+    for (const col of section.columns) {
+      if (col.items.some(i => i.id === activePage)) return section.id
+    }
+  }
+  return null
 }
 
-// ── Dropdown Mega Menu ────────────────────────────────────
+// ── Mega Menu Component ───────────────────────────────────
 function MegaMenu({ section, activePage, onNavigate, onClose }) {
-  const colors = COLOR_MAP[section.color]
-  const cols = section.items.length > 6 ? 3 : section.items.length > 3 ? 2 : 1
-
+  const { color, columns } = section
   return (
-    <div className="absolute top-full right-0 mt-1 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden"
-      style={{ minWidth: cols === 3 ? 540 : cols === 2 ? 380 : 220 }}>
+    <div
+      className="absolute top-full right-0 mt-0 bg-white rounded-b-2xl rounded-tl-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden"
+      style={{ minWidth: Math.min(columns.length * 210, 900) }}>
 
-      {/* Header */}
-      <div className={`px-4 py-3 ${colors.light} border-b ${colors.border}`}>
-        <div className={`text-xs font-bold ${colors.text} flex items-center gap-2`}>
-          <span>{section.icon}</span>
-          <span>{section.label}</span>
+      {/* شريط العنوان */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100"
+        style={{ background: `linear-gradient(135deg, ${color.nav}15, ${color.nav}08)` }}>
+        <span className="text-xl">{section.icon}</span>
+        <div>
+          <div className="font-bold text-sm" style={{ color: color.text }}>{section.label}</div>
+          <div className="text-xs text-slate-400">{columns.reduce((s,c)=>s+c.items.length,0)} عنصر</div>
         </div>
       </div>
 
-      {/* Items Grid */}
-      <div className={`p-3 grid gap-1`}
-        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
-        {section.items.map(item => {
-          const isActive = activePage === item.id
-          const disabled = !!item.badge
-          return (
-            <button key={item.id}
-              onClick={() => { if (!disabled) { onNavigate(item.id); onClose() } }}
-              disabled={disabled}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-right transition-all
-                ${isActive
-                  ? `${colors.light} ${colors.text} font-semibold`
-                  : disabled
-                    ? 'text-slate-300 cursor-not-allowed'
-                    : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}>
-              <span className="text-lg shrink-0">{item.icon}</span>
-              <div className="flex-1 min-w-0 text-right">
-                <div className="flex items-center gap-2 justify-end">
-                  {item.badge && (
-                    <span className="text-xs bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">{item.badge}</span>
-                  )}
-                  <span className="text-sm font-medium truncate">{item.label}</span>
-                </div>
-                <div className="text-xs text-slate-400 truncate mt-0.5">{item.desc}</div>
+      {/* الأعمدة */}
+      <div className="flex gap-0 p-1">
+        {columns.map((col, ci) => (
+          <div key={ci} className={`flex-1 p-3 ${ci < columns.length - 1 ? 'border-l border-slate-100' : ''}`}
+            style={{ minWidth: 180 }}>
+
+            {/* عنوان العمود */}
+            <div className="flex items-center gap-1.5 mb-3 pb-2 border-b border-slate-100">
+              <span className="text-sm">{col.icon}</span>
+              <div>
+                <div className="text-xs font-bold text-slate-700">{col.title}</div>
+                <div className="text-xs text-slate-400" style={{ fontSize: 10 }}>{col.subtitle}</div>
               </div>
-            </button>
-          )
-        })}
+            </div>
+
+            {/* العناصر */}
+            <div className="space-y-0.5">
+              {col.items.map((item, ii) => {
+                const isActive  = activePage === item.id
+                const isDisabled = !!item.badge
+                return (
+                  <button key={ii}
+                    onClick={() => { if (!isDisabled) { onNavigate(item.id); onClose() } }}
+                    disabled={isDisabled}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-right transition-all group
+                      ${isActive
+                        ? 'font-semibold'
+                        : isDisabled
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'hover:bg-slate-50'}`}
+                    style={isActive ? { background: `${color.nav}12`, color: color.text } : {}}>
+
+                    <span className={`text-base shrink-0 transition-transform ${!isDisabled && !isActive ? 'group-hover:scale-110' : ''}`}>
+                      {item.icon}
+                    </span>
+                    <div className="flex-1 min-w-0 text-right">
+                      <div className={`text-xs font-medium truncate ${isActive ? '' : 'text-slate-700'}`}>
+                        {item.label}
+                      </div>
+                      <div className="text-slate-400 truncate" style={{ fontSize: 10 }}>{item.sub}</div>
+                    </div>
+                    {item.badge && (
+                      <span className="text-xs bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full shrink-0" style={{ fontSize: 9 }}>
+                        {item.badge}
+                      </span>
+                    )}
+                    {isActive && (
+                      <span className="shrink-0 text-xs" style={{ color: color.text }}>●</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-// ── User Menu ─────────────────────────────────────────────
-function UserMenu({ user, logout }) {
+// ── قائمة المستخدم ────────────────────────────────────────
+function UserDropdown({ user, logout }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -156,27 +312,39 @@ function UserMenu({ user, logout }) {
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(p => !p)}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-white/10 transition-colors">
-        <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm border border-white/30">
+        className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-white/10 transition-colors group">
+        <div className="w-7 h-7 rounded-lg bg-white/25 flex items-center justify-center text-white font-bold text-xs border border-white/20 group-hover:bg-white/30">
           {initial}
         </div>
-        <div className="hidden md:block text-right">
-          <div className="text-white text-xs font-semibold leading-none">{name}</div>
-          <div className="text-blue-200 text-xs mt-0.5 truncate max-w-28">{user?.email}</div>
+        <div className="hidden md:block text-right leading-tight">
+          <div className="text-white text-xs font-semibold">{name}</div>
+          <div className="text-blue-200 text-xs opacity-75 truncate max-w-24">{user?.email?.split('@')[0]}</div>
         </div>
-        <span className="text-blue-200 text-xs">▼</span>
+        <span className={`text-blue-300 text-xs transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▾</span>
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
-          <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-            <div className="text-sm font-bold text-slate-800">{name}</div>
-            <div className="text-xs text-slate-400 truncate">{user?.email}</div>
+        <div className="absolute left-0 top-full mt-1 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+          {/* رأس القائمة */}
+          <div className="px-4 py-3 bg-gradient-to-br from-slate-50 to-blue-50 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-700 flex items-center justify-center text-white font-bold">
+                {initial}
+              </div>
+              <div>
+                <div className="text-sm font-bold text-slate-800">{name}</div>
+                <div className="text-xs text-slate-400 truncate">{user?.email}</div>
+              </div>
+            </div>
           </div>
+
+          {/* خيارات */}
           <div className="p-2">
-            <button onClick={() => { setOpen(false); logout() }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-red-600 hover:bg-red-50 text-sm font-medium">
-              <span>⏻</span> تسجيل الخروج
+            <button
+              onClick={() => { setOpen(false); logout() }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-600 hover:bg-red-50 text-sm font-medium transition-colors">
+              <span className="text-base">⏻</span>
+              <span>تسجيل الخروج</span>
             </button>
           </div>
         </div>
@@ -185,109 +353,137 @@ function UserMenu({ user, logout }) {
   )
 }
 
-// ── الشريط العلوي الرئيسي ─────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// الشريط العلوي الرئيسي
+// ══════════════════════════════════════════════════════════
 export default function TopNav({ activePage, onNavigate, NotificationBell }) {
-  const { user, logout } = useAuth()
+  const { user, logout }  = useAuth()
   const [openMenu, setOpenMenu] = useState(null)
   const navRef = useRef(null)
 
-  // إغلاق عند النقر خارجاً
+  const closeMenu = useCallback(() => setOpenMenu(null), [])
+
   useEffect(() => {
-    const h = e => { if (navRef.current && !navRef.current.contains(e.target)) setOpenMenu(null) }
+    const h = e => {
+      if (navRef.current && !navRef.current.contains(e.target)) closeMenu()
+    }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
-  }, [])
+  }, [closeMenu])
 
-  // تحديد القسم النشط
-  const getActiveSection = () => {
-    for (const section of NAV_SECTIONS) {
-      if (section.items.some(i => i.id === activePage)) return section.id
-    }
-    return null
-  }
-  const activeSection = getActiveSection()
+  // إغلاق عند الضغط على Escape
+  useEffect(() => {
+    const h = e => { if (e.key === 'Escape') closeMenu() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [closeMenu])
+
+  const activeSectionId = getActiveSectionId(activePage)
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 h-14"
-      style={{ background: 'linear-gradient(135deg, #1e3a5f, #1e40af)' }}>
-      <div className="h-full flex items-center justify-between px-4 gap-2" ref={navRef}>
+    <>
+      {/* ── الشريط العلوي ── */}
+      <header
+        className="fixed top-0 left-0 right-0 z-40"
+        style={{
+          height: 52,
+          background: 'linear-gradient(135deg, #0f2744 0%, #1e3a5f 50%, #1e40af 100%)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+        }}>
 
-        {/* ── Logo ── */}
-        <button onClick={() => { onNavigate('dashboard'); setOpenMenu(null) }}
-          className="flex items-center gap-2.5 shrink-0 hover:opacity-90 transition-opacity">
-          <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center border border-white/30">
-            <span className="text-white font-bold text-sm">ح</span>
-          </div>
-          <div className="hidden md:block text-right">
-            <div className="text-white font-bold text-base leading-none">حساباتي</div>
-            <div className="text-blue-200 text-xs">ERP v2.0</div>
-          </div>
-        </button>
+        <div className="h-full flex items-center gap-1 px-4" ref={navRef} dir="rtl">
 
-        {/* ── لوحة التحكم ── */}
-        <button
-          onClick={() => { onNavigate('dashboard'); setOpenMenu(null) }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all
-            ${activePage === 'dashboard'
-              ? 'bg-white/20 text-white'
-              : 'text-blue-100 hover:bg-white/10 hover:text-white'}`}>
-          <span>🏠</span>
-          <span className="hidden lg:inline">لوحة التحكم</span>
-        </button>
+          {/* ── الشعار ── */}
+          <button
+            onClick={() => { onNavigate('dashboard'); closeMenu() }}
+            className="flex items-center gap-2.5 ml-3 shrink-0 hover:opacity-90 transition-opacity">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center border border-white/20"
+              style={{ background: 'rgba(255,255,255,0.15)' }}>
+              <span className="text-white font-bold text-sm">ح</span>
+            </div>
+            <div className="hidden lg:block text-right">
+              <div className="text-white font-bold text-sm leading-tight">حساباتي</div>
+              <div className="text-blue-300 leading-tight" style={{ fontSize: 10 }}>ERP v2.0</div>
+            </div>
+          </button>
 
-        {/* ── Navigation Sections ── */}
-        <nav className="flex items-center gap-0.5 flex-1 justify-center">
-          {NAV_SECTIONS.map(section => {
-            const isOpen   = openMenu === section.id
-            const isActive = activeSection === section.id
-            return (
-              <div key={section.id} className="relative">
-                <button
-                  onClick={() => setOpenMenu(isOpen ? null : section.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all
-                    ${isActive || isOpen
-                      ? 'bg-white/20 text-white'
-                      : 'text-blue-100 hover:bg-white/10 hover:text-white'}`}>
-                  <span className="text-base">{section.icon}</span>
-                  <span className="hidden lg:inline">{section.label}</span>
-                  <span className={`text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
-                </button>
+          {/* ── فاصل ── */}
+          <div className="w-px h-6 bg-white/10 mx-1 shrink-0"/>
 
-                {isOpen && (
-                  <MegaMenu
-                    section={section}
-                    activePage={activePage}
-                    onNavigate={onNavigate}
-                    onClose={() => setOpenMenu(null)}
-                  />
-                )}
+          {/* ── لوحة التحكم ── */}
+          <button
+            onClick={() => { onNavigate('dashboard'); closeMenu() }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0
+              ${activePage === 'dashboard'
+                ? 'bg-white/15 text-white'
+                : 'text-blue-200 hover:bg-white/10 hover:text-white'}`}>
+            <span>🏠</span>
+            <span>الرئيسية</span>
+          </button>
+
+          {/* ── عناصر التنقل الرئيسية ── */}
+          <nav className="flex items-center gap-0.5 flex-1">
+            {NAV_CONFIG.map(section => {
+              const isOpen   = openMenu === section.id
+              const isActive = activeSectionId === section.id
+
+              return (
+                <div key={section.id} className="relative">
+                  <button
+                    onClick={() => setOpenMenu(isOpen ? null : section.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                      ${isActive || isOpen
+                        ? 'text-white'
+                        : 'text-blue-200 hover:text-white hover:bg-white/10'}`}
+                    style={isActive || isOpen
+                      ? { background: section.color.nav + '40' }
+                      : {}}>
+                    <span className="text-sm">{section.icon}</span>
+                    <span className="hidden xl:inline">{section.label}</span>
+                    <span className={`transition-transform duration-200 opacity-60 ${isOpen ? 'rotate-180' : ''}`}
+                      style={{ fontSize: 9 }}>▾</span>
+                  </button>
+
+                  {/* Mega Menu */}
+                  {isOpen && (
+                    <MegaMenu
+                      section={section}
+                      activePage={activePage}
+                      onNavigate={onNavigate}
+                      onClose={closeMenu}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </nav>
+
+          {/* ── الجانب الأيسر: إشعارات + مستخدم ── */}
+          <div className="flex items-center gap-2 shrink-0 mr-1" dir="ltr">
+            {/* Notification Bell */}
+            {NotificationBell && (
+              <div className="[&_button]:text-blue-200 [&_button:hover]:text-white [&_button:hover]:bg-white/10">
+                <NotificationBell/>
               </div>
-            )
-          })}
-        </nav>
+            )}
 
-        {/* ── Right Side: Bell + User ── */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Notification Bell — passed as prop */}
-          {NotificationBell && <NotificationBell/>}
+            {/* حالة الاتصال */}
+            <div className="hidden lg:flex items-center gap-1.5 text-blue-300 px-2 py-1 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.06)', fontSize: 10 }}>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+              <span>متصل</span>
+            </div>
 
-          {/* Status */}
-          <div className="hidden md:flex items-center gap-1.5 text-xs text-blue-200 bg-white/10 px-3 py-1.5 rounded-xl">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
-            <span>متصل</span>
+            {/* User Menu */}
+            <UserDropdown user={user} logout={logout}/>
           </div>
-
-          {/* User Menu */}
-          <UserMenu user={user} logout={logout}/>
         </div>
-      </div>
+      </header>
 
-      {/* ── Active Page Indicator (breadcrumb) ── */}
-      {activePage !== 'dashboard' && (
-        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/10">
-          <div className="h-full bg-white/40 transition-all duration-300" style={{width:'100%'}}/>
-        </div>
+      {/* ── Overlay لإغلاق القائمة ── */}
+      {openMenu && (
+        <div className="fixed inset-0 z-30" onClick={closeMenu}/>
       )}
-    </header>
+    </>
   )
 }

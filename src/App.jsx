@@ -39,49 +39,50 @@ const HRPage       = lazy(() => import('./pages/OtherPages').then(m => ({ defaul
 const AssetsPage   = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.AssetsPage })))
 const TreasuryPage = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.TreasuryPage })))
 
-// ── Labels ───────────────────────────────────────────────
-const PAGE_LABELS = {
-  dashboard:          'لوحة التحكم',
-  coa:                'دليل الحسابات',
-  dimensions:         'الأبعاد المحاسبية',
-  branches:           'الفروع',
-  costcenters:        'مراكز التكلفة',
-  projects:           'المشاريع',
-  fiscal:             'الفترات المالية',
-  opening_balances:   'الأرصدة الافتتاحية',
-  journal:            'القيود اليومية',
-  reversing:          'القيود العكسية',
-  recurring:          'القيود المتكررة',
-  allocation:         'قيد التوزيع',
-  trialbal:           'ميزان المراجعة',
-  ledger:             'الأستاذ العام',
-  income_report:      'قائمة الدخل',
-  balance_report:     'الميزانية العمومية',
-  cashflow_report:    'التدفقات النقدية',
-  financial_analysis: 'التحليل المالي',
-  compare_report:     'مقارنة الفترات',
-  charts_report:      'الرسوم البيانية',
-  vat:                'ضريبة القيمة المضافة',
-  users:              'إدارة المستخدمين',
-  roles_permissions:  'الأدوار والصلاحيات',
-  company_settings:   'إعدادات المنشأة',
-  vat_settings:       'إعدادات الضريبة (VAT)',
-  currency_settings:  'العملات',
-  sales:              'المبيعات',
-  purchases:          'المشتريات',
-  inventory:          'المخزون',
-  hr:                 'الموارد البشرية',
-  assets:             'الأصول الثابتة',
-  treasury:           'الخزينة',
+// ── Breadcrumb Map ────────────────────────────────────────
+// Home > Section > SubSection > Page
+const BREADCRUMBS = {
+  dashboard:          [{ label: 'الرئيسية' }],
+  coa:                [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'دليل الحسابات' }],
+  dimensions:         [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'الأبعاد المحاسبية' }],
+  branches:           [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'الفروع' }],
+  costcenters:        [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'مراكز التكلفة' }],
+  projects:           [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'المشاريع' }],
+  fiscal:             [{ label: 'المحاسبة' }, { label: 'إعدادات المحاسبة' }, { label: 'السنوات والفترات المالية' }],
+  opening_balances:   [{ label: 'المحاسبة' }, { label: 'إعدادات المحاسبة' }, { label: 'الأرصدة الافتتاحية' }],
+  journal:            [{ label: 'المحاسبة' }, { label: 'دفتر الأستاذ' }, { label: 'القيود اليومية' }],
+  reversing:          [{ label: 'المحاسبة' }, { label: 'دفتر الأستاذ' }, { label: 'القيود العكسية' }],
+  recurring:          [{ label: 'المحاسبة' }, { label: 'دفتر الأستاذ' }, { label: 'القيود المتكررة' }],
+  allocation:         [{ label: 'المحاسبة' }, { label: 'دفتر الأستاذ' }, { label: 'قيد التوزيع' }],
+  trialbal:           [{ label: 'التقارير' }, { label: 'الميزان والأستاذ' }, { label: 'ميزان المراجعة' }],
+  ledger:             [{ label: 'التقارير' }, { label: 'الميزان والأستاذ' }, { label: 'الأستاذ العام' }],
+  income_report:      [{ label: 'التقارير' }, { label: 'القوائم المالية' }, { label: 'قائمة الدخل' }],
+  balance_report:     [{ label: 'التقارير' }, { label: 'القوائم المالية' }, { label: 'الميزانية العمومية' }],
+  cashflow_report:    [{ label: 'التقارير' }, { label: 'القوائم المالية' }, { label: 'التدفقات النقدية' }],
+  financial_analysis: [{ label: 'التقارير' }, { label: 'التحليل والمقارنة' }, { label: 'التحليل المالي' }],
+  compare_report:     [{ label: 'التقارير' }, { label: 'التحليل والمقارنة' }, { label: 'مقارنة الفترات' }],
+  charts_report:      [{ label: 'التقارير' }, { label: 'التحليل والمقارنة' }, { label: 'الرسوم البيانية' }],
+  vat:                [{ label: 'التقارير' }, { label: 'الضريبة' }, { label: 'ضريبة القيمة المضافة' }],
+  company_settings:   [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'إعدادات الشركة' }],
+  vat_settings:       [{ label: 'الإعداد' }, { label: 'الضريبة' }, { label: 'إعدادات VAT' }],
+  currency_settings:  [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'العملات' }],
+  users:              [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'إدارة المستخدمين' }],
+  roles_permissions:  [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'الأدوار والصلاحيات' }],
+  sales:              [{ label: 'الوحدات' }, { label: 'المبيعات' }],
+  purchases:          [{ label: 'الوحدات' }, { label: 'المشتريات' }],
+  inventory:          [{ label: 'الوحدات' }, { label: 'المخزون' }],
+  hr:                 [{ label: 'الوحدات' }, { label: 'الموارد البشرية' }],
+  assets:             [{ label: 'الوحدات' }, { label: 'الأصول الثابتة' }],
+  treasury:           [{ label: 'الوحدات' }, { label: 'الخزينة' }],
 }
 
 // ── Loaders ───────────────────────────────────────────────
 function PageLoader() {
   return (
-    <div className="min-h-[60vh] flex items-center justify-center">
+    <div className="min-h-[50vh] flex items-center justify-center">
       <div className="text-center">
-        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto mb-3"/>
-        <p className="text-sm text-slate-400">جارٍ التحميل...</p>
+        <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-3"/>
+        <p className="text-xs text-slate-400">جارٍ التحميل...</p>
       </div>
     </div>
   )
@@ -91,29 +92,65 @@ function AppLoader() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="text-center">
-        <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+          style={{ background: 'linear-gradient(135deg,#1e3a5f,#1e40af)' }}>
           <span className="text-white text-2xl font-bold">ح</span>
         </div>
         <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/>
+        <div className="text-xs text-slate-400 mt-3">حساباتي ERP</div>
       </div>
     </div>
   )
 }
 
+// ── Breadcrumb ─────────────────────────────────────────────
+function Breadcrumb({ page, ledgerAccount, onNavigate }) {
+  const crumbs = page === 'ledger' && ledgerAccount.code
+    ? [
+        ...( BREADCRUMBS['ledger'] || [] ),
+        { label: ledgerAccount.code + ' — ' + ledgerAccount.name }
+      ]
+    : BREADCRUMBS[page] || []
 
+  if (crumbs.length === 0) return null
+
+  return (
+    <nav className="flex items-center gap-1 text-xs" dir="rtl">
+      <button onClick={() => onNavigate('dashboard')}
+        className="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+        الرئيسية
+      </button>
+      {crumbs.map((crumb, i) => (
+        <span key={i} className="flex items-center gap-1">
+          <span className="text-slate-300 mx-0.5">›</span>
+          <span className={i === crumbs.length - 1
+            ? 'text-slate-700 font-semibold'
+            : 'text-slate-400'}>
+            {crumb.label}
+          </span>
+        </span>
+      ))}
+    </nav>
+  )
+}
+
+
+// ── Main App Content ──────────────────────────────────────
 function AppContent() {
   const { user, loading } = useAuth()
-  const [page,         setPage]         = useState('dashboard')
+  const [page,          setPage]          = useState('dashboard')
   const [ledgerAccount, setLedgerAccount] = useState({ code: '', name: '' })
 
   const navigateToLedger = (code, name) => { setLedgerAccount({ code, name }); setPage('ledger') }
-  const navigate = (p) => { if (p !== 'ledger') setLedgerAccount({ code: '', name: '' }); setPage(p) }
+  const navigate = (p) => {
+    if (p !== 'ledger') setLedgerAccount({ code: '', name: '' })
+    setPage(p)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   if (loading) return <AppLoader/>
   if (!user) return (
-    <Suspense fallback={<AppLoader/>}>
-      <LoginPage/>
-    </Suspense>
+    <Suspense fallback={<AppLoader/>}><LoginPage/></Suspense>
   )
 
   const renderPage = () => {
@@ -154,31 +191,12 @@ function AppContent() {
     }
   }
 
-  const getBreadcrumb = () => {
-    if (page === 'ledger' && ledgerAccount.code) return (
-      <div className="flex items-center gap-2 text-sm" dir="rtl">
-        <button onClick={() => navigate('trialbal')}
-          className="text-slate-400 hover:text-blue-700 transition-colors">ميزان المراجعة</button>
-        <span className="text-slate-300">/</span>
-        <span className="font-mono text-blue-700 font-bold">{ledgerAccount.code}</span>
-        <span className="text-slate-500 text-xs">{ledgerAccount.name}</span>
-      </div>
-    )
-    if (page === 'dashboard') return null
-    return (
-      <div className="flex items-center gap-2 text-sm" dir="rtl">
-        <button onClick={() => navigate('dashboard')} className="text-slate-400 hover:text-blue-600 text-xs">
-          لوحة التحكم
-        </button>
-        <span className="text-slate-300">/</span>
-        <span className="text-slate-700 font-medium text-xs">{PAGE_LABELS[page] || page}</span>
-      </div>
-    )
-  }
+  const isDashboard = page === 'dashboard'
 
   return (
     <div className="min-h-screen bg-slate-50" dir="rtl">
-      {/* ── Top Navigation Bar ── */}
+
+      {/* ── Top Navigation ── */}
       <TopNav
         activePage={page}
         onNavigate={navigate}
@@ -186,21 +204,25 @@ function AppContent() {
       />
 
       {/* ── Main Content ── */}
-      <main className="pt-14 min-h-screen">
+      <main style={{ paddingTop: 52 }} className="min-h-screen">
 
-        {/* Sub-header (breadcrumb + back button) */}
-        {page !== 'dashboard' && (
-          <div className="bg-white border-b border-slate-100 px-6 py-2 flex items-center justify-between">
-            {getBreadcrumb()}
+        {/* Sub-header: Breadcrumb */}
+        {!isDashboard && (
+          <div className="bg-white border-b border-slate-100 px-6 py-2.5 flex items-center justify-between sticky top-[52px] z-20">
+            <Breadcrumb page={page} ledgerAccount={ledgerAccount} onNavigate={navigate}/>
+
             <div className="flex items-center gap-3">
+              {/* زر رجوع للأستاذ من ميزان المراجعة */}
               {page === 'ledger' && ledgerAccount.code && (
                 <button onClick={() => navigate('trialbal')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">
-                  ← ميزان المراجعة
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors">
+                  ‹ ميزان المراجعة
                 </button>
               )}
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
+
+              {/* حالة الاتصال */}
+              <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
                 متصل بـ Railway
               </div>
             </div>
@@ -208,7 +230,7 @@ function AppContent() {
         )}
 
         {/* Page Content */}
-        <div className="p-6" key={page}>
+        <div className={`${isDashboard ? 'p-0' : 'p-6'}`} key={page}>
           <Suspense fallback={<PageLoader/>}>
             {renderPage()}
           </Suspense>
