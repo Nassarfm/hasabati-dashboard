@@ -31,6 +31,7 @@ const VATSettingsPage       = lazy(() => import('./pages/VATSettingsPage'))
 const CompanySettingsPage   = lazy(() => import('./pages/CompanySettingsPage'))
 const UserManagementPage    = lazy(() => import('./pages/UserManagementPage'))
 const RolesPermissionsPage  = lazy(() => import('./pages/RolesPermissionsPage'))
+const CurrencyPage          = lazy(() => import('./pages/CurrencyPage'))
 
 const SalesPage    = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.SalesPage })))
 const PurchasesPage= lazy(() => import('./pages/OtherPages').then(m => ({ default: m.PurchasesPage })))
@@ -65,7 +66,7 @@ const BREADCRUMBS = {
   vat:                [{ label: 'التقارير' }, { label: 'الضريبة' }, { label: 'ضريبة القيمة المضافة' }],
   company_settings:   [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'إعدادات الشركة' }],
   vat_settings:       [{ label: 'الإعداد' }, { label: 'الضريبة' }, { label: 'إعدادات VAT' }],
-  currency_settings:  [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'العملات' }],
+  currency_settings:  [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'العملات وأسعار الصرف' }],
   users:              [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'إدارة المستخدمين' }],
   roles_permissions:  [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'الأدوار والصلاحيات' }],
   sales:              [{ label: 'الوحدات' }, { label: 'المبيعات' }],
@@ -180,7 +181,7 @@ function AppContent() {
       case 'roles_permissions':  return <RolesPermissionsPage/>
       case 'company_settings':   return <CompanySettingsPage/>
       case 'vat_settings':       return <VATSettingsPage/>
-      case 'currency_settings':  return <VATSettingsPage/>
+      case 'currency_settings':   return <CurrencyPage/>
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>
