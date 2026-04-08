@@ -149,6 +149,49 @@ function InternalVATReport({ data, periodLabel, companyName }) {
         ))}
       </div>
 
+      {/* ✅ شارة مصدر البيانات + Breakdown */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border
+          ${data.source === 'je_lines'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+          {data.source === 'je_lines' ? '✅ مصدر البيانات: أسطر القيود (vat_amount)' : '⚠️ مصدر البيانات: أرصدة الحسابات (fallback)'}
+        </div>
+        {data.source === 'account_balances' && (
+          <div className="text-xs text-slate-400">
+            لم يتم إدخال vat_amount في القيود — يُنصح بتفعيل حقل الضريبة في القيود الجديدة
+          </div>
+        )}
+      </div>
+
+      {/* Breakdown per tax_type_code */}
+      {data.breakdown && data.breakdown.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 bg-slate-700 text-white font-bold text-sm flex items-center gap-2">
+            <span>🔍</span> تفصيل الضريبة حسب نوع الضريبة
+          </div>
+          <div className="grid grid-cols-12 bg-slate-100 text-xs font-bold text-slate-500">
+            <div className="col-span-3 px-4 py-2.5">رمز الضريبة</div>
+            <div className="col-span-3 px-4 py-2.5 text-center">الاتجاه</div>
+            <div className="col-span-3 px-4 py-2.5 text-center">الوعاء الضريبي</div>
+            <div className="col-span-3 px-4 py-2.5 text-center">مبلغ الضريبة</div>
+          </div>
+          {data.breakdown.map((b, i) => (
+            <div key={i} className="grid grid-cols-12 items-center border-b border-slate-50 hover:bg-slate-50">
+              <div className="col-span-3 px-4 py-3 font-mono font-bold text-blue-700 text-sm">{b.tax_type_code}</div>
+              <div className="col-span-3 px-4 py-3 text-center">
+                <span className={`text-xs px-2 py-1 rounded-full font-medium
+                  ${b.direction === 'output' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {b.direction === 'output' ? '📈 مخرجات' : '🛒 مدخلات'}
+                </span>
+              </div>
+              <div className="col-span-3 px-4 py-3 text-center font-mono text-sm text-slate-700">{fmtN(b.net_amount)}</div>
+              <div className="col-span-3 px-4 py-3 text-center font-mono font-bold text-sm text-slate-800">{fmtN(b.vat_amount)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* حالة الإقرار */}
       <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl border-2 font-bold text-base
         ${status==='payable'   ? 'bg-red-50 border-red-300 text-red-700'
@@ -483,9 +526,9 @@ function ZATCAReport({ data, periodLabel, companyName }) {
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 flex items-start gap-2">
         <span className="text-base shrink-0">⚠️</span>
         <div>
-          <strong>ملاحظة هامة:</strong> هذا النموذج يعتمد على بيانات حسابات الضريبة (2201 للمخرجات، 1401 للمدخلات).
-          لدقة التقرير يجب إعداد حسابات ضريبة القيمة المضافة وتصنيف القيود بشكل صحيح.
-          سيتم في مرحلة لاحقة إضافة إعدادات الضريبة الكاملة.
+          <strong>ملاحظة هامة:</strong> يعتمد هذا النموذج بشكل أساسي على حقل vat_amount في أسطر القيود.
+          عند غياب هذا الحقل يتم الرجوع تلقائياً لأرصدة حسابات الضريبة (2201، 1401).
+          المصدر الحالي للبيانات يظهر في شارة التقرير الداخلي.
         </div>
       </div>
     </div>
