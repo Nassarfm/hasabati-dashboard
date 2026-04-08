@@ -1,10 +1,10 @@
 import { useState, lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
-import Sidebar from './components/Sidebar'
+import TopNav from './components/TopNav'
 import NotificationBell from './components/NotificationBell'
 import { ToastProvider } from './components/UI'
 
-// ── Lazy imports — كل صفحة تُحمَّل عند الحاجة فقط ──────────
+// ── Lazy imports ─────────────────────────────────────────
 const LoginPage             = lazy(() => import('./pages/LoginPage'))
 const DashboardPage         = lazy(() => import('./pages/DashboardPage'))
 const COAPage               = lazy(() => import('./pages/COAPage'))
@@ -14,6 +14,7 @@ const BranchesPage          = lazy(() => import('./pages/BranchesPage'))
 const CostCentersPage       = lazy(() => import('./pages/CostCentersPage'))
 const ProjectsPage          = lazy(() => import('./pages/ProjectsPage'))
 const FiscalPeriodsPage     = lazy(() => import('./pages/FiscalPeriodsPage'))
+const OpeningBalancesPage   = lazy(() => import('./pages/OpeningBalancesPage'))
 const TrialBalancePage      = lazy(() => import('./pages/TrialBalancePage'))
 const LedgerPage            = lazy(() => import('./pages/LedgerPage'))
 const RecurringPage         = lazy(() => import('./pages/RecurringPage'))
@@ -30,9 +31,7 @@ const VATSettingsPage       = lazy(() => import('./pages/VATSettingsPage'))
 const CompanySettingsPage   = lazy(() => import('./pages/CompanySettingsPage'))
 const UserManagementPage    = lazy(() => import('./pages/UserManagementPage'))
 const RolesPermissionsPage  = lazy(() => import('./pages/RolesPermissionsPage'))
-const OpeningBalancesPage   = lazy(() => import('./pages/OpeningBalancesPage'))
 
-// OtherPages — named exports → نحوّل كل واحد بـ .then()
 const SalesPage    = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.SalesPage })))
 const PurchasesPage= lazy(() => import('./pages/OtherPages').then(m => ({ default: m.PurchasesPage })))
 const InventoryPage= lazy(() => import('./pages/OtherPages').then(m => ({ default: m.InventoryPage })))
@@ -40,33 +39,7 @@ const HRPage       = lazy(() => import('./pages/OtherPages').then(m => ({ defaul
 const AssetsPage   = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.AssetsPage })))
 const TreasuryPage = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.TreasuryPage })))
 
-
-// ── Suspense Fallback ────────────────────────────────────
-function PageLoader() {
-  return (
-    <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto mb-3"/>
-        <p className="text-sm text-slate-400">جارٍ التحميل...</p>
-      </div>
-    </div>
-  )
-}
-
-function AppLoader() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="text-center">
-        <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <span className="text-white text-2xl font-bold">ح</span>
-        </div>
-        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/>
-      </div>
-    </div>
-  )
-}
-
-
+// ── Labels ───────────────────────────────────────────────
 const PAGE_LABELS = {
   dashboard:          'لوحة التحكم',
   coa:                'دليل الحسابات',
@@ -94,7 +67,6 @@ const PAGE_LABELS = {
   company_settings:   'إعدادات المنشأة',
   vat_settings:       'إعدادات الضريبة (VAT)',
   currency_settings:  'العملات',
-  localization:       'الإقليمية والتوطين',
   sales:              'المبيعات',
   purchases:          'المشتريات',
   inventory:          'المخزون',
@@ -103,11 +75,35 @@ const PAGE_LABELS = {
   treasury:           'الخزينة',
 }
 
+// ── Loaders ───────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto mb-3"/>
+        <p className="text-sm text-slate-400">جارٍ التحميل...</p>
+      </div>
+    </div>
+  )
+}
+
+function AppLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <span className="text-white text-2xl font-bold">ح</span>
+        </div>
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/>
+      </div>
+    </div>
+  )
+}
+
 
 function AppContent() {
   const { user, loading } = useAuth()
-  const [page,      setPage]      = useState('dashboard')
-  const [collapsed, setCollapsed] = useState(false)
+  const [page,         setPage]         = useState('dashboard')
   const [ledgerAccount, setLedgerAccount] = useState({ code: '', name: '' })
 
   const navigateToLedger = (code, name) => { setLedgerAccount({ code, name }); setPage('ledger') }
@@ -119,8 +115,6 @@ function AppContent() {
       <LoginPage/>
     </Suspense>
   )
-
-  const sideWidth = collapsed ? 64 : 240
 
   const renderPage = () => {
     switch (page) {
@@ -150,7 +144,6 @@ function AppContent() {
       case 'company_settings':   return <CompanySettingsPage/>
       case 'vat_settings':       return <VATSettingsPage/>
       case 'currency_settings':  return <VATSettingsPage/>
-      case 'localization':       return <VATSettingsPage/>
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>
@@ -163,51 +156,65 @@ function AppContent() {
 
   const getBreadcrumb = () => {
     if (page === 'ledger' && ledgerAccount.code) return (
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-bold text-slate-700">حساباتي</span>
-        <span className="text-slate-300">ERP v2.0 /</span>
-        <button onClick={() => navigate('trialbal')} className="text-slate-500 hover:text-blue-700">ميزان المراجعة</button>
+      <div className="flex items-center gap-2 text-sm" dir="rtl">
+        <button onClick={() => navigate('trialbal')}
+          className="text-slate-400 hover:text-blue-700 transition-colors">ميزان المراجعة</button>
         <span className="text-slate-300">/</span>
         <span className="font-mono text-blue-700 font-bold">{ledgerAccount.code}</span>
-        <span className="text-slate-600 text-xs">{ledgerAccount.name}</span>
+        <span className="text-slate-500 text-xs">{ledgerAccount.name}</span>
       </div>
     )
+    if (page === 'dashboard') return null
     return (
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-bold text-slate-700">حساباتي</span>
-        <span className="text-slate-300">ERP v2.0 /</span>
-        <span className="text-slate-800 font-medium">{PAGE_LABELS[page] || page}</span>
+      <div className="flex items-center gap-2 text-sm" dir="rtl">
+        <button onClick={() => navigate('dashboard')} className="text-slate-400 hover:text-blue-600 text-xs">
+          لوحة التحكم
+        </button>
+        <span className="text-slate-300">/</span>
+        <span className="text-slate-700 font-medium text-xs">{PAGE_LABELS[page] || page}</span>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Sidebar activePage={page} onNavigate={navigate} collapsed={collapsed} onToggle={() => setCollapsed(p => !p)}/>
-      <main className="min-h-screen transition-all duration-300" style={{ marginRight: sideWidth }}>
-        <header className="bg-white border-b border-slate-100 sticky top-0 z-20 px-6 py-3 flex items-center justify-between">
-          {getBreadcrumb()}
-          <div className="flex items-center gap-3">
-            {page === 'ledger' && ledgerAccount.code && (
-              <button onClick={() => navigate('trialbal')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">
-                ← ميزان المراجعة
-              </button>
-            )}
-            <NotificationBell/>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"/>
-              متصل بـ Railway
+    <div className="min-h-screen bg-slate-50" dir="rtl">
+      {/* ── Top Navigation Bar ── */}
+      <TopNav
+        activePage={page}
+        onNavigate={navigate}
+        NotificationBell={NotificationBell}
+      />
+
+      {/* ── Main Content ── */}
+      <main className="pt-14 min-h-screen">
+
+        {/* Sub-header (breadcrumb + back button) */}
+        {page !== 'dashboard' && (
+          <div className="bg-white border-b border-slate-100 px-6 py-2 flex items-center justify-between">
+            {getBreadcrumb()}
+            <div className="flex items-center gap-3">
+              {page === 'ledger' && ledgerAccount.code && (
+                <button onClick={() => navigate('trialbal')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">
+                  ← ميزان المراجعة
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
+                متصل بـ Railway
+              </div>
             </div>
           </div>
-        </header>
+        )}
 
+        {/* Page Content */}
         <div className="p-6" key={page}>
           <Suspense fallback={<PageLoader/>}>
             {renderPage()}
           </Suspense>
         </div>
       </main>
+
       <ToastProvider/>
     </div>
   )
