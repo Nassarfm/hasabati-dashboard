@@ -1,11 +1,8 @@
-import { defineConfig, splitVendorChunkPlugin } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [
-    react(),
-    splitVendorChunkPlugin(), // تقسيم ذكي تلقائي للـ vendors
-  ],
+  plugins: [react()],
   base: '/hasabati-dashboard/',
 
   build: {
@@ -16,11 +13,20 @@ export default defineConfig({
         entryFileNames: `assets/[name]-[hash].js`,
         chunkFileNames: `assets/[name]-[hash].js`,
         assetFileNames: `assets/[name]-[hash].[ext]`,
-        manualChunks: {
-          'vendor-react':    ['react', 'react-dom'],
-          'vendor-recharts': ['recharts'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-lucide':   ['lucide-react'],
+        // Vite 8 (rolldown) → manualChunks يجب أن يكون function وليس object
+        manualChunks(id) {
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'vendor-react'
+          }
+          if (id.includes('node_modules/recharts')) {
+            return 'vendor-recharts'
+          }
+          if (id.includes('node_modules/@supabase')) {
+            return 'vendor-supabase'
+          }
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-lucide'
+          }
         },
       },
     },
