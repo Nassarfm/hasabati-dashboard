@@ -6,12 +6,13 @@ const SECTIONS = [
   {
     id: 'master', label: 'البيانات الأساسية', icon: '🗂️',
     items: [
-      { id:'coa',         icon:'📊', label:'دليل الحسابات' },
-      { id:'dimensions',  icon:'🏷️', label:'الأبعاد المحاسبية' },
-      { id:'branches',    icon:'🏢', label:'الفروع' },
-      { id:'costcenters', icon:'💰', label:'مراكز التكلفة' },
-      { id:'projects',    icon:'📁', label:'المشاريع' },
-      { id:'fiscal',      icon:'📅', label:'الفترات المالية' },
+      { id:'coa',               icon:'📊', label:'دليل الحسابات' },
+      { id:'dimensions',        icon:'🏷️', label:'الأبعاد المحاسبية' },
+      { id:'branches',          icon:'🏢', label:'الفروع' },
+      { id:'costcenters',       icon:'💰', label:'مراكز التكلفة' },
+      { id:'projects',          icon:'📁', label:'المشاريع' },
+      { id:'fiscal',            icon:'📅', label:'الفترات المالية' },
+      { id:'opening_balances',  icon:'🏦', label:'الأرصدة الافتتاحية' },
     ]
   },
   {

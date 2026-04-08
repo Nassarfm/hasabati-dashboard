@@ -30,6 +30,7 @@ const VATSettingsPage       = lazy(() => import('./pages/VATSettingsPage'))
 const CompanySettingsPage   = lazy(() => import('./pages/CompanySettingsPage'))
 const UserManagementPage    = lazy(() => import('./pages/UserManagementPage'))
 const RolesPermissionsPage  = lazy(() => import('./pages/RolesPermissionsPage'))
+const OpeningBalancesPage   = lazy(() => import('./pages/OpeningBalancesPage'))
 
 // OtherPages — named exports → نحوّل كل واحد بـ .then()
 const SalesPage    = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.SalesPage })))
@@ -40,7 +41,7 @@ const AssetsPage   = lazy(() => import('./pages/OtherPages').then(m => ({ defaul
 const TreasuryPage = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.TreasuryPage })))
 
 
-// ── Suspense Fallback — شاشة تحميل الصفحة ───────────────────
+// ── Suspense Fallback ────────────────────────────────────
 function PageLoader() {
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
@@ -52,7 +53,6 @@ function PageLoader() {
   )
 }
 
-// ── AppLoader — شاشة تحميل Auth الأولية ─────────────────────
 function AppLoader() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -75,6 +75,7 @@ const PAGE_LABELS = {
   costcenters:        'مراكز التكلفة',
   projects:           'المشاريع',
   fiscal:             'الفترات المالية',
+  opening_balances:   'الأرصدة الافتتاحية',
   journal:            'القيود اليومية',
   reversing:          'القيود العكسية',
   recurring:          'القيود المتكررة',
@@ -130,6 +131,7 @@ function AppContent() {
       case 'costcenters':        return <CostCentersPage/>
       case 'projects':           return <ProjectsPage/>
       case 'fiscal':             return <FiscalPeriodsPage/>
+      case 'opening_balances':   return <OpeningBalancesPage/>
       case 'journal':            return <JournalPage/>
       case 'reversing':          return <ReversingPage onNavigateToJournal={() => navigate('journal')}/>
       case 'recurring':          return <RecurringPage/>
@@ -147,8 +149,8 @@ function AppContent() {
       case 'roles_permissions':  return <RolesPermissionsPage/>
       case 'company_settings':   return <CompanySettingsPage/>
       case 'vat_settings':       return <VATSettingsPage/>
-      case 'currency_settings':  return <VATSettingsPage/>   // placeholder
-      case 'localization':       return <VATSettingsPage/>   // placeholder
+      case 'currency_settings':  return <VATSettingsPage/>
+      case 'localization':       return <VATSettingsPage/>
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>
@@ -200,7 +202,6 @@ function AppContent() {
           </div>
         </header>
 
-        {/* Suspense يلتقط كل صفحة lazy */}
         <div className="p-6" key={page}>
           <Suspense fallback={<PageLoader/>}>
             {renderPage()}
