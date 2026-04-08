@@ -226,15 +226,17 @@ function HotkeyOverlay({ onClose }) {
 // ══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════
-export default function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, allDimensions=[], taxTypes=[], onBack, onSaved, editJE = null }) {
+export default function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, allDimensions=[], taxTypes=[], currencies=[], onBack, onSaved, editJE = null }) {
   const emptyLine = useCallback(() => ({
     id:Math.random(), account_code:'', account_name:'', account:null,
     description:'', debit:'', credit:'', branch_code:'', branch_name:'',
     cost_center:'', cost_center_name:'', project_code:'', project_name:'',
     expense_classification_code:'', expense_classification_name:'',
     tax_type_code:'', vat_amount:0, net_amount:0,
-    is_tax_line:false, parent_line_id:null, // سطر ضريبة تلقائي
-    extraDims: {}, // أبعاد مخصصة { [dimCode]: { value_code, value_name } }
+    is_tax_line:false, parent_line_id:null,
+    // ── العملة الأجنبية ──
+    currency_code:'SAR', exchange_rate:'1', amount_foreign:'',
+    extraDims: {},
   }), [])
 
   const [periodState, setPeriodState] = useState({ status:'idle', periodName:'', yearName:'' })
@@ -254,6 +256,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
         expense_classification_code:l.expense_classification_code||'',
         expense_classification_name:l.expense_classification_name||'',
         tax_type_code:l.tax_type_code||'', vat_amount:l.vat_amount||0, net_amount:l.net_amount||0,
+        currency_code:l.currency_code||'SAR', exchange_rate:l.exchange_rate||'1', amount_foreign:l.amount_foreign||'',
         extraDims: l.extraDims||{},
       }))
     }
@@ -396,6 +399,9 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
           tax_type_code:l.tax_type_code||null,
           vat_amount:parseFloat(l.vat_amount)||0,
           net_amount:parseFloat(l.net_amount)||0,
+          currency_code:l.currency_code||'SAR',
+          exchange_rate:parseFloat(l.exchange_rate)||1,
+          amount_foreign:parseFloat(l.amount_foreign)||0,
         }))
       }
       const jeRes = editJE ? await api.accounting.updateJE(editJE.id,payload) : await api.accounting.createJE(payload)
@@ -457,7 +463,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
   // ── Grid column template — ديناميكي حسب عدد الأبعاد
   // الأبعاد المخصصة (غير الـ 4 الثابتة)
   const customDims = allDimensions.filter(d => !['branch','cost_center','expense_classification','project'].includes(d.code))
-  const COLS = `32px 2fr 1.5fr 90px 90px 110px 110px 110px 100px 100px ${customDims.map(()=>'100px').join(' ')} 36px`
+  const COLS = `32px 2fr 1.5fr 90px 90px 130px 110px 110px 110px 100px 100px ${customDims.map(()=>'100px').join(' ')} 36px`
 
   return (
     <div className="page-enter space-y-5">
@@ -626,6 +632,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
               <div className="px-3 py-3.5">البيان</div>
               <div className="px-3 py-3.5 text-center">مدين</div>
               <div className="px-3 py-3.5 text-center">دائن</div>
+              <div className="px-3 py-3.5 text-center">💱 العملة</div>
               <div className="px-3 py-3.5 text-center">الفرع</div>
               <div className="px-3 py-3.5 text-center">م. التكلفة</div>
               <div className="px-3 py-3.5 text-center">تصنيف</div>
@@ -719,8 +726,16 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                           disabled={line.is_tax_line}
                           className={`input text-xs text-center w-full num font-mono ${line.is_tax_line?'bg-blue-50 text-blue-700 font-bold border-blue-200':''}`}
                           onChange={e => {
-                            setLine(line.id,{debit:e.target.value,...(e.target.value?{credit:''}:{})})
-                            if(line.tax_type_code) applyTax(line.id, line.tax_type_code, e.target.value, '')
+                            const val = e.target.value
+                            const cur = line.currency_code || 'SAR'
+                            const rate = parseFloat(line.exchange_rate) || 1
+                            if (cur !== 'SAR' && rate !== 1) {
+                              const foreign = parseFloat(val) / rate
+                              setLine(line.id,{debit:val,credit:'',amount_foreign:foreign?foreign.toFixed(3):''})
+                            } else {
+                              setLine(line.id,{debit:val,...(val?{credit:''}:{})})
+                            }
+                            if(line.tax_type_code) applyTax(line.id, line.tax_type_code, val, '')
                           }}
                           onFocus={e => e.target.select()}/>
                       </div>
@@ -731,10 +746,75 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                           disabled={line.is_tax_line}
                           className={`input text-xs text-center w-full num font-mono ${line.is_tax_line?'bg-blue-50 text-blue-700 font-bold border-blue-200':''}`}
                           onChange={e => {
-                            setLine(line.id,{credit:e.target.value,...(e.target.value?{debit:''}:{})})
-                            if(line.tax_type_code) applyTax(line.id, line.tax_type_code, '', e.target.value)
+                            const val = e.target.value
+                            const cur = line.currency_code || 'SAR'
+                            const rate = parseFloat(line.exchange_rate) || 1
+                            if (cur !== 'SAR' && rate !== 1) {
+                              const foreign = parseFloat(val) / rate
+                              setLine(line.id,{credit:val,debit:'',amount_foreign:foreign?foreign.toFixed(3):''})
+                            } else {
+                              setLine(line.id,{credit:val,...(val?{debit:''}:{})})
+                            }
+                            if(line.tax_type_code) applyTax(line.id, line.tax_type_code, '', val)
                           }}
                           onFocus={e => e.target.select()}/>
+                      </div>
+
+                      {/* العملة */}
+                      <div className="px-2 py-2">
+                        {line.is_tax_line ? (
+                          <div className="text-center text-slate-200 text-xs py-2">—</div>
+                        ) : (
+                          <div className="space-y-1">
+                            {/* اختيار العملة */}
+                            <select
+                              className={`select text-xs w-full ${(line.currency_code&&line.currency_code!=='SAR')?'border-amber-400 bg-amber-50/50':''}`}
+                              value={line.currency_code||'SAR'}
+                              onChange={e => {
+                                const code = e.target.value
+                                // جلب آخر سعر صرف إذا تغيرت العملة
+                                setLine(line.id, {currency_code: code, exchange_rate: code==='SAR'?'1':line.exchange_rate, amount_foreign:''})
+                              }}>
+                              <option value="SAR">ر.س SAR</option>
+                              {currencies.filter(c=>c.code!=='SAR'&&c.is_active).map(c=>(
+                                <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
+                              ))}
+                            </select>
+                            {/* سعر الصرف والمبلغ الأجنبي — يظهر فقط للعملات غير SAR */}
+                            {line.currency_code && line.currency_code !== 'SAR' && (
+                              <>
+                                <input type="number" step="0.000001" placeholder="سعر الصرف"
+                                  className="input text-xs w-full font-mono text-center"
+                                  value={line.exchange_rate||''}
+                                  onChange={e => {
+                                    const rate = parseFloat(e.target.value) || 1
+                                    const foreign = parseFloat(line.amount_foreign) || 0
+                                    if (foreign > 0) {
+                                      const base = (foreign * rate).toFixed(3)
+                                      if (parseFloat(line.debit)>0)  setLine(line.id,{exchange_rate:e.target.value, debit:base})
+                                      else setLine(line.id,{exchange_rate:e.target.value, credit:base})
+                                    } else {
+                                      setLine(line.id,{exchange_rate:e.target.value})
+                                    }
+                                  }}
+                                  onFocus={e=>e.target.select()}/>
+                                <input type="number" step="0.001" placeholder="م. أجنبي"
+                                  className="input text-xs w-full font-mono text-center bg-amber-50"
+                                  value={line.amount_foreign||''}
+                                  onChange={e => {
+                                    const foreign = parseFloat(e.target.value) || 0
+                                    const rate    = parseFloat(line.exchange_rate) || 1
+                                    const base    = (foreign * rate).toFixed(3)
+                                    if (parseFloat(line.debit)>0||(!line.credit))
+                                      setLine(line.id,{amount_foreign:e.target.value, debit:base, credit:''})
+                                    else
+                                      setLine(line.id,{amount_foreign:e.target.value, credit:base, debit:''})
+                                  }}
+                                  onFocus={e=>e.target.select()}/>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* الفرع */}
@@ -897,7 +977,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
               <div className="px-2 py-3"/>
               <div className="px-2 py-3 text-center font-mono text-blue-700 font-bold">{fmt(totalD,2)}</div>
               <div className="px-2 py-3 text-center font-mono text-emerald-700 font-bold">{fmt(totalC,2)}</div>
-              <div className="col-span-4 px-3 py-3 flex items-center gap-3">
+              <div className="col-span-5 px-3 py-3 flex items-center gap-3">
                 {balanced
                   ? <span className="text-emerald-600 text-sm font-semibold">✅ متوازن</span>
                   : <>

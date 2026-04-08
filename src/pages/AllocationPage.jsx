@@ -88,20 +88,23 @@ function DimSelect({ value, items, nameKey, valueKey='code', onChange, placehold
 // ════════════════════════════════════════════════════════
 export default function AllocationPage({ onBack }) {
   const [accounts,    setAccounts]    = useState([])
-  const [dimensions,  setDimensions]  = useState([]) // كل الأبعاد ديناميكياً
+  const [dimensions,  setDimensions]  = useState([])
+  const [currencies,  setCurrencies]  = useState([])
+  const [taxTypes,    setTaxTypes]    = useState([])
   const [loading,     setLoading]     = useState(false)
   const [saving,      setSaving]      = useState(false)
-  const [step,        setStep]        = useState(1) // 1=الإعداد، 2=الأسطر، 3=المعاينة
-  const [result,      setResult]      = useState(null) // القيد المُنشأ
+  const [step,        setStep]        = useState(1)
+  const [result,      setResult]      = useState(null)
 
   // رأس التوزيع
   const [header, setHeader] = useState({
-    name:         '',
-    date:         TODAY,
-    description:  '',
-    sourceAccount:{ code:'', name:'' },
-    totalAmount:  '',
-    // أبعاد حساب المصدر — ديناميكية { [dimCode]: { value_code, value_name } }
+    name:          '',
+    date:          TODAY,
+    description:   '',
+    sourceAccount: { code:'', name:'' },
+    totalAmount:   '',
+    currency_code: 'SAR',
+    exchange_rate: '1',
     srcDims: {},
   })
 
@@ -117,8 +120,10 @@ export default function AllocationPage({ onBack }) {
       api.settings.listCostCenters(),
       api.settings.listProjects(),
       api.tax?.list?.({ active_only: true }) ?? Promise.resolve({ data:[] }),
-    ]).then(([coa, dims, br, cc, pr, tx]) => {
+      api.currency?.list?.({ active_only: true }) ?? Promise.resolve({ data:[] }),
+    ]).then(([coa, dims, br, cc, pr, tx, cur]) => {
       setTaxTypes(tx?.data||tx?.items||[])
+      setCurrencies(cur?.data||[])
       setAccounts((coa?.data||coa?.items||[]).filter(a => a.postable))
       // دمج الأبعاد: النظامية (من جداول منفصلة) + المخصصة (من dimensions)
       const SYSTEM_CODES = ['branch','cost_center','project']
@@ -217,19 +222,33 @@ export default function AllocationPage({ onBack }) {
         return out
       }
 
+      const curCode = header.currency_code || 'SAR'
+      const exRate  = parseFloat(header.exchange_rate) || 1
+
       const jeLines = [
-        ...linesWithAmounts.map(l => ({
-          account_code: l.account_code,
-          description:  l.description || header.description || `توزيع — ${l.pct}%`,
-          debit:        l.debit,
-          credit:       0,
-          ...mapDims(l.dims),
-        })),
+        ...linesWithAmounts.map(l => {
+          // إذا كانت العملة أجنبية: debit = amount_foreign × exchange_rate
+          const foreignAmt = l.debit // هذا المبلغ بالعملة الأساسية مؤقتاً
+          const baseDebit  = curCode !== 'SAR' ? parseFloat((foreignAmt * exRate).toFixed(3)) : l.debit
+          return {
+            account_code:   l.account_code,
+            description:    l.description || header.description || `توزيع — ${l.pct}%`,
+            debit:          baseDebit,
+            credit:         0,
+            currency_code:  curCode,
+            exchange_rate:  exRate,
+            amount_foreign: l.debit, // المبلغ الأصلي بالعملة الأجنبية
+            ...mapDims(l.dims),
+          }
+        }),
         {
-          account_code: header.sourceAccount.code,
-          description:  header.description || `توزيع — ${header.name}`,
-          debit:        0,
-          credit:       totalAmount,
+          account_code:   header.sourceAccount.code,
+          description:    header.description || `توزيع — ${header.name}`,
+          debit:          0,
+          credit:         curCode !== 'SAR' ? parseFloat((totalAmount * exRate).toFixed(3)) : totalAmount,
+          currency_code:  curCode,
+          exchange_rate:  exRate,
+          amount_foreign: totalAmount,
           ...mapDims(header.srcDims),
         }
       ]
@@ -349,12 +368,49 @@ export default function AllocationPage({ onBack }) {
             {/* المبلغ الإجمالي */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold text-slate-700">المبلغ الإجمالي للتوزيع <span className="text-red-500">*</span></label>
-              <input type="number" className="input text-base font-mono" placeholder="0.000"
-                value={header.totalAmount}
-                onChange={e => setHeader(p => ({...p, totalAmount:e.target.value}))}
-                min={0} step="0.001"/>
+              <div className="flex gap-2">
+                <input type="number" className="input text-base font-mono flex-1" placeholder="0.000"
+                  value={header.totalAmount}
+                  onChange={e => setHeader(p => ({...p, totalAmount:e.target.value}))}
+                  min={0} step="0.001"/>
+                {/* العملة */}
+                <select
+                  className={`select w-28 text-sm ${header.currency_code!=='SAR'?'border-amber-400 bg-amber-50':''}`}
+                  value={header.currency_code}
+                  onChange={e => setHeader(p => ({...p, currency_code:e.target.value, exchange_rate:e.target.value==='SAR'?'1':p.exchange_rate}))}>
+                  <option value="SAR">ر.س SAR</option>
+                  {currencies.filter(c=>c.code!=='SAR'&&c.is_active).map(c=>(
+                    <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
+                  ))}
+                </select>
+              </div>
+              {/* سعر الصرف — يظهر فقط للعملات الأجنبية */}
+              {header.currency_code !== 'SAR' && (
+                <div className="flex items-center gap-2 mt-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  <span className="text-xs text-amber-700 font-medium">سعر الصرف:</span>
+                  <span className="text-xs text-amber-600">1 {header.currency_code} =</span>
+                  <input type="number" step="0.000001"
+                    className="input text-xs font-mono w-28 text-center"
+                    placeholder="3.750000"
+                    value={header.exchange_rate}
+                    onChange={e => setHeader(p => ({...p, exchange_rate:e.target.value}))}/>
+                  <span className="text-xs text-amber-600">SAR</span>
+                  {header.exchange_rate && parseFloat(header.exchange_rate) > 0 && totalAmount > 0 && (
+                    <span className="text-xs text-emerald-700 font-mono font-bold mr-auto">
+                      = {fmt(totalAmount * parseFloat(header.exchange_rate), 3)} ريال
+                    </span>
+                  )}
+                </div>
+              )}
               {totalAmount > 0 && (
-                <span className="text-xs text-emerald-600 font-mono font-bold">{fmt(totalAmount,3)} ريال</span>
+                <span className="text-xs text-emerald-600 font-mono font-bold">
+                  {fmt(totalAmount,3)} {header.currency_code}
+                  {header.currency_code !== 'SAR' && parseFloat(header.exchange_rate) > 0 && (
+                    <span className="text-slate-400 font-normal mr-2">
+                      ({fmt(totalAmount * parseFloat(header.exchange_rate), 3)} SAR)
+                    </span>
+                  )}
+                </span>
               )}
             </div>
 
