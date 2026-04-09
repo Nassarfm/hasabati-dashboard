@@ -135,6 +135,7 @@ const NAV_CONFIG = [
           { id:'company_settings', icon:'🏢', label:'إعدادات الشركة',       sub:'Company Settings' },
           { id:'company_settings', icon:'🌍', label:'الإقليمية والتوطين',   sub:'Localization', subTab:'locale' },
           { id:'currency_settings',icon:'💱', label:'العملات',              sub:'Multi Currency' },
+          { id:'number_series',    icon:'🔢', label:'الترقيم التلقائي',    sub:'Number Series' },
         ]
       },
       {

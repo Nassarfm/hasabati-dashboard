@@ -33,6 +33,7 @@ const UserManagementPage    = lazy(() => import('./pages/UserManagementPage'))
 const RolesPermissionsPage  = lazy(() => import('./pages/RolesPermissionsPage'))
 const CurrencyPage          = lazy(() => import('./pages/CurrencyPage'))
 const AuditTrailPage        = lazy(() => import('./pages/AuditTrailPage'))
+const NumberSeriesPage      = lazy(() => import('./pages/NumberSeriesPage'))
 
 const SalesPage    = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.SalesPage })))
 const PurchasesPage= lazy(() => import('./pages/OtherPages').then(m => ({ default: m.PurchasesPage })))
@@ -69,6 +70,7 @@ const BREADCRUMBS = {
   vat_settings:       [{ label: 'الإعداد' }, { label: 'الضريبة' }, { label: 'إعدادات VAT' }],
   currency_settings:  [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'العملات وأسعار الصرف' }],
   audit_trail:        [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'سجل النشاط والتدقيق' }],
+  number_series:      [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'الترقيم التلقائي' }],
   users:              [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'إدارة المستخدمين' }],
   roles_permissions:  [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'الأدوار والصلاحيات' }],
   sales:              [{ label: 'الوحدات' }, { label: 'المبيعات' }],
@@ -185,6 +187,7 @@ function AppContent() {
       case 'vat_settings':       return <VATSettingsPage/>
       case 'currency_settings':   return <CurrencyPage/>
       case 'audit_trail':          return <AuditTrailPage/>
+      case 'number_series':        return <NumberSeriesPage/>
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>

@@ -221,6 +221,14 @@ export const api = {
     delete: (id)   => del(`/accounting/tax-types/${id}`),
   },
 
+  // ✅ الترقيم التلقائي
+  series: {
+    list:    ()              => get('/settings/series'),
+    update:  (type, b)       => put(`/settings/series/${type}`, b),
+    reset:   (type, year, from_seq) => post(`/settings/series/${type}/reset?year=${year}&start_from=${from_seq||0}`, {}),
+    preview: (type, date)    => get(`/settings/series/${type}/preview`, date?{entry_date:date}:{}),
+  },
+
   // ✅ سجل النشاط والتدقيق
   audit: {
     activities:   (p={})         => get('/audit/activities', p),
