@@ -24,7 +24,7 @@ async function request(method, path, body = null) {
   return data
 }
 
-const get   = (p, params) => request('GET',    p + (params ? '?' + new URLSearchParams(params) : ''))
+const get   = (p, params) => request('GET',    p + (params && Object.keys(params).length ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!==''))) : ''))
 const post  = (p, b)      => request('POST',   p, b)
 const put   = (p, b)      => request('PUT',    p, b)
 const patch = (p, b)      => request('PATCH',  p, b)
@@ -33,6 +33,9 @@ const del   = (p)         => request('DELETE', p)
 export const api = {
   health: () => get('/health'),
 
+  // ══════════════════════════════════════════════════════
+  // 📊 المحاسبة
+  // ══════════════════════════════════════════════════════
   accounting: {
     getDashboard:      ()              => get('/accounting/dashboard'),
     getCOA:            (p={})          => get('/accounting/coa', p),
@@ -145,38 +148,16 @@ export const api = {
   },
 
   dimensions: {
-    list:             ()                => get('/dimensions'),
-    get:              (id)              => get(`/dimensions/${id}`),
-    create:           (b)              => post('/dimensions', b),
-    update:           (id, b)          => put(`/dimensions/${id}`, b),
-    remove:           (id)             => del(`/dimensions/${id}`),
-    listValues:       (dimId)          => get(`/dimensions/${dimId}/values`),
-    createValue:      (dimId, b)       => post(`/dimensions/${dimId}/values`, b),
-    updateValue:      (dimId, valId, b)=> put(`/dimensions/${dimId}/values/${valId}`, b),
-    deleteValue:      (dimId, valId)   => del(`/dimensions/${dimId}/values/${valId}`),
-    updateVisibility: (id, b)          => patch(`/dimensions/${id}/visibility`, b),
-  },
-
-  inventory: {
-    getProducts:     (p={}) => get('/inventory/products', p),
-    createProduct:   (b)    => post('/inventory/products', b),
-    getStockBalance: (p={}) => get('/inventory/stock', p),
-    getWarehouses:   ()     => get('/inventory/warehouses'),
-  },
-
-  sales: {
-    getCustomers:   (p={}) => get('/sales/customers', p),
-    createCustomer: (b)    => post('/sales/customers', b),
-    getInvoices:    (p={}) => get('/sales/invoices', p),
-    createInvoice:  (b)    => post('/sales/invoices', b),
-    postInvoice:    (id)   => post(`/sales/invoices/${id}/post`, {}),
-    getDashboard:   ()     => get('/sales/dashboard'),
-  },
-
-  purchases: {
-    getSuppliers: (p={}) => get('/purchases/suppliers', p),
-    getPOs:       (p={}) => get('/purchases/orders', p),
-    getGRNs:      (p={}) => get('/purchases/grn', p),
+    list:             ()                  => get('/dimensions'),
+    get:              (id)                => get(`/dimensions/${id}`),
+    create:           (b)                 => post('/dimensions', b),
+    update:           (id, b)             => put(`/dimensions/${id}`, b),
+    remove:           (id)                => del(`/dimensions/${id}`),
+    listValues:       (dimId)             => get(`/dimensions/${dimId}/values`),
+    createValue:      (dimId, b)          => post(`/dimensions/${dimId}/values`, b),
+    updateValue:      (dimId, valId, b)   => put(`/dimensions/${dimId}/values/${valId}`, b),
+    deleteValue:      (dimId, valId)      => del(`/dimensions/${dimId}/values/${valId}`),
+    updateVisibility: (id, b)             => patch(`/dimensions/${id}/visibility`, b),
   },
 
   hr: {
@@ -195,19 +176,19 @@ export const api = {
   },
 
   users: {
-    dashboard:             ()        => get('/users/dashboard'),
-    list:                  (p={})    => get('/users', p),
-    create:                (b)       => post('/users', b),
-    update:                (id, b)   => put(`/users/${id}`, b),
-    toggleStatus:          (id, s)   => patch(`/users/${id}/status?status=${s}`, {}),
-    bulkAction:            (ids,a,r) => post('/users/bulk-action', {user_ids:ids, action:a, role_id:r}),
-    listRoles:             ()        => get('/users/roles'),
-    createRole:            (b)       => post('/users/roles', b),
-    updateRole:            (id, b)   => put(`/users/roles/${id}`, b),
-    getRolePermissions:    (id)      => get(`/users/roles/${id}/permissions`),
-    updateRolePermissions: (id, b)   => put(`/users/roles/${id}/permissions`, b),
-    listPermissions:       ()        => get('/users/permissions'),
-    getAuditLog:           (p={})    => get('/users/audit-log', p),
+    dashboard:             ()         => get('/users/dashboard'),
+    list:                  (p={})     => get('/users', p),
+    create:                (b)        => post('/users', b),
+    update:                (id, b)    => put(`/users/${id}`, b),
+    toggleStatus:          (id, s)    => patch(`/users/${id}/status?status=${s}`, {}),
+    bulkAction:            (ids,a,r)  => post('/users/bulk-action', {user_ids:ids, action:a, role_id:r}),
+    listRoles:             ()         => get('/users/roles'),
+    createRole:            (b)        => post('/users/roles', b),
+    updateRole:            (id, b)    => put(`/users/roles/${id}`, b),
+    getRolePermissions:    (id)       => get(`/users/roles/${id}/permissions`),
+    updateRolePermissions: (id, b)    => put(`/users/roles/${id}/permissions`, b),
+    listPermissions:       ()         => get('/users/permissions'),
+    getAuditLog:           (p={})     => get('/users/audit-log', p),
   },
 
   company: {
@@ -226,14 +207,14 @@ export const api = {
     list:    ()                     => get('/settings/series'),
     update:  (type, b)              => put(`/settings/series/${type}`, b),
     reset:   (type, year, from_seq) => post(`/settings/series/${type}/reset?year=${year}&start_from=${from_seq||0}`, {}),
-    preview: (type, date)           => get(`/settings/series/${type}/preview`, date?{entry_date:date}:{}),
+    preview: (type, date)           => get(`/settings/series/${type}/preview`, date ? {entry_date:date} : {}),
   },
 
   audit: {
-    activities:   (p={})        => get('/audit/activities', p),
-    usersSummary: (date)        => get('/audit/users-summary', date ? {target_date:date} : {}),
-    userDetail:   (email, p={}) => get(`/audit/user/${encodeURIComponent(email)}`, p),
-    stats:        (p={})        => get('/audit/stats', p),
+    activities:   (p={})         => get('/audit/activities', p),
+    usersSummary: (date)         => get('/audit/users-summary', date ? {target_date:date} : {}),
+    userDetail:   (email, p={})  => get(`/audit/user/${encodeURIComponent(email)}`, p),
+    stats:        (p={})         => get('/audit/stats', p),
   },
 
   currency: {
@@ -264,15 +245,15 @@ export const api = {
     deleteBankAccount:  (id)        => del(`/treasury/bank-accounts/${id}`),
 
     // سندات القبض والصرف النقدية (RV / PV)
-    listCashTransactions:  (p={})   => get('/treasury/cash-transactions', p),
-    createCashTransaction: (b)      => post('/treasury/cash-transactions', b),
-    postCashTransaction:   (id)     => post(`/treasury/cash-transactions/${id}/post`, {}),
-    cancelCashTransaction: (id)     => del(`/treasury/cash-transactions/${id}`),
+    listCashTransactions:   (p={})  => get('/treasury/cash-transactions', p),
+    createCashTransaction:  (b)     => post('/treasury/cash-transactions', b),
+    postCashTransaction:    (id)    => post(`/treasury/cash-transactions/${id}/post`, {}),
+    cancelCashTransaction:  (id)    => del(`/treasury/cash-transactions/${id}`),
 
     // حركات البنوك (BP / BR / BT)
-    listBankTransactions:  (p={})   => get('/treasury/bank-transactions', p),
-    createBankTransaction: (b)      => post('/treasury/bank-transactions', b),
-    postBankTransaction:   (id)     => post(`/treasury/bank-transactions/${id}/post`, {}),
+    listBankTransactions:   (p={})  => get('/treasury/bank-transactions', p),
+    createBankTransaction:  (b)     => post('/treasury/bank-transactions', b),
+    postBankTransaction:    (id)    => post(`/treasury/bank-transactions/${id}/post`, {}),
 
     // التحويلات الداخلية (IT)
     listInternalTransfers:  (p={})  => get('/treasury/internal-transfers', p),
@@ -286,35 +267,139 @@ export const api = {
       put(`/treasury/checks/${id}/status?status=${status}&notes=${encodeURIComponent(notes)}`, {}),
 
     // التسوية البنكية
-    listReconciliationSessions:   (p={})             => get('/treasury/reconciliation/sessions', p),
-    createReconciliationSession:  (b)                => post('/treasury/reconciliation/sessions', b),
-    getSessionLines:              (sessId)           => get(`/treasury/reconciliation/sessions/${sessId}/lines`),
-    importStatementLines:         (sessId, lines)    => post(`/treasury/reconciliation/sessions/${sessId}/import-lines`, lines),
-    matchTransaction:             (sessId, lineId, txId, txType) =>
+    listReconciliationSessions:  (p={})           => get('/treasury/reconciliation/sessions', p),
+    createReconciliationSession: (b)              => post('/treasury/reconciliation/sessions', b),
+    getSessionLines:             (sessId)         => get(`/treasury/reconciliation/sessions/${sessId}/lines`),
+    importStatementLines:        (sessId, lines)  => post(`/treasury/reconciliation/sessions/${sessId}/import-lines`, lines),
+    matchTransaction:            (sessId, lineId, txId, txType) =>
       post(`/treasury/reconciliation/sessions/${sessId}/match?statement_line_id=${lineId}&tx_id=${txId}&tx_type=${txType}`, {}),
 
     // صناديق العهدة
-    listPettyCashFunds:    ()       => get('/treasury/petty-cash/funds'),
-    createPettyCashFund:   (b)      => post('/treasury/petty-cash/funds', b),
-    updatePettyCashFund:   (id, b)  => put(`/treasury/petty-cash/funds/${id}`, b),
+    listPettyCashFunds:    ()      => get('/treasury/petty-cash/funds'),
+    createPettyCashFund:   (b)     => post('/treasury/petty-cash/funds', b),
+    updatePettyCashFund:   (id, b) => put(`/treasury/petty-cash/funds/${id}`, b),
 
     // مصاريف العهدة (PET)
-    listPettyCashExpenses:  (p={})  => get('/treasury/petty-cash/expenses', p),
-    createPettyCashExpense: (b)     => post('/treasury/petty-cash/expenses', b),
-    postPettyCashExpense:   (id)    => post(`/treasury/petty-cash/expenses/${id}/post`, {}),
+    listPettyCashExpenses:  (p={}) => get('/treasury/petty-cash/expenses', p),
+    createPettyCashExpense: (b)    => post('/treasury/petty-cash/expenses', b),
+    postPettyCashExpense:   (id)   => post(`/treasury/petty-cash/expenses/${id}/post`, {}),
 
     // إعادة التعبئة (PCR)
-    listReplenishments:   (p={})    => get('/treasury/petty-cash/replenishments', p),
-    createReplenishment:  (fundId)  => post(`/treasury/petty-cash/replenishments?fund_id=${fundId}`, {}),
+    listReplenishments:  (p={})   => get('/treasury/petty-cash/replenishments', p),
+    createReplenishment: (fundId) => post(`/treasury/petty-cash/replenishments?fund_id=${fundId}`, {}),
 
     // جرد الصناديق
     createCount: (fundId, actual, notes='') =>
       post(`/treasury/petty-cash/counts?fund_id=${fundId}&actual_balance=${actual}&notes=${encodeURIComponent(notes)}`, {}),
 
     // التقارير
-    cashPositionReport:    ()       => get('/treasury/reports/cash-position'),
-    outstandingChecks:     ()       => get('/treasury/reports/outstanding-checks'),
-    pettyCashStatement:    (p={})   => get('/treasury/reports/petty-cash-statement', p),
+    cashPositionReport: () => get('/treasury/reports/cash-position'),
+    outstandingChecks:  () => get('/treasury/reports/outstanding-checks'),
+    pettyCashStatement: (p={}) => get('/treasury/reports/petty-cash-statement', p),
+  },
+
+  // ══════════════════════════════════════════════════════
+  // 📦 المخزون والمستودعات — Inventory Module
+  // ══════════════════════════════════════════════════════
+  inventory: {
+    // لوحة التحكم
+    dashboard: () => get('/inventory/dashboard'),
+
+    // وحدات القياس
+    listUOM:   ()    => get('/inventory/uom'),
+    createUOM: (b)   => post('/inventory/uom', b),
+
+    // التصنيفات
+    listCategories:  ()    => get('/inventory/categories'),
+    createCategory:  (b)   => post('/inventory/categories', b),
+
+    // الأصناف
+    listItems:   (p={})   => get('/inventory/items', p),
+    createItem:  (b)      => post('/inventory/items', b),
+    updateItem:  (id, b)  => put(`/inventory/items/${id}`, b),
+    getItem:     (id)     => get(`/inventory/items/${id}`),
+
+    // المستودعات
+    listWarehouses:  ()        => get('/inventory/warehouses'),
+    createWarehouse: (b)       => post('/inventory/warehouses', b),
+    updateWarehouse: (id, b)   => put(`/inventory/warehouses/${id}`, b),
+    listBins:        (whId)    => get(`/inventory/warehouses/${whId}/bins`),
+    createBin:       (whId, b) => post(`/inventory/warehouses/${whId}/bins`, b),
+
+    // الحركات المخزنية
+    listTransactions:  (p={}) => get('/inventory/transactions', p),
+    createTransaction: (b)    => post('/inventory/transactions', b),
+    getTransaction:    (id)   => get(`/inventory/transactions/${id}`),
+    postTransaction:   (id)   => post(`/inventory/transactions/${id}/post`, {}),
+    cancelTransaction: (id)   => del(`/inventory/transactions/${id}`),
+
+    // الجرد الفعلي
+    listCountSessions:  ()             => get('/inventory/count-sessions'),
+    createCountSession: (b)            => post('/inventory/count-sessions', b),
+    getCountLines:      (sessId)       => get(`/inventory/count-sessions/${sessId}/lines`),
+    updateCountLine:    (sessId, lineId, b) => put(`/inventory/count-sessions/${sessId}/lines/${lineId}`, b),
+    postCountSession:   (sessId)       => post(`/inventory/count-sessions/${sessId}/post`, {}),
+
+    // استعلام المخزون
+    stockInquiry: (p={}) => get('/inventory/stock-inquiry', p),
+
+    // التقارير
+    stockBalanceReport:  (p={}) => get('/inventory/reports/stock-balance', p),
+    stockMovementReport: (p={}) => get('/inventory/reports/stock-movement', p),
+    valuationReport:     ()     => get('/inventory/reports/valuation'),
+    agingReport:         ()     => get('/inventory/reports/aging'),
+
+    // الإعدادات
+    getAccountSettings:    ()           => get('/inventory/settings/accounts'),
+    updateAccountSettings: (txType, b)  => put(`/inventory/settings/accounts/${txType}`, b),
+  },
+
+  // ══════════════════════════════════════════════════════
+  // 🧾 المبيعات والذمم المدينة — AR & Sales Module
+  // ══════════════════════════════════════════════════════
+  ar: {
+    // لوحة التحكم
+    dashboard: () => get('/ar/dashboard'),
+
+    // العملاء
+    listCustomers:  (p={})    => get('/ar/customers', p),
+    createCustomer: (b)       => post('/ar/customers', b),
+    updateCustomer: (id, b)   => put(`/ar/customers/${id}`, b),
+    getCustomer:    (id)      => get(`/ar/customers/${id}`),
+
+    // الفواتير
+    listInvoices:     (p={})  => get('/ar/invoices', p),
+    createInvoice:    (b)     => post('/ar/invoices', b),
+    getInvoice:       (id)    => get(`/ar/invoices/${id}`),
+    postInvoice:      (id)    => post(`/ar/invoices/${id}/post`, {}),
+    cancelInvoice:    (id, reason) => post(`/ar/invoices/${id}/cancel?reason=${encodeURIComponent(reason)}`, {}),
+    getInvoiceXML:    (id)    => get(`/ar/invoices/${id}/xml`),
+    createCreditNote: (id, b) => post(`/ar/invoices/${id}/credit-note`, b),
+
+    // ZATCA
+    getZatcaSettings:    ()   => get('/ar/zatca/settings'),
+    updateZatcaSettings: (b)  => put('/ar/zatca/settings', b),
+    validateZatca:       (id) => post(`/ar/zatca/validate/${id}`, {}),
+
+    // المقبوضات
+    listReceipts:  (p={})              => get('/ar/receipts', p),
+    createReceipt: (b)                 => post('/ar/receipts', b),
+    postReceipt:   (id, invoiceId)     => post(`/ar/receipts/${id}/post${invoiceId ? '?invoice_id='+invoiceId : ''}`, {}),
+
+    // عروض الأسعار
+    listQuotations:   (p={})  => get('/ar/quotations', p),
+    createQuotation:  (b)     => post('/ar/quotations', b),
+    convertQuotation: (id)    => post(`/ar/quotations/${id}/convert`, {}),
+
+    // مندوبو المبيعات
+    listSalesReps:  ()    => get('/ar/sales-reps'),
+    createSalesRep: (b)   => post('/ar/sales-reps', b),
+
+    // التقارير
+    agingReport:       (p={})     => get('/ar/reports/aging', p),
+    customerStatement: (id, p={}) => get(`/ar/reports/customer-statement/${id}`, p),
+    salesSummary:      (p={})     => get('/ar/reports/sales-summary', p),
+    vatReport:         (p={})     => get('/ar/reports/vat-report', p),
   },
 }
 
