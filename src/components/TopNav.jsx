@@ -102,24 +102,98 @@ const NAV_ITEMS = [
     icon: '🧾',
     label: 'المبيعات',
     color: 'orange',
-    soon: true,
-    sections: []
+    sections: [
+      {
+        title: 'إدارة العملاء',
+        items: [
+          { id:'sales',     icon:'📊', label:'لوحة تحكم المبيعات',    sub:'Sales Dashboard' },
+          { id:'customers', icon:'👤', label:'العملاء',                sub:'Customers' },
+          { id:'sales_reps',icon:'🤝', label:'مندوبو المبيعات',        sub:'Sales Representatives' },
+        ]
+      },
+      {
+        title: 'دورة المبيعات',
+        items: [
+          { id:'quotations', icon:'📋', label:'عروض الأسعار',          sub:'Quotations' },
+          { id:'sales_invoices',icon:'🧾',label:'فواتير المبيعات',     sub:'Sales Invoices' },
+          { id:'credit_notes', icon:'↩️', label:'الإشعارات الدائنة',   sub:'Credit Notes' },
+          { id:'sales_receipts',icon:'💵',label:'المقبوضات',           sub:'Receipts' },
+        ]
+      },
+      {
+        title: 'التقارير',
+        items: [
+          { id:'sales_aging',  icon:'⏱️', label:'أعمار الديون',        sub:'Aging Report' },
+          { id:'sales_report', icon:'📈', label:'تقارير المبيعات',     sub:'Sales Reports' },
+          { id:'vat_sales',    icon:'🧮', label:'تقرير ضريبة المبيعات',sub:'VAT Sales Report' },
+        ]
+      },
+    ]
   },
   {
     id: 'purchases',
     icon: '🛒',
     label: 'المشتريات',
     color: 'purple',
-    soon: true,
-    sections: []
+    sections: [
+      {
+        title: 'إدارة الموردين',
+        items: [
+          { id:'purchases',  icon:'📊', label:'لوحة تحكم المشتريات',  sub:'Purchases Dashboard' },
+          { id:'vendors',    icon:'🏢', label:'الموردون',              sub:'Vendors' },
+        ]
+      },
+      {
+        title: 'دورة الشراء',
+        items: [
+          { id:'purchase_requests', icon:'📝', label:'طلبات الشراء',   sub:'Purchase Requests' },
+          { id:'purchase_orders',   icon:'📋', label:'أوامر الشراء',   sub:'Purchase Orders' },
+          { id:'grn',               icon:'📥', label:'إشعارات الاستلام', sub:'Goods Receipt' },
+          { id:'ap_invoices',       icon:'🧾', label:'فواتير الموردين', sub:'AP Invoices' },
+          { id:'ap_payments',       icon:'💸', label:'دفعات الموردين', sub:'AP Payments' },
+        ]
+      },
+      {
+        title: 'التقارير',
+        items: [
+          { id:'ap_aging',     icon:'⏱️', label:'أعمار الديون',        sub:'AP Aging' },
+          { id:'pending_del',  icon:'🚚', label:'توريد معلق',          sub:'Pending Delivery' },
+          { id:'vendor_perf',  icon:'⭐', label:'أداء الموردين',       sub:'Vendor Performance' },
+        ]
+      },
+    ]
   },
   {
     id: 'inventory',
     icon: '📦',
     label: 'المخزون',
     color: 'amber',
-    soon: true,
-    sections: []
+    sections: [
+      {
+        title: 'الإعداد',
+        items: [
+          { id:'inventory',    icon:'📊', label:'لوحة تحكم المخزون',   sub:'Inventory Dashboard' },
+          { id:'inv_items',    icon:'🏷️', label:'بطاقات الأصناف',      sub:'Item Master' },
+          { id:'warehouses',   icon:'🏭', label:'المستودعات',           sub:'Warehouses' },
+        ]
+      },
+      {
+        title: 'الحركات',
+        items: [
+          { id:'inv_transactions',icon:'📋',label:'الحركات المخزنية',  sub:'Inventory Transactions' },
+          { id:'inv_count',    icon:'🔍', label:'الجرد الفعلي',         sub:'Physical Count' },
+          { id:'inv_inquiry',  icon:'🔎', label:'استعلام المخزون',      sub:'Stock Inquiry' },
+        ]
+      },
+      {
+        title: 'التقارير',
+        items: [
+          { id:'inv_balance',   icon:'⚖️', label:'رصيد المخزون',       sub:'Stock Balance' },
+          { id:'inv_valuation', icon:'💰', label:'تقييم المخزون',      sub:'Valuation' },
+          { id:'inv_aging',     icon:'⏱️', label:'تقادم المخزون',      sub:'Aging Report' },
+        ]
+      },
+    ]
   },
   {
     id: 'hr',
