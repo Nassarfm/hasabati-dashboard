@@ -2,17 +2,17 @@
 import { useState } from 'react'
 import { useAuth } from '../AuthContext'
 
-const SECTIONS = [
+// ── قوائم الوحدات ──────────────────────────────────────
+const ACCOUNTING_SECTIONS = [
   {
     id: 'master', label: 'البيانات الأساسية', icon: '🗂️',
     items: [
-      { id:'coa',               icon:'📊', label:'دليل الحسابات' },
-      { id:'dimensions',        icon:'🏷️', label:'الأبعاد المحاسبية' },
-      { id:'branches',          icon:'🏢', label:'الفروع' },
-      { id:'costcenters',       icon:'💰', label:'مراكز التكلفة' },
-      { id:'projects',          icon:'📁', label:'المشاريع' },
-      { id:'fiscal',            icon:'📅', label:'الفترات المالية' },
-      { id:'opening_balances',  icon:'🏦', label:'الأرصدة الافتتاحية' },
+      { id:'coa',         icon:'📊', label:'دليل الحسابات' },
+      { id:'dimensions',  icon:'🏷️', label:'الأبعاد المحاسبية' },
+      { id:'branches',    icon:'🏢', label:'الفروع' },
+      { id:'costcenters', icon:'💰', label:'مراكز التكلفة' },
+      { id:'projects',    icon:'📁', label:'المشاريع' },
+      { id:'fiscal',      icon:'📅', label:'الفترات المالية' },
     ]
   },
   {
@@ -39,139 +39,181 @@ const SECTIONS = [
     ]
   },
   {
-    id: 'fin_settings', label: 'الإعدادات المالية', icon: '⚙️',
+    id: 'settings', label: 'إعدادات المنشأة', icon: '⚙️',
     items: [
       { id:'users',             icon:'👥', label:'إدارة المستخدمين' },
       { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات' },
       { id:'company_settings',  icon:'🏢', label:'إعدادات المنشأة' },
       { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة (VAT)' },
-      { id:'currency_settings', icon:'💱', label:'العملات',             badge:'قريباً' },
-      { id:'localization',      icon:'🌍', label:'الإقليمية والتوطين',  badge:'قريباً' },
+      { id:'currency_settings', icon:'💱', label:'العملات وأسعار الصرف' },
+      { id:'number_series',     icon:'🔢', label:'الترقيم التلقائي' },
+      { id:'audit_trail',       icon:'🔍', label:'سجل النشاط' },
     ]
   },
-  {
-    id: 'other', label: 'الوحدات الأخرى', icon: '🏭',
-    items: [
-      { id:'sales',     icon:'🧾', label:'المبيعات',        badge:'قريباً' },
-      { id:'purchases', icon:'🛒', label:'المشتريات',       badge:'قريباً' },
-      { id:'inventory', icon:'📦', label:'المخزون',         badge:'قريباً' },
-      { id:'hr',        icon:'👥', label:'الموارد البشرية', badge:'قريباً' },
-      { id:'assets',    icon:'🏗️', label:'الأصول الثابتة', badge:'قريباً' },
-      { id:'treasury',  icon:'🏦', label:'الخزينة',         badge:'قريباً' },
-    ]
-  }
 ]
 
-export default function Sidebar({ activePage, onNavigate, collapsed, onToggle }) {
+const TREASURY_SECTIONS = [
+  {
+    id: 'treasury_main', label: 'الخزينة والبنوك', icon: '🏦',
+    items: [
+      { id:'treasury', tab:'dashboard',    icon:'📊', label:'لوحة التحكم'          },
+      { id:'treasury', tab:'bank-accounts',icon:'🏦', label:'الحسابات البنكية'     },
+      { id:'treasury', tab:'cash',         icon:'💵', label:'سندات القبض والصرف'  },
+      { id:'treasury', tab:'bank-tx',      icon:'🏛️', label:'حركات البنوك'        },
+      { id:'treasury', tab:'transfers',    icon:'🔄', label:'التحويلات الداخلية'   },
+      { id:'treasury', tab:'checks',       icon:'📝', label:'إدارة الشيكات'       },
+      { id:'treasury', tab:'reconcile',    icon:'⚖️', label:'التسوية البنكية'     },
+      { id:'treasury', tab:'petty',        icon:'👜', label:'العهدة النثرية'       },
+    ]
+  },
+]
+
+const SECTIONS_MAP = {
+  accounting: ACCOUNTING_SECTIONS,
+  treasury:   TREASURY_SECTIONS,
+  sales:      [],
+  purchases:  [],
+  inventory:  [],
+  hr:         [],
+  assets:     [],
+}
+
+export default function Sidebar({ activePage, activeModule, onNavigate, collapsed, onToggle }) {
   const { user, logout } = useAuth()
-  const [openSections, setOpenSections] = useState({
-    master:true, transactions:true, reports:true, fin_settings:true, other:false
-  })
+  const sections = SECTIONS_MAP[activeModule] || ACCOUNTING_SECTIONS
+
+  const defaultOpen = {}
+  sections.forEach(s => { defaultOpen[s.id] = true })
+  const [openSections, setOpenSections] = useState(defaultOpen)
 
   const toggle = (id) => setOpenSections(p => ({...p, [id]:!p[id]}))
 
+  const MODULE_ACCENT = {
+    accounting: { border: 'border-blue-700',    bg: '#1e3a5f', dot: 'bg-blue-400'    },
+    treasury:   { border: 'border-emerald-600', bg: '#064e3b', dot: 'bg-emerald-400' },
+    sales:      { border: 'border-orange-500',  bg: '#7c2d12', dot: 'bg-orange-400'  },
+    purchases:  { border: 'border-purple-600',  bg: '#4c1d95', dot: 'bg-purple-400'  },
+    inventory:  { border: 'border-amber-500',   bg: '#78350f', dot: 'bg-amber-400'   },
+    hr:         { border: 'border-pink-500',    bg: '#831843', dot: 'bg-pink-400'    },
+    assets:     { border: 'border-slate-600',   bg: '#1e293b', dot: 'bg-slate-400'   },
+  }
+  const accent = MODULE_ACCENT[activeModule] || MODULE_ACCENT.accounting
+
   return (
-    <div className="fixed top-0 right-0 h-screen flex flex-col bg-white border-l border-slate-200 shadow-lg z-30 transition-all duration-300 overflow-hidden"
-      style={{width: collapsed ? 64 : 240}}>
+    <div
+      className={`fixed top-0 right-0 h-screen flex flex-col bg-white border-l-4 ${accent.border} shadow-lg z-20 transition-all duration-300 overflow-hidden`}
+      style={{width: collapsed ? 64 : 240, top: 0}}>
 
-      {/* Logo */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100 shrink-0"
-        style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
-        {!collapsed
-          ? <div><div className="text-white font-bold text-lg leading-none">حساباتي</div><div className="text-blue-200 text-xs mt-0.5">ERP v2.0</div></div>
-          : <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center mx-auto"><span className="text-white font-bold">ح</span></div>
-        }
-        <button onClick={onToggle} className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xs shrink-0">
-          {collapsed ? '←' : '→'}
-        </button>
-      </div>
+      {/* Module label strip */}
+      {!collapsed && (
+        <div className="px-4 py-2 text-xs font-bold text-white/80 shrink-0"
+          style={{background: accent.bg}}>
+          {activeModule === 'treasury' ? '🏦 الخزينة والبنوك' :
+           activeModule === 'accounting' ? '📊 المحاسبة' :
+           activeModule}
+        </div>
+      )}
 
-      {/* Dashboard */}
-      <div className="px-2 pt-2 shrink-0">
-        <button onClick={() => onNavigate('dashboard')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all
-            ${activePage==='dashboard'
-              ? 'bg-blue-700 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'}`}>
-          <span className="text-base shrink-0">🏠</span>
-          {!collapsed && <span>لوحة التحكم</span>}
-        </button>
-      </div>
-
-      {/* Scrollable Nav */}
-      <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-        {SECTIONS.map(section => (
-          <div key={section.id} className="mb-1">
-            {!collapsed && (
-              <button onClick={() => toggle(section.id)}
-                className="w-full flex items-center justify-between px-2 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider hover:text-slate-600 transition-colors">
-                <span className="flex items-center gap-1.5">
-                  <span>{section.icon}</span>
-                  <span>{section.label}</span>
-                </span>
-                <span className="text-slate-300 text-xs">{openSections[section.id] ? '▲' : '▼'}</span>
-              </button>
-            )}
-
-            {(collapsed || openSections[section.id]) && (
-              <div className="space-y-0.5">
-                {section.items.map(item => {
-                  const isActive = activePage === item.id
-                  return (
-                    <button key={item.id}
-                      onClick={() => !item.badge && onNavigate(item.id)}
-                      disabled={!!item.badge}
-                      title={collapsed ? item.label : undefined}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all
-                        ${isActive
-                          ? 'bg-blue-700 text-white shadow-sm'
-                          : item.badge
-                            ? 'text-slate-300 cursor-not-allowed'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'}`}>
-                      <span className="text-sm shrink-0">{item.icon}</span>
-                      {!collapsed && (
-                        <span className="flex-1 text-right truncate">{item.label}</span>
-                      )}
-                      {!collapsed && item.badge && (
-                        <span className="text-xs bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full shrink-0">
-                          {item.badge}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        ))}
-      </nav>
-
-      {/* User Footer */}
-      <div className="border-t border-slate-100 p-3 shrink-0">
-        {!collapsed ? (
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-700 flex items-center justify-center text-white font-bold text-sm shrink-0">
-              {user?.email?.[0]?.toUpperCase() || 'U'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-slate-700 truncate">
-                {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'مستخدم'}
-              </div>
-              <div className="text-xs text-slate-400 truncate">{user?.email}</div>
-            </div>
-            <button onClick={logout}
-              className="text-xs text-red-400 hover:text-red-600 shrink-0 px-1.5 py-1 rounded-lg hover:bg-red-50 transition-colors"
-              title="تسجيل الخروج">
-              ⏻
+      {/* Navigation */}
+      <div className="flex-1 overflow-y-auto py-2">
+        {!collapsed && (
+          /* Dashboard shortcut for accounting */
+          activeModule === 'accounting' && (
+            <button
+              onClick={()=>onNavigate('dashboard')}
+              className={`flex items-center gap-2 w-full px-4 py-2.5 text-xs font-semibold transition-colors mb-1
+                ${activePage==='dashboard'
+                  ? 'bg-blue-700 text-white'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-blue-700'}`}>
+              <span>🏠</span> لوحة التحكم
             </button>
+          )
+        )}
+
+        {collapsed ? (
+          /* Collapsed: icons only */
+          <div className="flex flex-col items-center gap-1 py-2">
+            {activeModule==='accounting' && (
+              <button onClick={()=>onNavigate('dashboard')}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-base transition-colors
+                  ${activePage==='dashboard'?'bg-blue-700 text-white':'text-slate-500 hover:bg-slate-100'}`}
+                title="لوحة التحكم">🏠</button>
+            )}
+            {sections.flatMap(s=>s.items).map((item,i)=>(
+              <button key={i} onClick={()=>onNavigate(item.id)}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-base transition-colors
+                  ${activePage===item.id?'bg-blue-700 text-white':'text-slate-500 hover:bg-slate-100'}`}
+                title={item.label}>
+                {item.icon}
+              </button>
+            ))}
           </div>
         ) : (
-          <button onClick={logout}
-            className="w-full flex items-center justify-center py-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-            title="تسجيل الخروج">
-            ⏻
-          </button>
+          sections.map(section => (
+            <div key={section.id} className="mb-1">
+              <button
+                onClick={()=>toggle(section.id)}
+                className="flex items-center justify-between w-full px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider">
+                <div className="flex items-center gap-1.5">
+                  <span>{section.icon}</span>
+                  <span>{section.label}</span>
+                </div>
+                <span className={`transition-transform ${openSections[section.id]?'rotate-0':'-rotate-90'}`}>▾</span>
+              </button>
+
+              {openSections[section.id] && (
+                <div className="pb-1">
+                  {section.items.map((item, i) => {
+                    const isActive = activePage === item.id && !item.badge
+                    return (
+                      <button
+                        key={i}
+                        onClick={()=>!item.badge && onNavigate(item.id)}
+                        className={`flex items-center gap-2.5 w-full px-4 py-2 text-xs font-medium transition-colors
+                          ${isActive
+                            ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-700 font-bold'
+                            : item.badge
+                              ? 'text-slate-300 cursor-not-allowed'
+                              : 'text-slate-600 hover:bg-slate-50 hover:text-blue-700'}`}>
+                        <span className="w-4 text-center text-sm">{item.icon}</span>
+                        <span className="flex-1 text-right">{item.label}</span>
+                        {item.badge && (
+                          <span className="text-xs bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">{item.badge}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ))
         )}
+      </div>
+
+      {/* Footer */}
+      <div className="shrink-0 border-t border-slate-100 p-3">
+        {!collapsed ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                style={{background:accent.bg}}>
+                {user?.email?.[0]?.toUpperCase()||'م'}
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-700 truncate">{user?.email?.split('@')[0]||'مستخدم'}</div>
+                <div className="text-xs text-slate-400 truncate">{user?.email||''}</div>
+              </div>
+            </div>
+            <button onClick={logout} className="text-slate-400 hover:text-red-500 text-sm shrink-0 ml-1" title="تسجيل الخروج">⏻</button>
+          </div>
+        ) : (
+          <button onClick={logout} className="w-full flex items-center justify-center text-slate-400 hover:text-red-500 py-1" title="تسجيل الخروج">⏻</button>
+        )}
+        {/* Toggle */}
+        <button onClick={onToggle}
+          className="mt-2 w-full flex items-center justify-center py-1 text-xs text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-50">
+          {collapsed ? '◀' : '▶ طي القائمة'}
+        </button>
       </div>
     </div>
   )

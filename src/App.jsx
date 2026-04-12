@@ -1,162 +1,137 @@
-import { useState, lazy, Suspense } from 'react'
+import { useState } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
-import TopNav from './components/TopNav'
+import Sidebar from './components/Sidebar'
 import NotificationBell from './components/NotificationBell'
 import { ToastProvider } from './components/UI'
+import LoginPage from './pages/LoginPage'
+import DashboardPage from './pages/DashboardPage'
+import COAPage from './pages/COAPage'
+import JournalPage from './pages/JournalPage'
+import DimensionsPage from './pages/DimensionsPage'
+import BranchesPage from './pages/BranchesPage'
+import CostCentersPage from './pages/CostCentersPage'
+import ProjectsPage from './pages/ProjectsPage'
+import FiscalPeriodsPage from './pages/FiscalPeriodsPage'
+import TrialBalancePage from './pages/TrialBalancePage'
+import LedgerPage from './pages/LedgerPage'
+import RecurringPage from './pages/RecurringPage'
+import ReversingPage from './pages/ReversingPage'
+import AllocationPage from './pages/AllocationPage'
+import IncomeReportPage from './pages/IncomeReportPage'
+import BalanceReportPage from './pages/BalanceReportPage'
+import CashFlowReportPage from './pages/CashFlowReportPage'
+import FinancialAnalysisPage from './pages/FinancialAnalysisPage'
+import CompareReportPage from './pages/CompareReportPage'
+import ChartsReportPage from './pages/ChartsReportPage'
+import { SalesPage, PurchasesPage, InventoryPage, HRPage, AssetsPage } from './pages/OtherPages'
+import TreasuryPage from './pages/TreasuryPage'
+import VATPage from './pages/VATPage'
+import VATSettingsPage from './pages/VATSettingsPage'
+import CompanySettingsPage from './pages/CompanySettingsPage'
+import UserManagementPage from './pages/UserManagementPage'
+import RolesPermissionsPage from './pages/RolesPermissionsPage'
 
-// ── Lazy imports ─────────────────────────────────────────
-const LoginPage             = lazy(() => import('./pages/LoginPage'))
-const DashboardPage         = lazy(() => import('./pages/DashboardPage'))
-const COAPage               = lazy(() => import('./pages/COAPage'))
-const JournalPage           = lazy(() => import('./pages/JournalPage'))
-const DimensionsPage        = lazy(() => import('./pages/DimensionsPage'))
-const BranchesPage          = lazy(() => import('./pages/BranchesPage'))
-const CostCentersPage       = lazy(() => import('./pages/CostCentersPage'))
-const ProjectsPage          = lazy(() => import('./pages/ProjectsPage'))
-const FiscalPeriodsPage     = lazy(() => import('./pages/FiscalPeriodsPage'))
-const OpeningBalancesPage   = lazy(() => import('./pages/OpeningBalancesPage'))
-const TrialBalancePage      = lazy(() => import('./pages/TrialBalancePage'))
-const LedgerPage            = lazy(() => import('./pages/LedgerPage'))
-const RecurringPage         = lazy(() => import('./pages/RecurringPage'))
-const ReversingPage         = lazy(() => import('./pages/ReversingPage'))
-const AllocationPage        = lazy(() => import('./pages/AllocationPage'))
-const IncomeReportPage      = lazy(() => import('./pages/IncomeReportPage'))
-const BalanceReportPage     = lazy(() => import('./pages/BalanceReportPage'))
-const CashFlowReportPage    = lazy(() => import('./pages/CashFlowReportPage'))
-const FinancialAnalysisPage = lazy(() => import('./pages/FinancialAnalysisPage'))
-const CompareReportPage     = lazy(() => import('./pages/CompareReportPage'))
-const ChartsReportPage      = lazy(() => import('./pages/ChartsReportPage'))
-const VATPage               = lazy(() => import('./pages/VATPage'))
-const VATSettingsPage       = lazy(() => import('./pages/VATSettingsPage'))
-const CompanySettingsPage   = lazy(() => import('./pages/CompanySettingsPage'))
-const UserManagementPage    = lazy(() => import('./pages/UserManagementPage'))
-const RolesPermissionsPage  = lazy(() => import('./pages/RolesPermissionsPage'))
-const CurrencyPage          = lazy(() => import('./pages/CurrencyPage'))
-const AuditTrailPage        = lazy(() => import('./pages/AuditTrailPage'))
-const NumberSeriesPage      = lazy(() => import('./pages/NumberSeriesPage'))
+// ── تعريف الوحدات الرئيسية ────────────────────────────
+const MODULES = [
+  { id: 'accounting', icon: '📊', label: 'المحاسبة',      color: 'blue'   },
+  { id: 'treasury',   icon: '🏦', label: 'الخزينة',       color: 'emerald'},
+  { id: 'sales',      icon: '🧾', label: 'المبيعات',      color: 'orange', soon: true },
+  { id: 'purchases',  icon: '🛒', label: 'المشتريات',     color: 'purple', soon: true },
+  { id: 'inventory',  icon: '📦', label: 'المخزون',       color: 'amber',  soon: true },
+  { id: 'hr',         icon: '👥', label: 'الموارد البشرية',color: 'pink',   soon: true },
+  { id: 'assets',     icon: '🏗️', label: 'الأصول الثابتة',color: 'slate',  soon: true },
+]
 
-const SalesPage    = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.SalesPage })))
-const PurchasesPage= lazy(() => import('./pages/OtherPages').then(m => ({ default: m.PurchasesPage })))
-const InventoryPage= lazy(() => import('./pages/OtherPages').then(m => ({ default: m.InventoryPage })))
-const HRPage       = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.HRPage })))
-const AssetsPage   = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.AssetsPage })))
-const TreasuryPage = lazy(() => import('./pages/OtherPages').then(m => ({ default: m.TreasuryPage })))
-
-// ── Breadcrumb Map ────────────────────────────────────────
-// Home > Section > SubSection > Page
-const BREADCRUMBS = {
-  dashboard:          [{ label: 'الرئيسية' }],
-  coa:                [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'دليل الحسابات' }],
-  dimensions:         [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'الأبعاد المحاسبية' }],
-  branches:           [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'الفروع' }],
-  costcenters:        [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'مراكز التكلفة' }],
-  projects:           [{ label: 'المحاسبة' }, { label: 'أستاذ الحسابات' }, { label: 'المشاريع' }],
-  fiscal:             [{ label: 'المحاسبة' }, { label: 'إعدادات المحاسبة' }, { label: 'السنوات والفترات المالية' }],
-  opening_balances:   [{ label: 'المحاسبة' }, { label: 'إعدادات المحاسبة' }, { label: 'الأرصدة الافتتاحية' }],
-  journal:            [{ label: 'المحاسبة' }, { label: 'دفتر الأستاذ' }, { label: 'القيود اليومية' }],
-  reversing:          [{ label: 'المحاسبة' }, { label: 'دفتر الأستاذ' }, { label: 'القيود العكسية' }],
-  recurring:          [{ label: 'المحاسبة' }, { label: 'دفتر الأستاذ' }, { label: 'القيود المتكررة' }],
-  allocation:         [{ label: 'المحاسبة' }, { label: 'دفتر الأستاذ' }, { label: 'قيد التوزيع' }],
-  trialbal:           [{ label: 'التقارير' }, { label: 'الميزان والأستاذ' }, { label: 'ميزان المراجعة' }],
-  ledger:             [{ label: 'التقارير' }, { label: 'الميزان والأستاذ' }, { label: 'الأستاذ العام' }],
-  income_report:      [{ label: 'التقارير' }, { label: 'القوائم المالية' }, { label: 'قائمة الدخل' }],
-  balance_report:     [{ label: 'التقارير' }, { label: 'القوائم المالية' }, { label: 'الميزانية العمومية' }],
-  cashflow_report:    [{ label: 'التقارير' }, { label: 'القوائم المالية' }, { label: 'التدفقات النقدية' }],
-  financial_analysis: [{ label: 'التقارير' }, { label: 'التحليل والمقارنة' }, { label: 'التحليل المالي' }],
-  compare_report:     [{ label: 'التقارير' }, { label: 'التحليل والمقارنة' }, { label: 'مقارنة الفترات' }],
-  charts_report:      [{ label: 'التقارير' }, { label: 'التحليل والمقارنة' }, { label: 'الرسوم البيانية' }],
-  vat:                [{ label: 'التقارير' }, { label: 'الضريبة' }, { label: 'ضريبة القيمة المضافة' }],
-  company_settings:   [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'إعدادات الشركة' }],
-  vat_settings:       [{ label: 'الإعداد' }, { label: 'الضريبة' }, { label: 'إعدادات VAT' }],
-  currency_settings:  [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'العملات وأسعار الصرف' }],
-  audit_trail:        [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'سجل النشاط والتدقيق' }],
-  number_series:      [{ label: 'الإعداد' }, { label: 'المنشأة والنظام' }, { label: 'الترقيم التلقائي' }],
-  users:              [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'إدارة المستخدمين' }],
-  roles_permissions:  [{ label: 'الإعداد' }, { label: 'المستخدمون والصلاحيات' }, { label: 'الأدوار والصلاحيات' }],
-  sales:              [{ label: 'الوحدات' }, { label: 'المبيعات' }],
-  purchases:          [{ label: 'الوحدات' }, { label: 'المشتريات' }],
-  inventory:          [{ label: 'الوحدات' }, { label: 'المخزون' }],
-  hr:                 [{ label: 'الوحدات' }, { label: 'الموارد البشرية' }],
-  assets:             [{ label: 'الوحدات' }, { label: 'الأصول الثابتة' }],
-  treasury:           [{ label: 'الوحدات' }, { label: 'الخزينة' }],
+const MODULE_COLORS = {
+  blue:    { active: 'bg-blue-700 text-white shadow-blue-200',    hover: 'hover:bg-blue-50 hover:text-blue-700',    dot: 'bg-blue-500'    },
+  emerald: { active: 'bg-emerald-600 text-white shadow-emerald-200', hover: 'hover:bg-emerald-50 hover:text-emerald-700', dot: 'bg-emerald-500' },
+  orange:  { active: 'bg-orange-500 text-white',  hover: 'hover:bg-orange-50 hover:text-orange-600',  dot: 'bg-orange-500'  },
+  purple:  { active: 'bg-purple-600 text-white',  hover: 'hover:bg-purple-50 hover:text-purple-700',  dot: 'bg-purple-500'  },
+  amber:   { active: 'bg-amber-500 text-white',   hover: 'hover:bg-amber-50 hover:text-amber-700',   dot: 'bg-amber-500'   },
+  pink:    { active: 'bg-pink-500 text-white',    hover: 'hover:bg-pink-50 hover:text-pink-700',    dot: 'bg-pink-500'    },
+  slate:   { active: 'bg-slate-600 text-white',   hover: 'hover:bg-slate-100 hover:text-slate-700', dot: 'bg-slate-500'   },
 }
 
-// ── Loaders ───────────────────────────────────────────────
-function PageLoader() {
-  return (
-    <div className="min-h-[50vh] flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-3"/>
-        <p className="text-xs text-slate-400">جارٍ التحميل...</p>
-      </div>
-    </div>
-  )
+// ── صفحات كل وحدة ────────────────────────────────────
+const MODULE_DEFAULT_PAGE = {
+  accounting: 'dashboard',
+  treasury:   'treasury',
+  sales:      'sales',
+  purchases:  'purchases',
+  inventory:  'inventory',
+  hr:         'hr',
+  assets:     'assets',
 }
 
-function AppLoader() {
-  return (
+const PAGE_LABELS = {
+  dashboard:          'لوحة التحكم',
+  coa:                'دليل الحسابات',
+  dimensions:         'الأبعاد المحاسبية',
+  branches:           'الفروع',
+  costcenters:        'مراكز التكلفة',
+  projects:           'المشاريع',
+  fiscal:             'الفترات المالية',
+  journal:            'القيود اليومية',
+  reversing:          'القيود العكسية',
+  recurring:          'القيود المتكررة',
+  allocation:         'قيد التوزيع',
+  trialbal:           'ميزان المراجعة',
+  ledger:             'الأستاذ العام',
+  income_report:      'قائمة الدخل',
+  balance_report:     'الميزانية العمومية',
+  cashflow_report:    'التدفقات النقدية',
+  financial_analysis: 'التحليل المالي',
+  compare_report:     'مقارنة الفترات',
+  charts_report:      'الرسوم البيانية',
+  vat:                'ضريبة القيمة المضافة',
+  users:              'إدارة المستخدمين',
+  roles_permissions:  'الأدوار والصلاحيات',
+  company_settings:   'إعدادات المنشأة',
+  vat_settings:       'إعدادات الضريبة (VAT)',
+  currency_settings:  'العملات وأسعار الصرف',
+  localization:       'الإقليمية والتوطين',
+  treasury:           'الخزينة والبنوك',
+  sales:              'المبيعات',
+  purchases:          'المشتريات',
+  inventory:          'المخزون',
+  hr:                 'الموارد البشرية',
+  assets:             'الأصول الثابتة',
+}
+
+function AppContent() {
+  const { user, loading } = useAuth()
+  const [activeModule, setActiveModule] = useState('accounting')
+  const [page,         setPage]         = useState('dashboard')
+  const [collapsed,    setCollapsed]    = useState(false)
+  const [ledgerAccount, setLedgerAccount] = useState({ code:'', name:'' })
+
+  const navigateToLedger = (code, name) => { setLedgerAccount({code,name}); setPage('ledger') }
+
+  const navigate = (p) => {
+    if (p !== 'ledger') setLedgerAccount({code:'',name:''})
+    setPage(p)
+  }
+
+  const switchModule = (mod) => {
+    if (mod.soon) return
+    setActiveModule(mod.id)
+    navigate(MODULE_DEFAULT_PAGE[mod.id])
+  }
+
+  if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="text-center">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-          style={{ background: 'linear-gradient(135deg,#1e3a5f,#1e40af)' }}>
+        <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <span className="text-white text-2xl font-bold">ح</span>
         </div>
         <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/>
-        <div className="text-xs text-slate-400 mt-3">حساباتي ERP</div>
       </div>
     </div>
   )
-}
 
-// ── Breadcrumb ─────────────────────────────────────────────
-function Breadcrumb({ page, ledgerAccount, onNavigate }) {
-  const crumbs = page === 'ledger' && ledgerAccount.code
-    ? [
-        ...( BREADCRUMBS['ledger'] || [] ),
-        { label: ledgerAccount.code + ' — ' + ledgerAccount.name }
-      ]
-    : BREADCRUMBS[page] || []
+  if (!user) return <LoginPage/>
 
-  if (crumbs.length === 0) return null
-
-  return (
-    <nav className="flex items-center gap-1 text-xs" dir="rtl">
-      <button onClick={() => onNavigate('dashboard')}
-        className="text-blue-600 hover:text-blue-800 font-medium transition-colors">
-        الرئيسية
-      </button>
-      {crumbs.map((crumb, i) => (
-        <span key={i} className="flex items-center gap-1">
-          <span className="text-slate-300 mx-0.5">›</span>
-          <span className={i === crumbs.length - 1
-            ? 'text-slate-700 font-semibold'
-            : 'text-slate-400'}>
-            {crumb.label}
-          </span>
-        </span>
-      ))}
-    </nav>
-  )
-}
-
-
-// ── Main App Content ──────────────────────────────────────
-function AppContent() {
-  const { user, loading } = useAuth()
-  const [page,          setPage]          = useState('dashboard')
-  const [ledgerAccount, setLedgerAccount] = useState({ code: '', name: '' })
-
-  const navigateToLedger = (code, name) => { setLedgerAccount({ code, name }); setPage('ledger') }
-  const navigate = (p) => {
-    if (p !== 'ledger') setLedgerAccount({ code: '', name: '' })
-    setPage(p)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  if (loading) return <AppLoader/>
-  if (!user) return (
-    <Suspense fallback={<AppLoader/>}><LoginPage/></Suspense>
-  )
+  const sideWidth = collapsed ? 64 : 240
 
   const renderPage = () => {
     switch (page) {
@@ -167,11 +142,10 @@ function AppContent() {
       case 'costcenters':        return <CostCentersPage/>
       case 'projects':           return <ProjectsPage/>
       case 'fiscal':             return <FiscalPeriodsPage/>
-      case 'opening_balances':   return <OpeningBalancesPage/>
       case 'journal':            return <JournalPage/>
-      case 'reversing':          return <ReversingPage onNavigateToJournal={() => navigate('journal')}/>
+      case 'reversing':          return <ReversingPage onNavigateToJournal={()=>navigate('journal')}/>
       case 'recurring':          return <RecurringPage/>
-      case 'allocation':         return <AllocationPage onBack={() => navigate('journal')}/>
+      case 'allocation':         return <AllocationPage onBack={()=>navigate('journal')}/>
       case 'trialbal':           return <TrialBalancePage onNavigateToLedger={navigateToLedger}/>
       case 'ledger':             return <LedgerPage initialAccountCode={ledgerAccount.code} initialAccountName={ledgerAccount.name}/>
       case 'income_report':      return <IncomeReportPage/>
@@ -185,65 +159,128 @@ function AppContent() {
       case 'roles_permissions':  return <RolesPermissionsPage/>
       case 'company_settings':   return <CompanySettingsPage/>
       case 'vat_settings':       return <VATSettingsPage/>
-      case 'currency_settings':   return <CurrencyPage/>
-      case 'audit_trail':          return <AuditTrailPage/>
-      case 'number_series':        return <NumberSeriesPage/>
+      case 'currency_settings':  return <VATSettingsPage/>
+      case 'localization':       return <VATSettingsPage/>
+      // ── الخزينة والبنوك ──
+      case 'treasury':           return <TreasuryPage/>
+      // ── وحدات أخرى ──
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>
       case 'hr':                 return <HRPage/>
       case 'assets':             return <AssetsPage/>
-      case 'treasury':           return <TreasuryPage/>
       default:                   return <DashboardPage/>
     }
   }
 
-  const isDashboard = page === 'dashboard'
+  const getBreadcrumb = () => {
+    const mod = MODULES.find(m => m.id === activeModule)
+    if (page==='ledger' && ledgerAccount.code) return (
+      <div className="flex items-center gap-2 text-sm">
+        <span className="font-bold text-slate-700">حساباتي</span>
+        <span className="text-slate-300">/</span>
+        <span className="text-slate-500">{mod?.label}</span>
+        <span className="text-slate-300">/</span>
+        <button onClick={()=>navigate('trialbal')} className="text-slate-500 hover:text-blue-700">ميزان المراجعة</button>
+        <span className="text-slate-300">/</span>
+        <span className="font-mono text-blue-700 font-bold">{ledgerAccount.code}</span>
+        <span className="text-slate-600 text-xs">{ledgerAccount.name}</span>
+      </div>
+    )
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        <span className="font-bold text-slate-700">حساباتي</span>
+        <span className="text-slate-300">/</span>
+        <span className="text-slate-500">{mod?.label}</span>
+        <span className="text-slate-300">/</span>
+        <span className="text-slate-800 font-medium">{PAGE_LABELS[page]||page}</span>
+      </div>
+    )
+  }
+
+  const activeMod = MODULES.find(m=>m.id===activeModule)
+  const modColor = MODULE_COLORS[activeMod?.color||'blue']
 
   return (
     <div className="min-h-screen bg-slate-50" dir="rtl">
+      <Sidebar activePage={page} activeModule={activeModule} onNavigate={navigate} collapsed={collapsed} onToggle={()=>setCollapsed(p=>!p)}/>
 
-      {/* ── Top Navigation ── */}
-      <TopNav
-        activePage={page}
-        onNavigate={navigate}
-        NotificationBell={NotificationBell}
-      />
+      <main className="min-h-screen transition-all duration-300" style={{marginRight: sideWidth}}>
 
-      {/* ── Main Content ── */}
-      <main style={{ paddingTop: 52 }} className="min-h-screen">
+        {/* ══ شريط الوحدات العلوي ══════════════════════════ */}
+        <div className="sticky top-0 z-30 border-b border-slate-200 shadow-sm"
+          style={{background:'linear-gradient(135deg,#0f2744 0%,#1e3a5f 50%,#1e40af 100%)'}}>
+          <div className="flex items-center px-6 py-0">
+            {/* Logo */}
+            <div className="flex items-center gap-2 ml-6 py-3 border-l border-white/10 pl-6">
+              <div className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">ح</span>
+              </div>
+              <div className="hidden sm:block">
+                <div className="text-white font-bold text-sm leading-none">حساباتي</div>
+                <div className="text-blue-200 text-xs">ERP v2.0</div>
+              </div>
+            </div>
 
-        {/* Sub-header: Breadcrumb */}
-        {!isDashboard && (
-          <div className="bg-white border-b border-slate-100 px-6 py-2.5 flex items-center justify-between sticky top-[52px] z-20">
-            <Breadcrumb page={page} ledgerAccount={ledgerAccount} onNavigate={navigate}/>
+            {/* Module Tabs */}
+            <div className="flex items-center gap-1 flex-1 py-2">
+              {MODULES.map(mod => {
+                const isActive = activeModule === mod.id
+                return (
+                  <button
+                    key={mod.id}
+                    onClick={() => switchModule(mod)}
+                    title={mod.soon ? 'قريباً' : mod.label}
+                    className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap
+                      ${isActive
+                        ? 'bg-white text-blue-800 shadow-lg'
+                        : mod.soon
+                          ? 'text-white/30 cursor-not-allowed'
+                          : 'text-white/70 hover:text-white hover:bg-white/10'
+                      }`}
+                  >
+                    <span className="text-sm">{mod.icon}</span>
+                    <span className="hidden md:inline">{mod.label}</span>
+                    {isActive && (
+                      <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-1 bg-white rounded-t-full"/>
+                    )}
+                    {mod.soon && (
+                      <span className="text-xs text-white/30 hidden lg:inline">(قريباً)</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
 
-            <div className="flex items-center gap-3">
-              {/* زر رجوع للأستاذ من ميزان المراجعة */}
-              {page === 'ledger' && ledgerAccount.code && (
-                <button onClick={() => navigate('trialbal')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors">
-                  ‹ ميزان المراجعة
-                </button>
-              )}
-
-              {/* حالة الاتصال */}
-              <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
-                متصل بـ Railway
+            {/* Actions */}
+            <div className="flex items-center gap-2 py-2">
+              <NotificationBell/>
+              <div className="flex items-center gap-1.5 text-xs text-white/50">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"/>
+                <span className="hidden lg:inline">Railway</span>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Page Content */}
-        <div className={`${isDashboard ? 'p-0' : 'p-6'}`} key={page}>
-          <Suspense fallback={<PageLoader/>}>
-            {renderPage()}
-          </Suspense>
+        {/* ══ شريط الصفحة الثانوي ═══════════════════════════ */}
+        <header className="bg-white border-b border-slate-100 px-6 py-2.5 flex items-center justify-between">
+          {getBreadcrumb()}
+          <div className="flex items-center gap-2">
+            {page==='ledger' && ledgerAccount.code && (
+              <button onClick={()=>navigate('trialbal')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">
+                ← ميزان المراجعة
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* ══ المحتوى ═══════════════════════════════════════ */}
+        <div className="p-6" key={page}>
+          {renderPage()}
         </div>
       </main>
-
       <ToastProvider/>
     </div>
   )

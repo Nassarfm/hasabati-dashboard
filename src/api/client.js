@@ -50,7 +50,6 @@ export const api = {
     submitJE:          (id)            => post(`/accounting/je/${id}/submit`, {}),
     approveJE:         (id)            => post(`/accounting/je/${id}/approve`, {}),
     rejectJE:          (id, note)      => post(`/accounting/je/${id}/reject`, { note }),
-    reverseJE:         (id, b)         => post(`/accounting/je/${id}/reverse`, b),
     getActivity:       (jeId)          => get(`/accounting/je/${jeId}/activity`),
     getRecentActivity: ()              => get('/accounting/je/activity/recent'),
     listAttachments:   (jeId)          => get(`/accounting/je/${jeId}/attachments`),
@@ -75,8 +74,7 @@ export const api = {
     getFiscalLocks:     ()             => get('/accounting/fiscal-locks'),
     lockPeriod:         (b)            => post('/accounting/fiscal-locks', b),
     unlockPeriod:       (id)           => del(`/accounting/fiscal-locks/${id}`),
-    getDisplayName:     ()             => Promise.resolve(null), // endpoint غير موجود
-    // ── القيود المتكررة ──
+    getDisplayName:     ()             => Promise.resolve(null),
     previewRecurring:   (payload)      => post('/accounting/recurring/preview', payload),
     createRecurring:    (payload)      => post('/accounting/recurring', payload),
     listRecurring:      (p={})         => get('/accounting/recurring', p),
@@ -84,8 +82,8 @@ export const api = {
     postRecurring:      (id)           => post(`/accounting/recurring/${id}/post-pending`, {}),
     skipInstance:       (instId, note) => post(`/accounting/recurring/instances/${instId}/skip`, { note }),
     setRecurringStatus: (id, status)   => patch(`/accounting/recurring/${id}/status`, { status }),
-    deleteRecurring:        (id)           => del(`/accounting/recurring/${id}`),
-    checkDueNotifications: ()             => post('/accounting/recurring/check-due-notifications', {}),
+    deleteRecurring:    (id)           => del(`/accounting/recurring/${id}`),
+    checkDueNotifications: ()          => post('/accounting/recurring/check-due-notifications', {}),
   },
 
   settings: {
@@ -147,15 +145,15 @@ export const api = {
   },
 
   dimensions: {
-    list:        ()                 => get('/dimensions'),
-    get:         (id)               => get(`/dimensions/${id}`),
-    create:      (b)                => post('/dimensions', b),
-    update:      (id, b)            => put(`/dimensions/${id}`, b),
-    remove:      (id)               => del(`/dimensions/${id}`),
-    listValues:  (dimId)            => get(`/dimensions/${dimId}/values`),
-    createValue: (dimId, b)         => post(`/dimensions/${dimId}/values`, b),
-    updateValue: (dimId, valId, b)  => put(`/dimensions/${dimId}/values/${valId}`, b),
-    deleteValue:    (dimId, valId)     => del(`/dimensions/${dimId}/values/${valId}`),
+    list:             ()                => get('/dimensions'),
+    get:              (id)              => get(`/dimensions/${id}`),
+    create:           (b)              => post('/dimensions', b),
+    update:           (id, b)          => put(`/dimensions/${id}`, b),
+    remove:           (id)             => del(`/dimensions/${id}`),
+    listValues:       (dimId)          => get(`/dimensions/${dimId}/values`),
+    createValue:      (dimId, b)       => post(`/dimensions/${dimId}/values`, b),
+    updateValue:      (dimId, valId, b)=> put(`/dimensions/${dimId}/values/${valId}`, b),
+    deleteValue:      (dimId, valId)   => del(`/dimensions/${dimId}/values/${valId}`),
     updateVisibility: (id, b)          => patch(`/dimensions/${id}/visibility`, b),
   },
 
@@ -195,25 +193,28 @@ export const api = {
     salesSummary:       (p={}) => get('/reports/sales-summary', p),
     inventoryValuation: (p={}) => get('/reports/inventory-valuation', p),
   },
+
   users: {
-    dashboard:            ()         => get('/users/dashboard'),
-    list:                 (p={})     => get('/users', p),
-    create:               (b)        => post('/users', b),
-    update:               (id,b)     => put(`/users/${id}`, b),
-    toggleStatus:         (id,s)     => patch(`/users/${id}/status?status=${s}`, {}),
-    bulkAction:           (ids,a,r)  => post('/users/bulk-action', {user_ids:ids, action:a, role_id:r}),
-    listRoles:            ()         => get('/users/roles'),
-    createRole:           (b)        => post('/users/roles', b),
-    updateRole:           (id,b)     => put(`/users/roles/${id}`, b),
-    getRolePermissions:   (id)       => get(`/users/roles/${id}/permissions`),
-    updateRolePermissions:(id,b)     => put(`/users/roles/${id}/permissions`, b),
-    listPermissions:      ()         => get('/users/permissions'),
-    getAuditLog:          (p={})     => get('/users/audit-log', p),
+    dashboard:             ()        => get('/users/dashboard'),
+    list:                  (p={})    => get('/users', p),
+    create:                (b)       => post('/users', b),
+    update:                (id, b)   => put(`/users/${id}`, b),
+    toggleStatus:          (id, s)   => patch(`/users/${id}/status?status=${s}`, {}),
+    bulkAction:            (ids,a,r) => post('/users/bulk-action', {user_ids:ids, action:a, role_id:r}),
+    listRoles:             ()        => get('/users/roles'),
+    createRole:            (b)       => post('/users/roles', b),
+    updateRole:            (id, b)   => put(`/users/roles/${id}`, b),
+    getRolePermissions:    (id)      => get(`/users/roles/${id}/permissions`),
+    updateRolePermissions: (id, b)   => put(`/users/roles/${id}/permissions`, b),
+    listPermissions:       ()        => get('/users/permissions'),
+    getAuditLog:           (p={})    => get('/users/audit-log', p),
   },
+
   company: {
     get:    ()  => get('/settings/company'),
     update: (b) => put('/settings/company', b),
   },
+
   tax: {
     list:   (p={}) => get('/accounting/tax-types', p),
     create: (b)    => post('/accounting/tax-types', b),
@@ -221,23 +222,20 @@ export const api = {
     delete: (id)   => del(`/accounting/tax-types/${id}`),
   },
 
-  // ✅ الترقيم التلقائي
   series: {
-    list:    ()              => get('/settings/series'),
-    update:  (type, b)       => put(`/settings/series/${type}`, b),
+    list:    ()                     => get('/settings/series'),
+    update:  (type, b)              => put(`/settings/series/${type}`, b),
     reset:   (type, year, from_seq) => post(`/settings/series/${type}/reset?year=${year}&start_from=${from_seq||0}`, {}),
-    preview: (type, date)    => get(`/settings/series/${type}/preview`, date?{entry_date:date}:{}),
+    preview: (type, date)           => get(`/settings/series/${type}/preview`, date?{entry_date:date}:{}),
   },
 
-  // ✅ سجل النشاط والتدقيق
   audit: {
-    activities:   (p={})         => get('/audit/activities', p),
-    usersSummary: (date)         => get('/audit/users-summary', date ? {target_date:date} : {}),
-    userDetail:   (email, p={})  => get(`/audit/user/${encodeURIComponent(email)}`, p),
-    stats:        (p={})         => get('/audit/stats', p),
+    activities:   (p={})        => get('/audit/activities', p),
+    usersSummary: (date)        => get('/audit/users-summary', date ? {target_date:date} : {}),
+    userDetail:   (email, p={}) => get(`/audit/user/${encodeURIComponent(email)}`, p),
+    stats:        (p={})        => get('/audit/stats', p),
   },
 
-  // ✅ العملات وأسعار الصرف
   currency: {
     list:         (p={})    => get('/settings/currencies', p),
     create:       (b)       => post('/settings/currencies', b),
@@ -250,6 +248,73 @@ export const api = {
     updateRate:   (id, b)   => put(`/settings/currencies/exchange-rates/${id}`, b),
     deleteRate:   (id)      => del(`/settings/currencies/exchange-rates/${id}`),
     convert:      (b)       => post('/settings/currencies/convert', b),
+  },
+
+  // ══════════════════════════════════════════════════════
+  // 🏦 الخزينة والبنوك — Treasury & Banking Module
+  // ══════════════════════════════════════════════════════
+  treasury: {
+    // لوحة التحكم
+    dashboard: () => get('/treasury/dashboard'),
+
+    // الحسابات البنكية والصناديق
+    listBankAccounts:   (p={})      => get('/treasury/bank-accounts', p),
+    createBankAccount:  (b)         => post('/treasury/bank-accounts', b),
+    updateBankAccount:  (id, b)     => put(`/treasury/bank-accounts/${id}`, b),
+    deleteBankAccount:  (id)        => del(`/treasury/bank-accounts/${id}`),
+
+    // سندات القبض والصرف النقدية (RV / PV)
+    listCashTransactions:  (p={})   => get('/treasury/cash-transactions', p),
+    createCashTransaction: (b)      => post('/treasury/cash-transactions', b),
+    postCashTransaction:   (id)     => post(`/treasury/cash-transactions/${id}/post`, {}),
+    cancelCashTransaction: (id)     => del(`/treasury/cash-transactions/${id}`),
+
+    // حركات البنوك (BP / BR / BT)
+    listBankTransactions:  (p={})   => get('/treasury/bank-transactions', p),
+    createBankTransaction: (b)      => post('/treasury/bank-transactions', b),
+    postBankTransaction:   (id)     => post(`/treasury/bank-transactions/${id}/post`, {}),
+
+    // التحويلات الداخلية (IT)
+    listInternalTransfers:  (p={})  => get('/treasury/internal-transfers', p),
+    createInternalTransfer: (b)     => post('/treasury/internal-transfers', b),
+    postInternalTransfer:   (id)    => post(`/treasury/internal-transfers/${id}/post`, {}),
+
+    // الشيكات (CHK)
+    listChecks:        (p={})       => get('/treasury/checks', p),
+    createCheck:       (b)          => post('/treasury/checks', b),
+    updateCheckStatus: (id, status, notes='') =>
+      put(`/treasury/checks/${id}/status?status=${status}&notes=${encodeURIComponent(notes)}`, {}),
+
+    // التسوية البنكية
+    listReconciliationSessions:   (p={})             => get('/treasury/reconciliation/sessions', p),
+    createReconciliationSession:  (b)                => post('/treasury/reconciliation/sessions', b),
+    getSessionLines:              (sessId)           => get(`/treasury/reconciliation/sessions/${sessId}/lines`),
+    importStatementLines:         (sessId, lines)    => post(`/treasury/reconciliation/sessions/${sessId}/import-lines`, lines),
+    matchTransaction:             (sessId, lineId, txId, txType) =>
+      post(`/treasury/reconciliation/sessions/${sessId}/match?statement_line_id=${lineId}&tx_id=${txId}&tx_type=${txType}`, {}),
+
+    // صناديق العهدة
+    listPettyCashFunds:    ()       => get('/treasury/petty-cash/funds'),
+    createPettyCashFund:   (b)      => post('/treasury/petty-cash/funds', b),
+    updatePettyCashFund:   (id, b)  => put(`/treasury/petty-cash/funds/${id}`, b),
+
+    // مصاريف العهدة (PET)
+    listPettyCashExpenses:  (p={})  => get('/treasury/petty-cash/expenses', p),
+    createPettyCashExpense: (b)     => post('/treasury/petty-cash/expenses', b),
+    postPettyCashExpense:   (id)    => post(`/treasury/petty-cash/expenses/${id}/post`, {}),
+
+    // إعادة التعبئة (PCR)
+    listReplenishments:   (p={})    => get('/treasury/petty-cash/replenishments', p),
+    createReplenishment:  (fundId)  => post(`/treasury/petty-cash/replenishments?fund_id=${fundId}`, {}),
+
+    // جرد الصناديق
+    createCount: (fundId, actual, notes='') =>
+      post(`/treasury/petty-cash/counts?fund_id=${fundId}&actual_balance=${actual}&notes=${encodeURIComponent(notes)}`, {}),
+
+    // التقارير
+    cashPositionReport:    ()       => get('/treasury/reports/cash-position'),
+    outstandingChecks:     ()       => get('/treasury/reports/outstanding-checks'),
+    pettyCashStatement:    (p={})   => get('/treasury/reports/petty-cash-statement', p),
   },
 }
 
