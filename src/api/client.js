@@ -401,6 +401,53 @@ export const api = {
     salesSummary:      (p={})     => get('/ar/reports/sales-summary', p),
     vatReport:         (p={})     => get('/ar/reports/vat-report', p),
   },
+
+  // ══════════════════════════════════════════════════════
+  // 🛒 المشتريات والذمم الدائنة — AP & Procurement Module
+  // ══════════════════════════════════════════════════════
+  ap: {
+    // Dashboard
+    dashboard: () => get('/ap/dashboard'),
+
+    // Vendors
+    listVendors:   (p={})   => get('/ap/vendors', p),
+    createVendor:  (b)      => post('/ap/vendors', b),
+    updateVendor:  (id, b)  => put(`/ap/vendors/${id}`, b),
+    getVendor:     (id)     => get(`/ap/vendors/${id}`),
+
+    // Purchase Requests
+    listPRs:   (p={})  => get('/ap/purchase-requests', p),
+    createPR:  (b)     => post('/ap/purchase-requests', b),
+    approvePR: (id)    => post(`/ap/purchase-requests/${id}/approve`, {}),
+
+    // Purchase Orders
+    listPOs:   (p={})  => get('/ap/purchase-orders', p),
+    createPO:  (b)     => post('/ap/purchase-orders', b),
+    getPO:     (id)    => get(`/ap/purchase-orders/${id}`),
+    approvePO: (id)    => post(`/ap/purchase-orders/${id}/approve`, {}),
+
+    // Goods Receipts (GRN)
+    listReceipts:  (p={}) => get('/ap/receipts', p),
+    createReceipt: (b)    => post('/ap/receipts', b),
+    postReceipt:   (id)   => post(`/ap/receipts/${id}/post`, {}),
+
+    // AP Invoices
+    listInvoices:   (p={}) => get('/ap/invoices', p),
+    createInvoice:  (b)    => post('/ap/invoices', b),
+    postInvoice:    (id)   => post(`/ap/invoices/${id}/post`, {}),
+
+    // Payments
+    listPayments:  (p={})          => get('/ap/payments', p),
+    createPayment: (b)             => post('/ap/payments', b),
+    postPayment:   (id, invoiceId) => post(`/ap/payments/${id}/post${invoiceId ? '?invoice_id='+invoiceId : ''}`, {}),
+
+    // Reports
+    agingReport:       (p={})     => get('/ap/reports/aging', p),
+    vendorStatement:   (id, p={}) => get(`/ap/reports/vendor-statement/${id}`, p),
+    purchaseSummary:   (p={})     => get('/ap/reports/purchase-summary', p),
+    pendingDelivery:   ()         => get('/ap/reports/pending-delivery'),
+    vendorPerformance: ()         => get('/ap/reports/vendor-performance'),
+  },
 }
 
 export default api
