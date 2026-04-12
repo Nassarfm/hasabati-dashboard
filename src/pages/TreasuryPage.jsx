@@ -39,6 +39,7 @@ function Modal({title,onClose,children,size='md'}) {
 }
 
 // ── AccountPicker — اختيار حساب من دليل الحسابات ─────────
+// يدعم أي شكل لاستجابة COA API
 function AccountPicker({value,onChange,placeholder='ابحث عن الحساب...',label}) {
   const [search,setSearch]=useState('')
   const [results,setResults]=useState([])
@@ -47,6 +48,11 @@ function AccountPicker({value,onChange,placeholder='ابحث عن الحساب..
   const [loading,setLoading]=useState(false)
   const ref=useRef(null)
 
+  // استخراج اسم الحساب — يدعم أي بنية
+  const getName =(a)=> a.account_name||a.name||a.name_ar||a.account_name_ar||''
+  const getCode =(a)=> a.account_code||a.code||''
+  const getType =(a)=> a.account_type||a.type||''
+
   useEffect(()=>{
     const handler=(e)=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown',handler)
@@ -54,23 +60,39 @@ function AccountPicker({value,onChange,placeholder='ابحث عن الحساب..
   },[])
 
   const doSearch=useCallback(async(q)=>{
-    if(!q||q.length<1){setResults([]);return}
     setLoading(true)
     try{
-      const r=await api.accounting.getCOA({search:q,limit:30})
-      // دليل الحسابات يعيد البيانات بأشكال مختلفة
+      const params={}
+      if(q&&q.trim()) params.search=q.trim()
+      params.limit=40
+      const r=await api.accounting.getCOA(params)
+      // استخراج المصفوفة من أي شكل
       let items=[]
-      if(Array.isArray(r))                items=r
-      else if(Array.isArray(r?.data))     items=r.data
+      if(Array.isArray(r))                   items=r
+      else if(Array.isArray(r?.data))        items=r.data
       else if(Array.isArray(r?.data?.items)) items=r.data.items
-      else if(Array.isArray(r?.items))    items=r.items
-      // فلتر: فقط الحسابات التفصيلية (غير الرؤوس) ويمكن الترحيل عليها
-      const filtered=items.filter(a=>
-        a.account_type!=='header' &&
-        a.account_type!=='group' &&
-        a.can_post!==false
-      )
-      setResults(filtered.length>0?filtered:items.slice(0,20))
+      else if(Array.isArray(r?.data?.accounts)) items=r.data.accounts
+      else if(Array.isArray(r?.items))       items=r.items
+      else if(Array.isArray(r?.accounts))    items=r.accounts
+
+      // log للتشخيص في المرة الأولى
+      if(items.length>0&&!q) console.log('COA sample item keys:',Object.keys(items[0]))
+
+      // فلتر الحسابات التفصيلية فقط
+      const filtered=items.filter(a=>{
+        const t=getType(a).toLowerCase()
+        return t!=='header'&&t!=='group'&&t!=='رأس'&&t!=='مجموعة'
+      })
+      // إذا لم يبقَ شيء بعد الفلتر، أظهر الكل
+      let final = filtered.length>0 ? filtered : items
+      // إذا فيه بحث — فلتر يدوي إضافي
+      if(q&&q.trim()){
+        const low=q.trim().toLowerCase()
+        const byCode=final.filter(a=>getCode(a).toLowerCase().startsWith(low))
+        const byName=final.filter(a=>getName(a).toLowerCase().includes(low)&&!getCode(a).toLowerCase().startsWith(low))
+        final=[...byCode,...byName]
+      }
+      setResults(final.slice(0,30))
     }catch(e){
       console.error('COA search error:',e)
       setResults([])
@@ -78,56 +100,61 @@ function AccountPicker({value,onChange,placeholder='ابحث عن الحساب..
   },[])
 
   useEffect(()=>{
-    const t=setTimeout(()=>doSearch(search),250)
+    if(!open) return
+    const t=setTimeout(()=>doSearch(search),200)
     return()=>clearTimeout(t)
-  },[search])
+  },[search,open])
 
-  // عند فتح القائمة لأول مرة — جلب أول 20 حساب
-  const handleOpen=async()=>{
+  const handleOpen=()=>{
     setOpen(true)
-    if(results.length===0&&!search){
-      await doSearch('')
-    }
+    if(results.length===0) doSearch(search)
   }
 
   const select=(acc)=>{
-    onChange(acc.account_code)
-    setDisplay(`${acc.account_code} — ${acc.account_name}`)
-    setOpen(false); setSearch('')
+    const code=getCode(acc)
+    const name=getName(acc)
+    onChange(code)
+    setDisplay(name?`${code} — ${name}`:code)
+    setOpen(false)
+    setSearch('')
   }
 
   return <div ref={ref} className="relative">
     {label&&<label className="text-xs font-semibold text-slate-600 block mb-1">{label}</label>}
     <div className="flex gap-1">
       <input readOnly
-        value={display||(value?`${value}`:'')|| ''}
+        value={display||(value||'')}
         placeholder={placeholder}
         className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono bg-slate-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400"
         onClick={handleOpen}/>
-      {value&&<button onClick={(e)=>{e.stopPropagation();onChange('');setDisplay('');setResults([])}} className="px-2 text-slate-400 hover:text-red-500 text-xs">✕</button>}
+      {value&&<button onClick={e=>{e.stopPropagation();onChange('');setDisplay('');}}
+        className="px-2 text-slate-400 hover:text-red-500 text-xs border border-slate-200 rounded-lg">✕</button>}
     </div>
-    {open&&<div className="absolute z-[200] top-full mt-1 right-0 left-0 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-72 overflow-y-auto"
-      style={{minWidth:'100%'}}>
-      <div className="p-2 border-b sticky top-0 bg-white z-10">
+    {open&&<div
+      className="absolute z-[300] top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden"
+      style={{minWidth:'100%',maxHeight:'260px',overflowY:'auto'}}>
+      {/* حقل البحث */}
+      <div className="p-2 border-b bg-white sticky top-0">
         <input autoFocus
           className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="اكتب رقم الحساب أو جزء من الاسم..."
+          placeholder="اكتب رقم أو اسم الحساب..."
           value={search}
           onChange={e=>setSearch(e.target.value)}/>
       </div>
-      {loading&&<div className="text-center text-slate-400 text-xs py-3">🔍 جارٍ البحث...</div>}
-      {!loading&&results.length===0&&<div className="text-center text-slate-400 text-xs py-4">
-        <div className="text-base mb-1">🔍</div>
-        اكتب للبحث في دليل الحسابات
+      {/* النتائج */}
+      {loading&&<div className="py-4 text-center text-xs text-slate-400">🔍 جارٍ البحث...</div>}
+      {!loading&&results.length===0&&<div className="py-6 text-center text-xs text-slate-400">
+        {search?'لا توجد حسابات مطابقة':'ابدأ الكتابة للبحث'}
       </div>}
-      {!loading&&results.map(a=>(
-        <button key={a.id||a.account_code} onClick={()=>select(a)}
-          className="flex items-center gap-2 w-full px-3 py-2.5 hover:bg-blue-50 text-right text-xs border-b border-slate-50 last:border-0 transition-colors">
-          <span className="font-mono text-blue-700 font-bold shrink-0 text-xs bg-blue-50 px-2 py-0.5 rounded">{a.account_code}</span>
-          <span className="text-slate-800 font-medium truncate flex-1">{a.account_name}</span>
-          <span className="text-slate-400 text-xs shrink-0">{a.account_type}</span>
+      {!loading&&results.map((a,i)=>{
+        const code=getCode(a); const name=getName(a); const type=getType(a)
+        return <button key={code||i} onClick={()=>select(a)}
+          className="flex items-center gap-2 w-full px-3 py-2 hover:bg-blue-50 text-right border-b border-slate-50 last:border-0 transition-colors">
+          <span className="font-mono text-blue-700 font-bold text-xs bg-blue-50 px-1.5 py-0.5 rounded shrink-0">{code}</span>
+          <span className="text-slate-800 text-xs font-medium truncate flex-1">{name||'—'}</span>
+          <span className="text-slate-400 text-xs shrink-0 hidden sm:inline">{type}</span>
         </button>
-      ))}
+      })}
     </div>}
   </div>
 }
