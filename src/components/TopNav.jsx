@@ -47,19 +47,7 @@ const NAV_ITEMS = [
           { id:'charts_report',      icon:'📉', label:'الرسوم البيانية',     sub:'Charts' },
         ]
       },
-      {
-        title: 'الإعداد والصلاحيات',
-        items: [
-          { id:'users',             icon:'👥', label:'إدارة المستخدمين',        sub:'User Management' },
-          { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات',      sub:'Roles & Permissions' },
-          { id:'audit_trail',       icon:'🔍', label:'سجل النشاط والتدقيق',    sub:'Audit Trail' },
-          { id:'number_series',     icon:'🔢', label:'الترقيم التلقائي',        sub:'Number Series' },
-          { id:'company_settings',  icon:'🏢', label:'إعدادات المنشأة',         sub:'Company Settings' },
-          { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة (VAT)',   sub:'VAT Settings' },
-          { id:'currency_settings', icon:'💱', label:'العملات وأسعار الصرف',    sub:'Multi Currency' },
-          { id:'localization',      icon:'🌍', label:'الإقليمية والتوطين',      sub:'Localization' },
-        ]
-      },
+
     ]
   },
   {
@@ -79,6 +67,32 @@ const NAV_ITEMS = [
           { id:'treasury', icon:'📝', label:'إدارة الشيكات',         sub:'Cheque Management' },
           { id:'treasury', icon:'⚖️', label:'التسوية البنكية',       sub:'Bank Reconciliation' },
           { id:'treasury', icon:'👜', label:'العهدة النثرية',         sub:'Petty Cash Management' },
+        ]
+      },
+    ]
+  },
+  {
+    id: 'settings',
+    icon: '⚙️',
+    label: 'الإعدادات',
+    color: 'slate',
+    sections: [
+      {
+        title: 'المنشأة والمستخدمين',
+        items: [
+          { id:'company_settings',  icon:'🏢', label:'إعدادات المنشأة',         sub:'Company Settings' },
+          { id:'users',             icon:'👥', label:'إدارة المستخدمين',        sub:'User Management' },
+          { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات',      sub:'Roles & Permissions' },
+          { id:'audit_trail',       icon:'🔍', label:'سجل النشاط والتدقيق',    sub:'Audit Trail' },
+        ]
+      },
+      {
+        title: 'الإعدادات المالية',
+        items: [
+          { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة (VAT)',   sub:'VAT Settings' },
+          { id:'currency_settings', icon:'💱', label:'العملات وأسعار الصرف',    sub:'Multi Currency' },
+          { id:'number_series',     icon:'🔢', label:'الترقيم التلقائي',        sub:'Number Series' },
+          { id:'localization',      icon:'🌍', label:'الإقليمية والتوطين',      sub:'Localization' },
         ]
       },
     ]
