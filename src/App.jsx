@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './AuthContext'
-import Sidebar from './components/Sidebar'
-import NotificationBell from './components/NotificationBell'
+import TopNav from './components/TopNav'
 import { ToastProvider } from './components/UI'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
@@ -30,38 +29,8 @@ import VATSettingsPage from './pages/VATSettingsPage'
 import CompanySettingsPage from './pages/CompanySettingsPage'
 import UserManagementPage from './pages/UserManagementPage'
 import RolesPermissionsPage from './pages/RolesPermissionsPage'
-
-// ── تعريف الوحدات الرئيسية ────────────────────────────
-const MODULES = [
-  { id: 'accounting', icon: '📊', label: 'المحاسبة',      color: 'blue'   },
-  { id: 'treasury',   icon: '🏦', label: 'الخزينة',       color: 'emerald'},
-  { id: 'sales',      icon: '🧾', label: 'المبيعات',      color: 'orange', soon: true },
-  { id: 'purchases',  icon: '🛒', label: 'المشتريات',     color: 'purple', soon: true },
-  { id: 'inventory',  icon: '📦', label: 'المخزون',       color: 'amber',  soon: true },
-  { id: 'hr',         icon: '👥', label: 'الموارد البشرية',color: 'pink',   soon: true },
-  { id: 'assets',     icon: '🏗️', label: 'الأصول الثابتة',color: 'slate',  soon: true },
-]
-
-const MODULE_COLORS = {
-  blue:    { active: 'bg-blue-700 text-white shadow-blue-200',    hover: 'hover:bg-blue-50 hover:text-blue-700',    dot: 'bg-blue-500'    },
-  emerald: { active: 'bg-emerald-600 text-white shadow-emerald-200', hover: 'hover:bg-emerald-50 hover:text-emerald-700', dot: 'bg-emerald-500' },
-  orange:  { active: 'bg-orange-500 text-white',  hover: 'hover:bg-orange-50 hover:text-orange-600',  dot: 'bg-orange-500'  },
-  purple:  { active: 'bg-purple-600 text-white',  hover: 'hover:bg-purple-50 hover:text-purple-700',  dot: 'bg-purple-500'  },
-  amber:   { active: 'bg-amber-500 text-white',   hover: 'hover:bg-amber-50 hover:text-amber-700',   dot: 'bg-amber-500'   },
-  pink:    { active: 'bg-pink-500 text-white',    hover: 'hover:bg-pink-50 hover:text-pink-700',    dot: 'bg-pink-500'    },
-  slate:   { active: 'bg-slate-600 text-white',   hover: 'hover:bg-slate-100 hover:text-slate-700', dot: 'bg-slate-500'   },
-}
-
-// ── صفحات كل وحدة ────────────────────────────────────
-const MODULE_DEFAULT_PAGE = {
-  accounting: 'dashboard',
-  treasury:   'treasury',
-  sales:      'sales',
-  purchases:  'purchases',
-  inventory:  'inventory',
-  hr:         'hr',
-  assets:     'assets',
-}
+import AuditTrailPage from './pages/AuditTrailPage'
+import NumberSeriesPage from './pages/NumberSeriesPage'
 
 const PAGE_LABELS = {
   dashboard:          'لوحة التحكم',
@@ -86,6 +55,8 @@ const PAGE_LABELS = {
   vat:                'ضريبة القيمة المضافة',
   users:              'إدارة المستخدمين',
   roles_permissions:  'الأدوار والصلاحيات',
+  audit_trail:        'سجل النشاط والتدقيق',
+  number_series:      'الترقيم التلقائي',
   company_settings:   'إعدادات المنشأة',
   vat_settings:       'إعدادات الضريبة (VAT)',
   currency_settings:  'العملات وأسعار الصرف',
@@ -100,22 +71,13 @@ const PAGE_LABELS = {
 
 function AppContent() {
   const { user, loading } = useAuth()
-  const [activeModule, setActiveModule] = useState('accounting')
-  const [page,         setPage]         = useState('dashboard')
-  const [collapsed,    setCollapsed]    = useState(false)
+  const [page, setPage]   = useState('dashboard')
   const [ledgerAccount, setLedgerAccount] = useState({ code:'', name:'' })
 
   const navigateToLedger = (code, name) => { setLedgerAccount({code,name}); setPage('ledger') }
-
   const navigate = (p) => {
     if (p !== 'ledger') setLedgerAccount({code:'',name:''})
     setPage(p)
-  }
-
-  const switchModule = (mod) => {
-    if (mod.soon) return
-    setActiveModule(mod.id)
-    navigate(MODULE_DEFAULT_PAGE[mod.id])
   }
 
   if (loading) return (
@@ -130,8 +92,6 @@ function AppContent() {
   )
 
   if (!user) return <LoginPage/>
-
-  const sideWidth = collapsed ? 64 : 240
 
   const renderPage = () => {
     switch (page) {
@@ -157,13 +117,13 @@ function AppContent() {
       case 'vat':                return <VATPage/>
       case 'users':              return <UserManagementPage/>
       case 'roles_permissions':  return <RolesPermissionsPage/>
+      case 'audit_trail':        return <AuditTrailPage/>
+      case 'number_series':      return <NumberSeriesPage/>
       case 'company_settings':   return <CompanySettingsPage/>
       case 'vat_settings':       return <VATSettingsPage/>
       case 'currency_settings':  return <VATSettingsPage/>
       case 'localization':       return <VATSettingsPage/>
-      // ── الخزينة والبنوك ──
       case 'treasury':           return <TreasuryPage/>
-      // ── وحدات أخرى ──
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>
@@ -174,12 +134,9 @@ function AppContent() {
   }
 
   const getBreadcrumb = () => {
-    const mod = MODULES.find(m => m.id === activeModule)
-    if (page==='ledger' && ledgerAccount.code) return (
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-bold text-slate-700">حساباتي</span>
-        <span className="text-slate-300">/</span>
-        <span className="text-slate-500">{mod?.label}</span>
+    if (page === 'ledger' && ledgerAccount.code) return (
+      <div className="flex items-center gap-2 text-sm" dir="rtl">
+        <span className="text-slate-400">حساباتي</span>
         <span className="text-slate-300">/</span>
         <button onClick={()=>navigate('trialbal')} className="text-slate-500 hover:text-blue-700">ميزان المراجعة</button>
         <span className="text-slate-300">/</span>
@@ -188,86 +145,25 @@ function AppContent() {
       </div>
     )
     return (
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-bold text-slate-700">حساباتي</span>
+      <div className="flex items-center gap-2 text-sm" dir="rtl">
+        <span className="text-slate-400">حساباتي</span>
         <span className="text-slate-300">/</span>
-        <span className="text-slate-500">{mod?.label}</span>
-        <span className="text-slate-300">/</span>
-        <span className="text-slate-800 font-medium">{PAGE_LABELS[page]||page}</span>
+        <span className="text-slate-800 font-semibold">{PAGE_LABELS[page] || page}</span>
       </div>
     )
   }
 
-  const activeMod = MODULES.find(m=>m.id===activeModule)
-  const modColor = MODULE_COLORS[activeMod?.color||'blue']
-
   return (
     <div className="min-h-screen bg-slate-50" dir="rtl">
-      <Sidebar activePage={page} activeModule={activeModule} onNavigate={navigate} collapsed={collapsed} onToggle={()=>setCollapsed(p=>!p)}/>
+      {/* الشريط العلوي فقط — بدون Sidebar */}
+      <TopNav activePage={page} onNavigate={navigate}/>
 
-      <main className="min-h-screen transition-all duration-300" style={{marginRight: sideWidth}}>
-
-        {/* ══ شريط الوحدات العلوي ══════════════════════════ */}
-        <div className="sticky top-0 z-30 border-b border-slate-200 shadow-sm"
-          style={{background:'linear-gradient(135deg,#0f2744 0%,#1e3a5f 50%,#1e40af 100%)'}}>
-          <div className="flex items-center px-6 py-0">
-            {/* Logo */}
-            <div className="flex items-center gap-2 ml-6 py-3 border-l border-white/10 pl-6">
-              <div className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">ح</span>
-              </div>
-              <div className="hidden sm:block">
-                <div className="text-white font-bold text-sm leading-none">حساباتي</div>
-                <div className="text-blue-200 text-xs">ERP v2.0</div>
-              </div>
-            </div>
-
-            {/* Module Tabs */}
-            <div className="flex items-center gap-1 flex-1 py-2">
-              {MODULES.map(mod => {
-                const isActive = activeModule === mod.id
-                return (
-                  <button
-                    key={mod.id}
-                    onClick={() => switchModule(mod)}
-                    title={mod.soon ? 'قريباً' : mod.label}
-                    className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap
-                      ${isActive
-                        ? 'bg-white text-blue-800 shadow-lg'
-                        : mod.soon
-                          ? 'text-white/30 cursor-not-allowed'
-                          : 'text-white/70 hover:text-white hover:bg-white/10'
-                      }`}
-                  >
-                    <span className="text-sm">{mod.icon}</span>
-                    <span className="hidden md:inline">{mod.label}</span>
-                    {isActive && (
-                      <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-1 bg-white rounded-t-full"/>
-                    )}
-                    {mod.soon && (
-                      <span className="text-xs text-white/30 hidden lg:inline">(قريباً)</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2 py-2">
-              <NotificationBell/>
-              <div className="flex items-center gap-1.5 text-xs text-white/50">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"/>
-                <span className="hidden lg:inline">Railway</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ══ شريط الصفحة الثانوي ═══════════════════════════ */}
-        <header className="bg-white border-b border-slate-100 px-6 py-2.5 flex items-center justify-between">
+      <main>
+        {/* شريط Breadcrumb */}
+        <header className="bg-white border-b border-slate-100 px-6 py-2.5 flex items-center justify-between sticky top-14 z-40">
           {getBreadcrumb()}
           <div className="flex items-center gap-2">
-            {page==='ledger' && ledgerAccount.code && (
+            {page === 'ledger' && ledgerAccount.code && (
               <button onClick={()=>navigate('trialbal')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">
                 ← ميزان المراجعة
@@ -276,11 +172,12 @@ function AppContent() {
           </div>
         </header>
 
-        {/* ══ المحتوى ═══════════════════════════════════════ */}
+        {/* المحتوى */}
         <div className="p-6" key={page}>
           {renderPage()}
         </div>
       </main>
+
       <ToastProvider/>
     </div>
   )
