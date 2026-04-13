@@ -7,6 +7,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../api/client'
+import SlideOver from '../components/SlideOver'
 
 const fmt    = (n,d=3) => (parseFloat(n)||0).toLocaleString('ar-SA',{minimumFractionDigits:d,maximumFractionDigits:d})
 const today  = () => new Date().toISOString().split('T')[0]
@@ -237,6 +238,134 @@ function StatusBadge({status}) {
   return <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${c[status]||'bg-slate-100 text-slate-600'}`}>{l[status]||status}</span>
 }
 
+// ── VoucherSlideOver — معاينة السند ──────────────────────
+function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToast}) {
+  const [loading, setLoading] = useState(false)
+  if(!tx) return null
+
+  const acc = accounts.find(a=>a.id===tx.bank_account_id)
+  const amt = parseFloat(tx.amount)||0
+  const TX_LABELS = {RV:'سند قبض نقدي',PV:'سند صرف نقدي',BP:'دفعة بنكية',BR:'قبض بنكي',BT:'تحويل بنكي',IT:'تحويل داخلي',CHK:'شيك'}
+  const isPost = tx.tx_type==='RV'||tx.tx_type==='PV'
+  const apiPost = isPost ? ()=>api.treasury.postCashTransaction(tx.id) : ()=>api.treasury.postBankTransaction(tx.id)
+
+  const je_lines = tx.tx_type==='RV'||tx.tx_type==='BR' ? [
+    {account_code:acc?.gl_account_code||'—', account_name:acc?.account_name||'الصندوق/البنك', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code},
+    {account_code:tx.counterpart_account||'—', account_name:'الحساب المقابل', debit:0, credit:amt},
+  ] : [
+    {account_code:tx.counterpart_account||'—', account_name:'الحساب المقابل', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code},
+    {account_code:acc?.gl_account_code||'—', account_name:acc?.account_name||'الصندوق/البنك', debit:0, credit:amt},
+  ]
+
+  const doPost = async() => {
+    setLoading(true)
+    try { await apiPost(); showToast('تم الترحيل ✅'); onPosted() }
+    catch(e) { showToast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+
+  const doCancel = async() => {
+    if(!window.confirm('هل تريد إلغاء هذا السند؟')) return
+    setLoading(true)
+    try { await api.treasury.cancelCashTransaction(tx.id); showToast('تم الإلغاء'); onCancelled() }
+    catch(e) { showToast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+
+  const doPrint = () => printVoucher({...tx}, je_lines, acc?.account_name||'—')
+
+  return (
+    <SlideOver open={!!tx} onClose={onClose} size="xl"
+      title={`${TX_LABELS[tx.tx_type]||'سند'} — ${tx.serial||'مسودة'}`}
+      subtitle={`${fmtDate(tx.tx_date)} | ${tx.description||''}`}
+      footer={
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-slate-600 border border-slate-200 hover:bg-slate-50">إغلاق</button>
+          <button onClick={doPrint} className="px-4 py-2 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50">🖨️ طباعة</button>
+          {tx.status==='draft' && <>
+            {(tx.tx_type==='RV'||tx.tx_type==='PV') &&
+              <button onClick={doCancel} disabled={loading} className="px-4 py-2 rounded-xl text-sm text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50">إلغاء السند</button>
+            }
+            <button onClick={doPost} disabled={loading} className="flex-1 px-4 py-2 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
+              {loading ? '⏳ جارٍ الترحيل...' : '✅ ترحيل'}
+            </button>
+          </>}
+        </div>
+      }>
+      <div className="space-y-5" dir="rtl">
+        {/* رأس السند */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          {[
+            ['رقم السند', tx.serial||'—'],
+            ['الحالة', <StatusBadge status={tx.status}/>],
+            ['التاريخ', fmtDate(tx.tx_date)],
+            ['الصندوق/البنك', acc?.account_name||tx.bank_account_name||'—'],
+            ['المبلغ', <span className="font-mono font-bold text-slate-800">{fmt(amt,3)} {tx.currency_code||'ر.س'}</span>],
+            ['طريقة الدفع', tx.payment_method||'—'],
+            ['الطرف', tx.party_name||tx.beneficiary_name||'—'],
+            ['المرجع', tx.reference||'—'],
+            ['الفرع', tx.branch_code||'—'],
+            ['مركز التكلفة', tx.cost_center||'—'],
+            ['المشروع', tx.project_code||'—'],
+            ['الحساب المقابل', tx.counterpart_account||'—'],
+          ].map(([l,v],i)=>(
+            <div key={i} className="flex gap-2 bg-slate-50 rounded-xl px-3 py-2">
+              <span className="text-slate-400 shrink-0">{l}:</span>
+              <span className="text-slate-700 font-medium">{v}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* البيان */}
+        {tx.description && <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-800"><span className="font-semibold">البيان: </span>{tx.description}</div>}
+
+        {/* القيد المحاسبي */}
+        <div>
+          <h3 className="text-sm font-bold text-slate-700 mb-2">📒 القيد المحاسبي</h3>
+          <div className="border border-blue-200 rounded-xl overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-blue-700 text-white">
+                <tr>
+                  {['رقم الحساب','اسم الحساب','الفرع','مركز التكلفة','المشروع','مدين','دائن'].map(h=>(
+                    <th key={h} className="px-3 py-2 text-right font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {je_lines.map((l,i)=>(
+                  <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50'}`}>
+                    <td className="px-3 py-2 font-mono font-bold text-blue-700">{l.account_code}</td>
+                    <td className="px-3 py-2 text-slate-700">{l.account_name}</td>
+                    <td className="px-3 py-2 text-slate-400">{l.branch_code||'—'}</td>
+                    <td className="px-3 py-2 text-slate-400">{l.cost_center||'—'}</td>
+                    <td className="px-3 py-2 text-slate-400">{l.project_code||'—'}</td>
+                    <td className="px-3 py-2 font-mono font-bold text-slate-800">{l.debit>0?fmt(l.debit,3):'—'}</td>
+                    <td className="px-3 py-2 font-mono font-bold text-slate-800">{l.credit>0?fmt(l.credit,3):'—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
+                <tr>
+                  <td colSpan={5} className="px-3 py-2 text-blue-800">الإجمالي</td>
+                  <td className="px-3 py-2 font-mono text-blue-800">{fmt(amt,3)}</td>
+                  <td className="px-3 py-2 font-mono text-blue-800">{fmt(amt,3)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* رقم القيد بعد الترحيل */}
+        {tx.status==='posted' && tx.je_serial && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800">
+            ✅ تم الترحيل — القيد: <span className="font-mono font-bold">{tx.je_serial}</span>
+          </div>
+        )}
+      </div>
+    </SlideOver>
+  )
+}
+
 // ══════════════════════════════════════════════════════════
 // MAIN PAGE
 // ══════════════════════════════════════════════════════════
@@ -427,6 +556,7 @@ function CashListTab({showToast,openView}) {
   const [loading,setLoading]=useState(true)
   const [filters,setFilters]=useState({tx_type:'',status:'',date_from:'',date_to:''})
   const [accounts,setAccounts]=useState([])
+  const [selected,setSelected]=useState(null)
 
   const load=useCallback(async()=>{
     setLoading(true)
@@ -437,9 +567,6 @@ function CashListTab({showToast,openView}) {
     }catch(e){showToast(e.message,'error')}finally{setLoading(false)}
   },[filters])
   useEffect(()=>{load()},[load])
-
-  const doPost=async(id)=>{try{await api.treasury.postCashTransaction(id);load();showToast('تم الترحيل ✅')}catch(e){showToast(e.message,'error')}}
-  const doCancel=async(id)=>{try{await api.treasury.cancelCashTransaction(id);load();showToast('تم الإلغاء')}catch(e){showToast(e.message,'error')}}
 
   return <div className="space-y-4">
     <div className="flex items-center justify-between flex-wrap gap-3">
@@ -459,19 +586,11 @@ function CashListTab({showToast,openView}) {
         <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍 بحث</button>
       </div>
     </div>
-    <TxTable items={items} total={total} loading={loading} onPost={doPost} onCancel={doCancel}
-      onPrint={(tx)=>{
-        const acc=accounts.find(a=>a.id===tx.bank_account_id)
-        const amt=parseFloat(tx.amount)||0
-        const je_lines=tx.tx_type==='RV'?[
-          {account_code:acc?.gl_account_code||'—',account_name:acc?.account_name||'الصندوق',debit:amt,credit:0},
-          {account_code:tx.counterpart_account||'—',account_name:'الحساب المقابل',debit:0,credit:amt},
-        ]:[
-          {account_code:tx.counterpart_account||'—',account_name:'الحساب المقابل',debit:amt,credit:0},
-          {account_code:acc?.gl_account_code||'—',account_name:acc?.account_name||'الصندوق',debit:0,credit:amt},
-        ]
-        printVoucher({...tx,je_lines},je_lines,acc?.account_name||'—')
-      }}/>
+    <TxTable items={items} total={total} loading={loading} onView={setSelected}/>
+    <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
+      onClose={()=>setSelected(null)}
+      onPosted={()=>{setSelected(null);load()}}
+      onCancelled={()=>{setSelected(null);load()}}/>
   </div>
 }
 
@@ -481,18 +600,18 @@ function BankTxListTab({showToast,openView}) {
   const [total,setTotal]=useState(0)
   const [loading,setLoading]=useState(true)
   const [filters,setFilters]=useState({tx_type:'',status:''})
+  const [accounts,setAccounts]=useState([])
+  const [selected,setSelected]=useState(null)
 
   const load=useCallback(async()=>{
     setLoading(true)
     try{
       const p=Object.fromEntries(Object.entries(filters).filter(([,v])=>v))
-      const r=await api.treasury.listBankTransactions(p)
-      setItems(r?.data?.items||[]); setTotal(r?.data?.total||0)
+      const [r,a]=await Promise.all([api.treasury.listBankTransactions(p),api.treasury.listBankAccounts()])
+      setItems(r?.data?.items||[]); setTotal(r?.data?.total||0); setAccounts(a?.data||[])
     }catch(e){showToast(e.message,'error')}finally{setLoading(false)}
   },[filters])
   useEffect(()=>{load()},[load])
-
-  const doPost=async(id)=>{try{await api.treasury.postBankTransaction(id);load();showToast('تم الترحيل ✅')}catch(e){showToast(e.message,'error')}}
 
   return <div className="space-y-4">
     <div className="flex items-center justify-between flex-wrap gap-3">
@@ -511,7 +630,11 @@ function BankTxListTab({showToast,openView}) {
         <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍</button>
       </div>
     </div>
-    <TxTable items={items} total={total} loading={loading} onPost={doPost}/>
+    <TxTable items={items} total={total} loading={loading} onView={setSelected}/>
+    <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
+      onClose={()=>setSelected(null)}
+      onPosted={()=>{setSelected(null);load()}}
+      onCancelled={()=>{setSelected(null);load()}}/>
   </div>
 }
 
@@ -546,17 +669,19 @@ const TX_META={
   BT:{label:'تحويل بنكي',color:'text-blue-700'},
   IT:{label:'تحويل داخلي',color:'text-purple-700'},
 }
-function TxTable({items,total,loading,onPost,onCancel,onPrint}) {
+function TxTable({items,total,loading,onView}) {
   return <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-    <div className="grid text-white text-xs font-semibold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:'1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr 100px'}}>
-      {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ','الحالة','إجراء'].map(h=><div key={h} className="px-3 py-3">{h}</div>)}
+    <div className="grid text-white text-xs font-semibold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:'1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr'}}>
+      {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ','الحالة'].map(h=><div key={h} className="px-3 py-3">{h}</div>)}
     </div>
     {loading?<div className="py-10 text-center text-slate-400">جارٍ التحميل...</div>:
     items.length===0?<div className="py-12 text-center text-slate-400">لا توجد مستندات</div>:
     items.map((item,i)=>{
       const meta=TX_META[item.tx_type]||{}
-      return <div key={item.id} className={`grid items-center border-b border-slate-50 text-xs hover:bg-blue-50/20 transition-colors ${i%2===0?'bg-white':'bg-slate-50/30'}`}
-        style={{gridTemplateColumns:'1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr 100px'}}>
+      return <div key={item.id}
+        onClick={()=>onView&&onView(item)}
+        className={`grid items-center border-b border-slate-50 text-xs cursor-pointer hover:bg-blue-50/40 transition-colors ${i%2===0?'bg-white':'bg-slate-50/30'}`}
+        style={{gridTemplateColumns:'1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr'}}>
         <div className={`px-3 py-3 font-mono font-bold ${meta.color}`}>{item.serial}</div>
         <div className={`px-3 py-3 font-medium ${meta.color}`}>{meta.label}</div>
         <div className="px-3 py-3 text-slate-500">{fmtDate(item.tx_date)}</div>
@@ -564,16 +689,6 @@ function TxTable({items,total,loading,onPost,onCancel,onPrint}) {
         <div className="px-3 py-3 text-slate-600 truncate">{item.party_name||item.beneficiary_name||'—'}</div>
         <div className="px-3 py-3 font-mono font-bold text-slate-800">{fmt(item.amount,3)}</div>
         <div className="px-3 py-3"><StatusBadge status={item.status}/></div>
-        <div className="px-2 py-3 flex gap-1 flex-wrap">
-          {item.status==='draft'&&<>
-            <button onClick={()=>onPost&&onPost(item.id)} className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1 rounded-lg font-medium">ترحيل</button>
-            {onCancel&&<button onClick={()=>onCancel(item.id)} className="text-xs bg-red-50 text-red-500 hover:bg-red-100 px-2 py-1 rounded-lg">إلغاء</button>}
-          </>}
-          {item.status==='posted'&&<>
-            <span className="text-emerald-600 font-mono text-xs truncate">{item.je_serial}</span>
-            {onPrint&&<button onClick={()=>onPrint(item)} className="text-blue-500 hover:text-blue-700 text-sm" title="طباعة">🖨️</button>}
-          </>}
-        </div>
       </div>
     })}
     <div className="px-4 py-2.5 bg-slate-50 border-t flex justify-between text-xs text-slate-500">
