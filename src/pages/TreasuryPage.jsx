@@ -120,6 +120,7 @@ function AccountingTable({lines=[]}) {
         <tr className="bg-slate-50 border-b-2 border-slate-200 text-slate-500 text-xs">
           <th className="px-4 py-2.5 text-right font-semibold">رقم الحساب</th>
           <th className="px-4 py-2.5 text-right font-semibold">اسم الحساب</th>
+          <th className="px-4 py-2.5 text-right font-semibold">الفرع</th>
           <th className="px-4 py-2.5 text-right font-semibold">مركز التكلفة</th>
           <th className="px-4 py-2.5 text-right font-semibold">المشروع</th>
           <th className="px-4 py-2.5 text-center font-semibold w-36">مدين</th>
@@ -131,6 +132,7 @@ function AccountingTable({lines=[]}) {
           <tr key={i} className={`border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/50'}`}>
             <td className="px-4 py-2.5 font-mono font-bold text-blue-700 text-sm">{l.account_code||'—'}</td>
             <td className="px-4 py-2.5 text-slate-700">{l.account_name||l.description||'—'}</td>
+            <td className="px-4 py-2.5 text-slate-400 text-xs">{l.branch_code||'—'}</td>
             <td className="px-4 py-2.5 text-slate-400 text-xs">{l.cost_center||'—'}</td>
             <td className="px-4 py-2.5 text-slate-400 text-xs">{l.project_code||'—'}</td>
             <td className="px-4 py-2.5 text-center font-mono font-bold">{l.debit>0?<span className="text-slate-800">{fmt(l.debit,3)}</span>:'—'}</td>
@@ -140,7 +142,7 @@ function AccountingTable({lines=[]}) {
       </tbody>
       <tfoot>
         <tr className="bg-blue-50 border-t-2 border-blue-200 font-bold">
-          <td colSpan={4} className="px-4 py-3 text-blue-800 text-sm">الإجمالي</td>
+          <td colSpan={5} className="px-4 py-3 text-blue-800 text-sm">الإجمالي</td>
           <td className="px-4 py-3 text-center font-mono text-blue-800">{fmt(totalDR,3)}</td>
           <td className="px-4 py-3 text-center font-mono text-blue-800">{fmt(totalCR,3)}</td>
         </tr>
@@ -713,27 +715,43 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const isPV=type==='PV'
   const typeLabel=isPV?'سند صرف نقدي':'سند قبض نقدي'
   const [accounts,setAccounts]=useState([])
+  const [branches,setBranches]=useState([])
+  const [costCenters,setCostCenters]=useState([])
+  const [projects,setProjects]=useState([])
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
     description:'', party_name:'', reference:'',
-    payment_method:'cash', cost_center:'', project_code:'', notes:''
+    payment_method:'cash', branch_code:'', cost_center:'', project_code:'', notes:''
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
 
-  useEffect(()=>{api.treasury.listBankAccounts({account_type:'cash_fund'}).then(r=>setAccounts(r?.data||[]))},[])
+  useEffect(()=>{
+    Promise.all([
+      api.treasury.listBankAccounts({account_type:'cash_fund'}),
+      api.settings.listBranches().catch(()=>({data:[]})),
+      api.settings.listCostCenters().catch(()=>({data:[]})),
+      api.settings.listProjects().catch(()=>({data:[]})),
+    ]).then(([a,b,cc,p])=>{
+      setAccounts(a?.data||[])
+      setBranches(b?.data||[])
+      setCostCenters(cc?.data||[])
+      setProjects(p?.data||[])
+    })
+  },[])
 
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
 
   // التوجيه المحاسبي
+  const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null}
   const je_lines = selectedBank && form.counterpart_account && amt>0 ? (isPV?[
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:amt,  credit:0,   cost_center:form.cost_center, project_code:form.project_code},
+    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:amt,  credit:0,   ...dims},
     {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,              debit:0,    credit:amt},
   ]:[
     {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,              debit:amt,  credit:0},
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:0,    credit:amt,  cost_center:form.cost_center, project_code:form.project_code},
+    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:0,    credit:amt,  ...dims},
   ]) : []
 
   const save=async()=>{
@@ -812,19 +830,34 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
         <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)} placeholder="وصف العملية..."/>
       </div>
 
-      {/* مركز التكلفة والمشروع */}
-      <div className="grid grid-cols-3 gap-5">
+      {/* الأبعاد المحاسبية */}
+      <div className="grid grid-cols-2 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المرجع</label>
           <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.reference} onChange={e=>s('reference',e.target.value)}/>
         </div>
         <div>
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">الفرع</label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.branch_code} onChange={e=>s('branch_code',e.target.value)}>
+            <option value="">— اختر الفرع —</option>
+            {branches.map(b=><option key={b.code} value={b.code}>{b.code} — {b.name_ar}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-5">
+        <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">مركز التكلفة</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.cost_center} onChange={e=>s('cost_center',e.target.value)} placeholder="CC001"/>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.cost_center} onChange={e=>s('cost_center',e.target.value)}>
+            <option value="">— اختر مركز التكلفة —</option>
+            {costCenters.map(cc=><option key={cc.code} value={cc.code}>{cc.code} — {cc.name_ar}</option>)}
+          </select>
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المشروع</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.project_code} onChange={e=>s('project_code',e.target.value)} placeholder="PRJ001"/>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.project_code} onChange={e=>s('project_code',e.target.value)}>
+            <option value="">— اختر المشروع —</option>
+            {projects.map(p=><option key={p.code} value={p.code}>{p.code} — {p.name_ar}</option>)}
+          </select>
         </div>
       </div>
 
@@ -853,13 +886,16 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   const labels={BP:'💸 دفعة بنكية',BR:'🏦 قبض بنكي',BT:'↔️ تحويل بنكي'}
   const [accounts,setAccounts]=useState([])
   const [vendors,setVendors]=useState([])
+  const [branches,setBranches]=useState([])
+  const [costCenters,setCostCenters]=useState([])
+  const [projects,setProjects]=useState([])
   const [payType,setPayType]=useState('expense')
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
     beneficiary_name:'', beneficiary_iban:'', beneficiary_bank:'',
     description:'', reference:'', payment_method:'wire',
-    cost_center:'', project_code:'', notes:''
+    branch_code:'', cost_center:'', project_code:'', notes:''
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
@@ -868,16 +904,26 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
     Promise.all([
       api.treasury.listBankAccounts({account_type:'bank'}),
       api.ap?.listVendors({limit:200}).catch(()=>({data:{items:[]}})),
-    ]).then(([a,v])=>{setAccounts(a?.data||[]);setVendors(v?.data?.items||[])})
+      api.settings.listBranches().catch(()=>({data:[]})),
+      api.settings.listCostCenters().catch(()=>({data:[]})),
+      api.settings.listProjects().catch(()=>({data:[]})),
+    ]).then(([a,v,b,cc,p])=>{
+      setAccounts(a?.data||[])
+      setVendors(v?.data?.items||[])
+      setBranches(b?.data||[])
+      setCostCenters(cc?.data||[])
+      setProjects(p?.data||[])
+    })
   },[])
 
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
+  const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null}
   const je_lines = selectedBank&&form.counterpart_account&&amt>0 ? (type==='BR'?[
     {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:amt, credit:0},
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:0, credit:amt, cost_center:form.cost_center, project_code:form.project_code},
+    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:0, credit:amt, ...dims},
   ]:[
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:amt, credit:0, cost_center:form.cost_center, project_code:form.project_code},
+    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:amt, credit:0, ...dims},
     {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:0, credit:amt},
   ]) : []
 
@@ -969,18 +1015,33 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
         <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)}/>
       </div>
 
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-2 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المرجع</label>
           <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.reference} onChange={e=>s('reference',e.target.value)}/>
         </div>
         <div>
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">الفرع</label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.branch_code} onChange={e=>s('branch_code',e.target.value)}>
+            <option value="">— اختر الفرع —</option>
+            {branches.map(b=><option key={b.code} value={b.code}>{b.code} — {b.name_ar}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-5">
+        <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">مركز التكلفة</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.cost_center} onChange={e=>s('cost_center',e.target.value)}/>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.cost_center} onChange={e=>s('cost_center',e.target.value)}>
+            <option value="">— اختر مركز التكلفة —</option>
+            {costCenters.map(cc=><option key={cc.code} value={cc.code}>{cc.code} — {cc.name_ar}</option>)}
+          </select>
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المشروع</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.project_code} onChange={e=>s('project_code',e.target.value)}/>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.project_code} onChange={e=>s('project_code',e.target.value)}>
+            <option value="">— اختر المشروع —</option>
+            {projects.map(p=><option key={p.code} value={p.code}>{p.code} — {p.name_ar}</option>)}
+          </select>
         </div>
       </div>
 
