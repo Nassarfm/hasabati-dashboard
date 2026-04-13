@@ -247,6 +247,7 @@ export const api = {
     // سندات القبض والصرف النقدية (RV / PV)
     listCashTransactions:   (p={})  => get('/treasury/cash-transactions', p),
     createCashTransaction:  (b)     => post('/treasury/cash-transactions', b),
+    updateCashTransaction:  (id, b) => put(`/treasury/cash-transactions/${id}`, b),
     postCashTransaction:    (id)    => post(`/treasury/cash-transactions/${id}/post`, {}),
     cancelCashTransaction:  (id)    => del(`/treasury/cash-transactions/${id}`),
 

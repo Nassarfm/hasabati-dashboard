@@ -241,13 +241,21 @@ function StatusBadge({status}) {
 // ── VoucherSlideOver — معاينة السند ──────────────────────
 function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToast}) {
   const [loading, setLoading] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState({})
+
+  useEffect(()=>{
+    if(tx){ setEditMode(false); setEditForm({}) }
+  },[tx])
+
   if(!tx) return null
 
   const acc = accounts.find(a=>a.id===tx.bank_account_id)
-  const amt = parseFloat(tx.amount)||0
+  const amt = parseFloat(editMode ? editForm.amount : tx.amount)||0
   const TX_LABELS = {RV:'سند قبض نقدي',PV:'سند صرف نقدي',BP:'دفعة بنكية',BR:'قبض بنكي',BT:'تحويل بنكي',IT:'تحويل داخلي',CHK:'شيك'}
-  const isPost = tx.tx_type==='RV'||tx.tx_type==='PV'
-  const apiPost = isPost ? ()=>api.treasury.postCashTransaction(tx.id) : ()=>api.treasury.postBankTransaction(tx.id)
+  const isCashTx = tx.tx_type==='RV'||tx.tx_type==='PV'
+  const apiPost = isCashTx ? ()=>api.treasury.postCashTransaction(tx.id) : ()=>api.treasury.postBankTransaction(tx.id)
+  const se=(k,v)=>setEditForm(p=>({...p,[k]:v}))
 
   const je_lines = tx.tx_type==='RV'||tx.tx_type==='BR' ? [
     {account_code:acc?.gl_account_code||'—', account_name:acc?.account_name||'الصندوق/البنك', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code},
@@ -265,9 +273,23 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
   }
 
   const doCancel = async() => {
-    if(!window.confirm('هل تريد إلغاء هذا السند؟')) return
+    if(!window.confirm('هل تريد إلغاء هذا السند؟ سيبقى مسجلاً بحالة ملغي ولن يُحذف.')) return
     setLoading(true)
-    try { await api.treasury.cancelCashTransaction(tx.id); showToast('تم الإلغاء'); onCancelled() }
+    try { await api.treasury.cancelCashTransaction(tx.id); showToast('تم إلغاء السند'); onCancelled() }
+    catch(e) { showToast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+
+  const doSaveEdit = async() => {
+    if(!editForm.amount || parseFloat(editForm.amount)<=0){ showToast('المبلغ مطلوب','error'); return }
+    if(!editForm.description?.trim()){ showToast('البيان مطلوب','error'); return }
+    setLoading(true)
+    try {
+      await api.treasury.updateCashTransaction(tx.id, editForm)
+      showToast('تم التعديل ✅')
+      setEditMode(false)
+      onCancelled() // لإعادة تحميل القائمة
+    }
     catch(e) { showToast(e.message,'error') }
     finally { setLoading(false) }
   }
@@ -281,18 +303,69 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
       footer={
         <div className="flex gap-2 flex-wrap">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-slate-600 border border-slate-200 hover:bg-slate-50">إغلاق</button>
-          <button onClick={doPrint} className="px-4 py-2 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50">🖨️ طباعة</button>
+          {!editMode && <button onClick={doPrint} className="px-4 py-2 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50">🖨️ طباعة</button>}
           {tx.status==='draft' && <>
-            {(tx.tx_type==='RV'||tx.tx_type==='PV') &&
-              <button onClick={doCancel} disabled={loading} className="px-4 py-2 rounded-xl text-sm text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50">إلغاء السند</button>
-            }
-            <button onClick={doPost} disabled={loading} className="flex-1 px-4 py-2 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
-              {loading ? '⏳ جارٍ الترحيل...' : '✅ ترحيل'}
-            </button>
+            {!editMode && isCashTx && <>
+              <button onClick={()=>{ setEditForm({...tx}); setEditMode(true) }}
+                className="px-4 py-2 rounded-xl text-sm text-amber-700 border border-amber-200 hover:bg-amber-50">✏️ تعديل</button>
+              <button onClick={doCancel} disabled={loading}
+                className="px-4 py-2 rounded-xl text-sm text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50">🚫 إلغاء السند</button>
+              <button onClick={doPost} disabled={loading}
+                className="flex-1 px-4 py-2 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                {loading ? '⏳ جارٍ الترحيل...' : '✅ ترحيل'}
+              </button>
+            </>}
+            {editMode && <>
+              <button onClick={()=>setEditMode(false)} className="px-4 py-2 rounded-xl text-sm text-slate-600 border border-slate-200 hover:bg-slate-50">رجوع</button>
+              <button onClick={doSaveEdit} disabled={loading}
+                className="flex-1 px-4 py-2 rounded-xl text-sm bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50">
+                {loading ? '⏳ جارٍ الحفظ...' : '💾 حفظ التعديل'}
+              </button>
+            </>}
           </>}
         </div>
       }>
       <div className="space-y-5" dir="rtl">
+
+        {/* نموذج التعديل */}
+        {editMode && <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-amber-700">✏️ وضع التعديل — المسودة فقط</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">المبلغ *</label>
+              <input type="number" step="0.001" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500"
+                value={editForm.amount||''} onChange={e=>se('amount',e.target.value)}/>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">التاريخ</label>
+              <input type="date" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                value={editForm.tx_date||''} onChange={e=>se('tx_date',e.target.value)}/>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">البيان *</label>
+            <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              value={editForm.description||''} onChange={e=>se('description',e.target.value)}/>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">اسم الطرف</label>
+              <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                value={editForm.party_name||''} onChange={e=>se('party_name',e.target.value)}/>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">المرجع</label>
+              <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                value={editForm.reference||''} onChange={e=>se('reference',e.target.value)}/>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">ملاحظات</label>
+            <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              value={editForm.notes||''} onChange={e=>se('notes',e.target.value)}/>
+          </div>
+        </div>}
+
         {/* رأس السند */}
         <div className="grid grid-cols-2 gap-3 text-sm">
           {[
