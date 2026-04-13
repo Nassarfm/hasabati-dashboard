@@ -443,53 +443,263 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
 // MAIN PAGE
 // ══════════════════════════════════════════════════════════
 export default function TreasuryPage() {
-  const [view,setView]=useState('main') // main | new-cash | new-bank-tx | new-transfer | new-bank-account
-  const [viewData,setViewData]=useState(null)
-  const [toast,setToast]=useState(null)
-  const [tab,setTab]=useState('dashboard')
-  const showToast=(msg,type='success')=>setToast({msg,type})
+  const [view,setView]     = useState('main')
+  const [viewData,setViewData] = useState(null)
+  const [toast,setToast]   = useState(null)
+  const [section,setSection] = useState('operations') // settings | operations | petty | reconciliation | reports
+  const showToast = (msg,type='success') => setToast({msg,type})
 
-  const openView=(v,data=null)=>{setView(v);setViewData(data);window.scrollTo(0,0)}
-  const closeView=()=>{setView('main');setViewData(null)}
-  const onSaved=(msg)=>{closeView();showToast(msg||'تم الحفظ ✅')}
+  const openView  = (v,data=null) => { setView(v); setViewData(data); window.scrollTo(0,0) }
+  const closeView = () => { setView('main'); setViewData(null) }
+  const onSaved   = (msg) => { closeView(); showToast(msg||'تم الحفظ ✅') }
 
-  if(view==='new-cash')        return <CashVoucherPage type={viewData||'PV'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
-  if(view==='new-bank-tx')     return <BankTxPage type={viewData||'BP'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
-  if(view==='new-transfer')    return <InternalTransferPage onBack={closeView} onSaved={onSaved} showToast={showToast}/>
-  if(view==='new-bank-account')return <BankAccountPage account={viewData} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+  if(view==='new-cash')         return <CashVoucherPage type={viewData||'PV'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+  if(view==='new-bank-tx')      return <BankTxPage type={viewData||'BP'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+  if(view==='new-transfer')     return <InternalTransferPage onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+  if(view==='new-bank-account') return <BankAccountPage account={viewData} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
 
-  const TABS=[
-    {id:'dashboard',    icon:'📊',label:'لوحة التحكم'},
-    {id:'bank-accounts',icon:'🏦',label:'الحسابات البنكية'},
-    {id:'cash',         icon:'💵',label:'القبض والصرف النقدي'},
-    {id:'bank-tx',      icon:'🏛️',label:'حركات البنوك'},
-    {id:'transfers',    icon:'🔄',label:'التحويلات الداخلية'},
-    {id:'checks',       icon:'📝',label:'الشيكات'},
-    {id:'petty',        icon:'👜',label:'العهدة النثرية'},
+  const SECTIONS = [
+    { id:'settings',       icon:'⚙️',  label:'الإعدادات' },
+    { id:'operations',     icon:'💼',  label:'العمليات' },
+    { id:'petty',          icon:'👜',  label:'العهدة النثرية' },
+    { id:'reconciliation', icon:'🔗',  label:'التسويات البنكية' },
+    { id:'reports',        icon:'📊',  label:'التقارير' },
   ]
 
-  return <div className="space-y-4" dir="rtl">
+  return <div className="space-y-5" dir="rtl">
     {toast&&<Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
-    <div className="flex items-center justify-between">
-      <div><h1 className="text-2xl font-bold text-slate-800">🏦 الخزينة والبنوك</h1>
-           <p className="text-sm text-slate-400 mt-0.5">Treasury & Banking Module</p></div>
+
+    {/* Header */}
+    <div>
+      <h1 className="text-2xl font-bold text-slate-800">🏦 الخزينة والبنوك</h1>
+      <p className="text-sm text-slate-400 mt-0.5">Treasury & Banking Module</p>
     </div>
-    <div className="flex gap-1 bg-slate-100 rounded-2xl p-1.5 overflow-x-auto">
-      {TABS.map(t=>(
-        <button key={t.id} onClick={()=>setTab(t.id)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all
-            ${tab===t.id?'bg-white text-blue-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
-          {t.icon} {t.label}
+
+    {/* Main Navigation — بطاقات */}
+    <div className="grid grid-cols-5 gap-3">
+      {SECTIONS.map(s=>(
+        <button key={s.id} onClick={()=>setSection(s.id)}
+          className={`flex flex-col items-center gap-2 py-4 px-3 rounded-2xl border-2 font-semibold text-sm transition-all
+            ${section===s.id
+              ? 'bg-blue-700 border-blue-700 text-white shadow-lg shadow-blue-200'
+              : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700'}`}>
+          <span className="text-2xl">{s.icon}</span>
+          <span className="text-xs">{s.label}</span>
         </button>
       ))}
     </div>
-    {tab==='dashboard'    &&<DashboardTab showToast={showToast} setTab={setTab} openView={openView}/>}
-    {tab==='bank-accounts'&&<BankAccountsTab showToast={showToast} openView={openView}/>}
-    {tab==='cash'         &&<CashListTab showToast={showToast} openView={openView}/>}
-    {tab==='bank-tx'      &&<BankTxListTab showToast={showToast} openView={openView}/>}
-    {tab==='transfers'    &&<TransfersListTab showToast={showToast} openView={openView}/>}
-    {tab==='checks'       &&<ChecksTab showToast={showToast}/>}
-    {tab==='petty'        &&<PettyCashTab showToast={showToast}/>}
+
+    {/* Content */}
+    {section==='settings'       && <SettingsSection showToast={showToast} openView={openView}/>}
+    {section==='operations'     && <OperationsSection showToast={showToast} openView={openView}/>}
+    {section==='petty'          && <PettyCashTab showToast={showToast}/>}
+    {section==='reconciliation' && <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">🔗 التسويات البنكية — قريباً</div>}
+    {section==='reports'        && <ReportsSection showToast={showToast}/>}
+  </div>
+}
+
+// ══ SETTINGS SECTION ══════════════════════════════════════
+function SettingsSection({showToast,openView}) {
+  return <div className="space-y-4">
+    <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3 text-sm text-blue-700 font-medium">
+      ⚙️ إعدادات الخزينة — الحسابات البنكية والصناديق
+    </div>
+    <BankAccountsTab showToast={showToast} openView={openView}/>
+  </div>
+}
+
+// ══ OPERATIONS SECTION ════════════════════════════════════
+function OperationsSection({showToast,openView}) {
+  const [sub,setSub] = useState('cash')
+  const SUBS = [
+    {id:'cash',      icon:'💵', label:'نقدي',              desc:'سندات القبض والصرف'},
+    {id:'bank',      icon:'🏛️', label:'بنكي',              desc:'الدفعات والقبض البنكي'},
+    {id:'transfers', icon:'🔄', label:'تحويلات داخلية',    desc:'بين الحسابات'},
+    {id:'checks',    icon:'📝', label:'الشيكات',           desc:'إدارة الشيكات'},
+  ]
+  return <div className="space-y-4">
+    {/* Sub Navigation */}
+    <div className="flex gap-2 bg-slate-50 rounded-2xl p-1.5 border border-slate-200">
+      {SUBS.map(s=>(
+        <button key={s.id} onClick={()=>setSub(s.id)}
+          className={`flex-1 flex flex-col items-center py-2.5 px-2 rounded-xl text-xs font-semibold transition-all
+            ${sub===s.id?'bg-white text-blue-700 shadow-sm border border-blue-100':'text-slate-500 hover:text-slate-700'}`}>
+          <span className="text-lg mb-0.5">{s.icon}</span>
+          <span>{s.label}</span>
+          <span className={`text-[10px] font-normal ${sub===s.id?'text-blue-400':'text-slate-400'}`}>{s.desc}</span>
+        </button>
+      ))}
+    </div>
+    {/* Content */}
+    {sub==='cash'      && <CashListTab showToast={showToast} openView={openView}/>}
+    {sub==='bank'      && <BankTxListTab showToast={showToast} openView={openView}/>}
+    {sub==='transfers' && <TransfersListTab showToast={showToast} openView={openView}/>}
+    {sub==='checks'    && <ChecksTab showToast={showToast}/>}
+  </div>
+}
+
+// ══ REPORTS SECTION ═══════════════════════════════════════
+function ReportsSection({showToast}) {
+  const [sub,setSub] = useState('balances')
+  const [loading,setLoading] = useState(false)
+  const [data,setData] = useState(null)
+  const [filters,setFilters] = useState({date_from:'',date_to:'',month:'',year:new Date().getFullYear()})
+  const sf=(k,v)=>setFilters(p=>({...p,[k]:v}))
+
+  const SUBS = [
+    {id:'balances',     icon:'🏦', label:'أرصدة البنوك'},
+    {id:'cash-flow',    icon:'📈', label:'التدفقات النقدية'},
+    {id:'bank-expenses',icon:'💸', label:'المصاريف البنكية'},
+    {id:'statement',    icon:'📄', label:'كشف الحساب البنكي'},
+    {id:'inactive',     icon:'🔒', label:'الحسابات غير النشطة'},
+  ]
+
+  const load = async() => {
+    setLoading(true); setData(null)
+    try {
+      let r
+      if(sub==='balances')      r = await api.treasury.cashPositionReport()
+      else if(sub==='cash-flow') r = await api.treasury.listCashTransactions({status:'posted',date_from:filters.date_from,date_to:filters.date_to})
+      else if(sub==='bank-expenses') r = await api.treasury.listBankTransactions({tx_type:'BP',status:'posted',date_from:filters.date_from,date_to:filters.date_to})
+      else if(sub==='inactive') r = await api.treasury.listBankAccounts({is_active:false})
+      setData(r?.data||null)
+    } catch(e){ showToast(e.message,'error') }
+    finally{ setLoading(false) }
+  }
+
+  useEffect(()=>{ setData(null) },[sub])
+
+  return <div className="space-y-4">
+    {/* Sub Nav */}
+    <div className="flex gap-2 flex-wrap">
+      {SUBS.map(s=>(
+        <button key={s.id} onClick={()=>setSub(s.id)}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all
+            ${sub===s.id?'bg-blue-700 text-white border-blue-700':'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}>
+          {s.icon} {s.label}
+        </button>
+      ))}
+    </div>
+
+    {/* Filters */}
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">من تاريخ</label>
+        <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+          value={filters.date_from} onChange={e=>sf('date_from',e.target.value)}/>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">إلى تاريخ</label>
+        <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+          value={filters.date_to} onChange={e=>sf('date_to',e.target.value)}/>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">الشهر</label>
+        <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+          value={filters.month} onChange={e=>sf('month',e.target.value)}>
+          <option value="">— اختر —</option>
+          {['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+            .map((m,i)=><option key={i} value={String(i+1).padStart(2,'0')}>{m}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">السنة</label>
+        <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
+          value={filters.year} onChange={e=>sf('year',e.target.value)}>
+          {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+      <button onClick={load} disabled={loading}
+        className="px-5 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 disabled:opacity-50">
+        {loading?'⏳ جارٍ التحميل...':'🔍 عرض التقرير'}
+      </button>
+    </div>
+
+    {/* Report Output */}
+    {!data && !loading && <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 text-sm">اضغط "عرض التقرير" لتحميل البيانات</div>}
+    {loading && <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto mb-3"/><p className="text-sm">جارٍ التحميل...</p></div>}
+
+    {/* أرصدة البنوك */}
+    {sub==='balances' && data && <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-3 bg-blue-700 text-white font-bold text-sm">🏦 تقرير أرصدة البنوك والصناديق</div>
+      <table className="w-full text-xs">
+        <thead className="bg-slate-50 text-slate-500"><tr>
+          {['الكود','الاسم','النوع','العملة','الرصيد الحالي','الحالة'].map(h=><th key={h} className="px-4 py-2.5 text-right font-semibold">{h}</th>)}
+        </tr></thead>
+        <tbody>
+          {(Array.isArray(data)?data:data.accounts||[]).map((a,i)=>(
+            <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
+              <td className="px-4 py-2.5 font-mono text-blue-700 font-bold">{a.account_code}</td>
+              <td className="px-4 py-2.5 text-slate-700">{a.account_name}</td>
+              <td className="px-4 py-2.5 text-slate-500">{a.account_type==='bank'?'🏦 بنك':'💵 صندوق'}</td>
+              <td className="px-4 py-2.5 text-slate-500">{a.currency_code||'SAR'}</td>
+              <td className="px-4 py-2.5 font-mono font-bold text-slate-800">{fmt(a.current_balance,2)}</td>
+              <td className="px-4 py-2.5"><span className={`px-2 py-0.5 rounded-full text-xs ${a.is_active?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-600'}`}>{a.is_active?'نشط':'غير نشط'}</span></td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
+          <tr><td colSpan={4} className="px-4 py-3 text-blue-800">الإجمالي</td>
+          <td className="px-4 py-3 font-mono text-blue-800">{fmt((Array.isArray(data)?data:data.accounts||[]).reduce((s,a)=>s+parseFloat(a.current_balance||0),0),2)}</td>
+          <td></td></tr>
+        </tfoot>
+      </table>
+    </div>}
+
+    {/* التدفقات النقدية / المصاريف البنكية */}
+    {(sub==='cash-flow'||sub==='bank-expenses') && data && <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-3 bg-blue-700 text-white font-bold text-sm">
+        {sub==='cash-flow'?'📈 تقرير التدفقات النقدية':'💸 تقرير المصاريف البنكية'}
+      </div>
+      <table className="w-full text-xs">
+        <thead className="bg-slate-50 text-slate-500"><tr>
+          {['الرقم','التاريخ','النوع','الحساب','الطرف','المبلغ','البيان'].map(h=><th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>)}
+        </tr></thead>
+        <tbody>
+          {(data.items||[]).map((t,i)=>(
+            <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
+              <td className="px-3 py-2.5 font-mono text-blue-700 font-bold">{t.serial}</td>
+              <td className="px-3 py-2.5 text-slate-500">{fmtDate(t.tx_date)}</td>
+              <td className="px-3 py-2.5">{TX_META[t.tx_type]?.label||t.tx_type}</td>
+              <td className="px-3 py-2.5 text-slate-600 truncate">{t.bank_account_name||'—'}</td>
+              <td className="px-3 py-2.5 text-slate-600 truncate">{t.party_name||t.beneficiary_name||'—'}</td>
+              <td className="px-3 py-2.5 font-mono font-bold text-slate-800">{fmt(t.amount,3)}</td>
+              <td className="px-3 py-2.5 text-slate-500 truncate">{t.description}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
+          <tr><td colSpan={5} className="px-3 py-3 text-blue-800">الإجمالي</td>
+          <td className="px-3 py-3 font-mono text-blue-800">{fmt((data.items||[]).reduce((s,t)=>s+parseFloat(t.amount||0),0),3)}</td>
+          <td></td></tr>
+        </tfoot>
+      </table>
+    </div>}
+
+    {/* الحسابات غير النشطة */}
+    {sub==='inactive' && data && <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-3 bg-slate-700 text-white font-bold text-sm">🔒 الحسابات غير النشطة</div>
+      {(Array.isArray(data)?data:[]).length===0
+        ? <div className="py-10 text-center text-slate-400 text-sm">لا توجد حسابات غير نشطة</div>
+        : <table className="w-full text-xs">
+          <thead className="bg-slate-50 text-slate-500"><tr>
+            {['الكود','الاسم','النوع','الرصيد'].map(h=><th key={h} className="px-4 py-2.5 text-right font-semibold">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(Array.isArray(data)?data:[]).map((a,i)=>(
+              <tr key={i} className="border-t border-slate-100">
+                <td className="px-4 py-2.5 font-mono text-slate-600">{a.account_code}</td>
+                <td className="px-4 py-2.5">{a.account_name}</td>
+                <td className="px-4 py-2.5 text-slate-500">{a.account_type}</td>
+                <td className="px-4 py-2.5 font-mono">{fmt(a.current_balance,2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>}
+    </div>}
+
+    {/* كشف الحساب */}
+    {sub==='statement' && <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 text-sm">📄 كشف الحساب البنكي — يتطلب اختيار حساب بنكي محدد — قريباً</div>}
   </div>
 }
 
