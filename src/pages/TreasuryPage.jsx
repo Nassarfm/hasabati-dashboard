@@ -249,14 +249,43 @@ function StatusBadge({status}) {
   return <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${c[status]||'bg-slate-100 text-slate-600'}`}>{l[status]||status}</span>
 }
 
-// ── VoucherSlideOver — معاينة السند ──────────────────────
+// ── VoucherSlideOver — معاينة السند (نسخة محسّنة) ─────────
 function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToast}) {
-  const [loading, setLoading] = useState(false)
+  const [loading,  setLoading]  = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [editForm, setEditForm] = useState({})
+  const [cpName,   setCpName]   = useState('')       // اسم الحساب المقابل
+  const [branches, setBranches] = useState([])
+  const [costCenters, setCostCenters] = useState([])
+  const [projects, setProjects] = useState([])
+  const [expClass, setExpClass] = useState([])
 
+  // تحميل قوائم الأبعاد مرة واحدة
   useEffect(()=>{
-    if(tx){ setEditMode(false); setEditForm({}) }
+    Promise.all([
+      api.settings.listBranches().catch(()=>({data:[]})),
+      api.settings.listCostCenters().catch(()=>({data:[]})),
+      api.settings.listProjects().catch(()=>({data:[]})),
+      api.dimensions?.list?.().catch(()=>({data:[]})) ?? Promise.resolve({data:[]}),
+    ]).then(([b,cc,p,dims])=>{
+      setBranches(b?.data||[])
+      setCostCenters(cc?.data||[])
+      setProjects(p?.data||[])
+      const expDim=(dims?.data||[]).find(d=>d.code==='expense_classification')
+      setExpClass(expDim?.values||[])
+    })
+  },[])
+
+  // جلب اسم الحساب المقابل عند تغيير السند
+  useEffect(()=>{
+    if(!tx){ return }
+    setEditMode(false); setEditForm({}); setCpName('')
+    if(!tx.counterpart_account) return
+    api.accounting.getCOA({search: tx.counterpart_account, limit:5}).then(r=>{
+      const items = Array.isArray(r)?r:(r?.data?.items||r?.items||r?.data||[])
+      const found = items.find(a=>(a.account_code||a.code)===tx.counterpart_account)
+      if(found) setCpName(found.account_name||found.name_ar||found.name||'')
+    }).catch(()=>{})
   },[tx])
 
   if(!tx) return null
@@ -265,187 +294,382 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
   const amt = parseFloat(editMode ? editForm.amount : tx.amount)||0
   const TX_LABELS = {RV:'سند قبض نقدي',PV:'سند صرف نقدي',BP:'دفعة بنكية',BR:'قبض بنكي',BT:'تحويل بنكي',IT:'تحويل داخلي',CHK:'شيك'}
   const isCashTx = tx.tx_type==='RV'||tx.tx_type==='PV'
-  const apiPost = isCashTx ? ()=>api.treasury.postCashTransaction(tx.id) : ()=>api.treasury.postBankTransaction(tx.id)
+  const isReceipt = tx.tx_type==='RV'||tx.tx_type==='BR'
+  const apiPost  = isCashTx ? ()=>api.treasury.postCashTransaction(tx.id) : ()=>api.treasury.postBankTransaction(tx.id)
   const se=(k,v)=>setEditForm(p=>({...p,[k]:v}))
 
-  const je_lines = tx.tx_type==='RV'||tx.tx_type==='BR' ? [
-    {account_code:acc?.gl_account_code||'—', account_name:acc?.account_name||'الصندوق/البنك', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code},
-    {account_code:tx.counterpart_account||'—', account_name:'الحساب المقابل', debit:0, credit:amt},
+  // دوال البحث عن الأسماء
+  const branchName  = code => branches.find(b=>b.code===code)?.name_ar || code || '—'
+  const ccName      = code => costCenters.find(c=>c.code===code)?.name_ar || code || '—'
+  const projName    = code => projects.find(p=>p.code===code)?.name_ar || code || '—'
+  const expClsName  = code => {
+    const found = expClass.find(e=>(e.code||e.id)===code)
+    return found ? (found.name_ar||found.name||code) : (code||'—')
+  }
+
+  const cpLabel = cpName ? `${tx.counterpart_account} — ${cpName}` : (tx.counterpart_account||'—')
+  const accLabel = acc?.account_name || tx.bank_account_name || '—'
+
+  const je_lines = isReceipt ? [
+    {account_code:acc?.gl_account_code||'—', account_name:accLabel, debit:amt, credit:0,
+     branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code},
+    {account_code:tx.counterpart_account||'—', account_name:cpName||'الحساب المقابل', debit:0, credit:amt},
   ] : [
-    {account_code:tx.counterpart_account||'—', account_name:'الحساب المقابل', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code},
-    {account_code:acc?.gl_account_code||'—', account_name:acc?.account_name||'الصندوق/البنك', debit:0, credit:amt},
+    {account_code:tx.counterpart_account||'—', account_name:cpName||'الحساب المقابل', debit:amt, credit:0,
+     branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code},
+    {account_code:acc?.gl_account_code||'—', account_name:accLabel, debit:0, credit:amt},
   ]
 
-  const doPost = async() => {
-    setLoading(true)
-    try { await apiPost(); showToast('تم الترحيل ✅'); onPosted() }
-    catch(e) { showToast(e.message,'error') }
-    finally { setLoading(false) }
-  }
+  const hasDims = tx.branch_code||tx.cost_center||tx.project_code||tx.expense_classification_code
 
-  const doCancel = async() => {
-    if(!window.confirm('هل تريد إلغاء هذا السند؟ سيبقى مسجلاً بحالة ملغي ولن يُحذف.')) return
+  const doPost = async()=>{
     setLoading(true)
-    try { await api.treasury.cancelCashTransaction(tx.id); showToast('تم إلغاء السند'); onCancelled() }
-    catch(e) { showToast(e.message,'error') }
-    finally { setLoading(false) }
+    try{await apiPost();showToast('تم الترحيل ✅');onPosted()}
+    catch(e){showToast(e.message,'error')}
+    finally{setLoading(false)}
   }
-
-  const doSaveEdit = async() => {
-    if(!editForm.amount || parseFloat(editForm.amount)<=0){ showToast('المبلغ مطلوب','error'); return }
-    if(!editForm.description?.trim()){ showToast('البيان مطلوب','error'); return }
+  const doCancel = async()=>{
+    if(!window.confirm('هل تريد إلغاء هذا السند؟')) return
     setLoading(true)
-    try {
-      await api.treasury.updateCashTransaction(tx.id, editForm)
+    try{await api.treasury.cancelCashTransaction(tx.id);showToast('تم إلغاء السند');onCancelled()}
+    catch(e){showToast(e.message,'error')}
+    finally{setLoading(false)}
+  }
+  const doSaveEdit = async()=>{
+    if(!editForm.amount||parseFloat(editForm.amount)<=0){showToast('المبلغ مطلوب','error');return}
+    if(!editForm.description?.trim()){showToast('البيان مطلوب','error');return}
+    setLoading(true)
+    try{
+      await api.treasury.updateCashTransaction(tx.id,editForm)
       showToast('تم التعديل ✅')
       setEditMode(false)
-      onCancelled() // لإعادة تحميل القائمة
+      onCancelled()
     }
-    catch(e) { showToast(e.message,'error') }
-    finally { setLoading(false) }
+    catch(e){showToast(e.message,'error')}
+    finally{setLoading(false)}
   }
+  const doPrint=()=>printVoucher({...tx},je_lines,accLabel)
 
-  const doPrint = () => printVoucher({...tx}, je_lines, acc?.account_name||'—')
+  // حساب توازن القيد
+  const totalDR = je_lines.reduce((s,l)=>s+(parseFloat(l.debit)||0),0)
+  const totalCR = je_lines.reduce((s,l)=>s+(parseFloat(l.credit)||0),0)
+  const isBalanced = Math.abs(totalDR-totalCR)<0.01
+
+  const GRAD = 'linear-gradient(135deg,#1e3a5f,#1e40af)'
 
   return (
-    <SlideOver open={!!tx} onClose={onClose} size="xl"
+    <SlideOver open={!!tx} onClose={onClose} size="2xl"
       title={`${TX_LABELS[tx.tx_type]||'سند'} — ${tx.serial||'مسودة'}`}
       subtitle={`${fmtDate(tx.tx_date)} | ${tx.description||''}`}
       footer={
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-slate-600 border border-slate-200 hover:bg-slate-50">إغلاق</button>
-          {!editMode && <button onClick={doPrint} className="px-4 py-2 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50">🖨️ طباعة</button>}
-          {tx.status==='draft' && <>
-            {!editMode && isCashTx && <>
-              <button onClick={()=>{ setEditForm({...tx}); setEditMode(true) }}
-                className="px-4 py-2 rounded-xl text-sm text-amber-700 border border-amber-200 hover:bg-amber-50">✏️ تعديل</button>
+        <div className="flex items-center justify-between w-full">
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-slate-600 border border-slate-200 hover:bg-slate-50">إغلاق</button>
+          <div className="flex gap-2">
+            {!editMode&&<button onClick={doPrint} className="px-4 py-2.5 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50">🖨️ طباعة</button>}
+            {tx.status==='draft'&&isCashTx&&!editMode&&<>
+              <button onClick={()=>{setEditForm({...tx});setEditMode(true)}}
+                className="px-4 py-2.5 rounded-xl text-sm text-amber-700 border border-amber-200 hover:bg-amber-50">✏️ تعديل</button>
               <button onClick={doCancel} disabled={loading}
-                className="px-4 py-2 rounded-xl text-sm text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50">🚫 إلغاء السند</button>
+                className="px-4 py-2.5 rounded-xl text-sm text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50">🚫 إلغاء</button>
               <button onClick={doPost} disabled={loading}
-                className="flex-1 px-4 py-2 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
-                {loading ? '⏳ جارٍ الترحيل...' : '✅ ترحيل'}
+                className="px-5 py-2.5 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                {loading?'⏳ ترحيل...':'✅ ترحيل'}
               </button>
             </>}
-            {editMode && <>
-              <button onClick={()=>setEditMode(false)} className="px-4 py-2 rounded-xl text-sm text-slate-600 border border-slate-200 hover:bg-slate-50">رجوع</button>
+            {editMode&&<>
+              <button onClick={()=>setEditMode(false)} className="px-4 py-2.5 rounded-xl text-sm text-slate-600 border border-slate-200">رجوع</button>
               <button onClick={doSaveEdit} disabled={loading}
-                className="flex-1 px-4 py-2 rounded-xl text-sm bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50">
-                {loading ? '⏳ جارٍ الحفظ...' : '💾 حفظ التعديل'}
+                className="px-5 py-2.5 rounded-xl text-sm bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50">
+                {loading?'⏳ حفظ...':'💾 حفظ التعديل'}
               </button>
             </>}
-          </>}
+          </div>
         </div>
       }>
-      <div className="space-y-5" dir="rtl">
 
-        {/* نموذج التعديل */}
-        {editMode && <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
-          <p className="text-xs font-semibold text-amber-700">✏️ وضع التعديل — المسودة فقط</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">المبلغ *</label>
-              <input type="number" step="0.001" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500"
-                value={editForm.amount||''} onChange={e=>se('amount',e.target.value)}/>
+      {/* ── Layout: Main + Sidebar ── */}
+      <div className="flex h-full overflow-hidden" dir="rtl">
+
+        {/* ── MAIN PANEL ── */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+          {/* حالة الترحيل */}
+          {tx.status==='posted'&&tx.je_serial&&(
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+              <span className="text-2xl">✅</span>
+              <div>
+                <div className="text-sm font-bold text-emerald-800">تم الترحيل بنجاح</div>
+                <div className="text-xs text-emerald-600">رقم القيد: <span className="font-mono font-bold">{tx.je_serial}</span></div>
+              </div>
+            </div>
+          )}
+          {tx.status==='cancelled'&&(
+            <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+              <span className="text-2xl">🚫</span>
+              <div className="text-sm font-bold text-red-700">تم إلغاء هذا السند</div>
+            </div>
+          )}
+
+          {/* نموذج التعديل */}
+          {editMode&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 space-y-4">
+            <p className="text-xs font-bold text-amber-700 flex items-center gap-1">✏️ وضع التعديل — المسودة فقط</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">المبلغ *</label>
+                <input type="number" step="0.001" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500"
+                  value={editForm.amount||''} onChange={e=>se('amount',e.target.value)}/>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">التاريخ</label>
+                <input type="date" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  value={editForm.tx_date||''} onChange={e=>se('tx_date',e.target.value)}/>
+              </div>
             </div>
             <div>
-              <label className="text-xs text-slate-500 block mb-1">التاريخ</label>
-              <input type="date" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                value={editForm.tx_date||''} onChange={e=>se('tx_date',e.target.value)}/>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 block mb-1">البيان *</label>
-            <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              value={editForm.description||''} onChange={e=>se('description',e.target.value)}/>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">اسم الطرف</label>
+              <label className="text-xs text-slate-500 block mb-1">البيان *</label>
               <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                value={editForm.party_name||''} onChange={e=>se('party_name',e.target.value)}/>
+                value={editForm.description||''} onChange={e=>se('description',e.target.value)}/>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">اسم الطرف</label>
+                <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  value={editForm.party_name||''} onChange={e=>se('party_name',e.target.value)}/>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">المرجع</label>
+                <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  value={editForm.reference||''} onChange={e=>se('reference',e.target.value)}/>
+              </div>
+            </div>
+            {/* الأبعاد في وضع التعديل */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">الفرع</label>
+                <select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  value={editForm.branch_code||''} onChange={e=>se('branch_code',e.target.value)}>
+                  <option value="">— اختر الفرع —</option>
+                  {branches.map(b=><option key={b.code} value={b.code}>{b.code} — {b.name_ar}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">مركز التكلفة</label>
+                <select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  value={editForm.cost_center||''} onChange={e=>se('cost_center',e.target.value)}>
+                  <option value="">— اختر مركز التكلفة —</option>
+                  {costCenters.map(cc=><option key={cc.code} value={cc.code}>{cc.code} — {cc.name_ar}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">المشروع</label>
+                <select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  value={editForm.project_code||''} onChange={e=>se('project_code',e.target.value)}>
+                  <option value="">— اختر المشروع —</option>
+                  {projects.map(p=><option key={p.code} value={p.code}>{p.code} — {p.name_ar}</option>)}
+                </select>
+              </div>
+              {expClass.length>0&&<div>
+                <label className="text-xs text-slate-500 block mb-1">تصنيف المصروف</label>
+                <select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                  value={editForm.expense_classification_code||''} onChange={e=>se('expense_classification_code',e.target.value)}>
+                  <option value="">— اختر —</option>
+                  {expClass.map(ec=><option key={ec.code||ec.id} value={ec.code||ec.id}>{ec.name_ar||ec.name||ec.code}</option>)}
+                </select>
+              </div>}
             </div>
             <div>
-              <label className="text-xs text-slate-500 block mb-1">المرجع</label>
+              <label className="text-xs text-slate-500 block mb-1">ملاحظات</label>
               <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                value={editForm.reference||''} onChange={e=>se('reference',e.target.value)}/>
+                value={editForm.notes||''} onChange={e=>se('notes',e.target.value)}/>
             </div>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 block mb-1">ملاحظات</label>
-            <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              value={editForm.notes||''} onChange={e=>se('notes',e.target.value)}/>
-          </div>
-        </div>}
+          </div>}
 
-        {/* رأس السند */}
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          {[
-            ['رقم السند', tx.serial||'—'],
-            ['الحالة', <StatusBadge status={tx.status}/>],
-            ['التاريخ', fmtDate(tx.tx_date)],
-            ['الصندوق/البنك', acc?.account_name||tx.bank_account_name||'—'],
-            ['المبلغ', <span className="font-mono font-bold text-slate-800">{fmt(amt,3)} {tx.currency_code||'ر.س'}</span>],
-            ['طريقة الدفع', tx.payment_method||'—'],
-            ['الطرف', tx.party_name||tx.beneficiary_name||'—'],
-            ['المرجع', tx.reference||'—'],
-            ['الفرع', tx.branch_code||'—'],
-            ['مركز التكلفة', tx.cost_center||'—'],
-            ['المشروع', tx.project_code||'—'],
-            ...(tx.expense_classification_code ? [['تصنيف المصروف', tx.expense_classification_code]] : []),
-            ['الحساب المقابل', tx.counterpart_account||'—'],
-          ].map(([l,v],i)=>(
-            <div key={i} className="flex gap-2 bg-slate-50 rounded-xl px-3 py-2">
-              <span className="text-slate-400 shrink-0">{l}:</span>
-              <span className="text-slate-700 font-medium">{v}</span>
+          {/* رأس السند */}
+          {!editMode&&<div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-4 py-3 text-xs font-bold text-white" style={{background:GRAD}}>📋 بيانات السند</div>
+            <div className="p-4 grid grid-cols-2 gap-3 text-sm">
+              {[
+                ['رقم السند', <span className="font-mono font-bold text-blue-700">{tx.serial||'—'}</span>],
+                ['الحالة', <StatusBadge status={tx.status}/>],
+                ['التاريخ', fmtDate(tx.tx_date)],
+                ['طريقة الدفع', tx.payment_method||'—'],
+                ['الصندوق / البنك', <span className="font-semibold">{accLabel}</span>],
+                ['المبلغ', <span className="font-mono font-bold text-slate-800">{fmt(amt,3)} {tx.currency_code||'ر.س'}</span>],
+                ['الطرف', tx.party_name||tx.beneficiary_name||'—'],
+                ['المرجع', tx.reference||'—'],
+                ['الحساب المقابل', <span className="font-mono text-blue-700 text-xs">{cpLabel}</span>],
+              ].map(([l,v],i)=>(
+                <div key={i} className="flex flex-col gap-0.5 bg-slate-50 rounded-xl px-3 py-2">
+                  <span className="text-xs text-slate-400">{l}</span>
+                  <span className="text-slate-800 font-medium text-sm">{v}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+            {tx.description&&<div className="mx-4 mb-4 bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-800">
+              <span className="font-semibold text-xs text-blue-500 block mb-0.5">البيان</span>
+              {tx.description}
+            </div>}
+          </div>}
 
-        {/* البيان */}
-        {tx.description && <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-800"><span className="font-semibold">البيان: </span>{tx.description}</div>}
-
-        {/* القيد المحاسبي */}
-        <div>
-          <h3 className="text-sm font-bold text-slate-700 mb-2">📒 القيد المحاسبي</h3>
-          <div className="border border-blue-200 rounded-xl overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-blue-700 text-white">
-                <tr>
-                  {['رقم الحساب','اسم الحساب','الفرع','مركز التكلفة','المشروع','مدين','دائن'].map(h=>(
-                    <th key={h} className="px-3 py-2 text-right font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {je_lines.map((l,i)=>(
-                  <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50'}`}>
-                    <td className="px-3 py-2 font-mono font-bold text-blue-700">{l.account_code}</td>
-                    <td className="px-3 py-2 text-slate-700">{l.account_name}</td>
-                    <td className="px-3 py-2 text-slate-400">{l.branch_code||'—'}</td>
-                    <td className="px-3 py-2 text-slate-400">{l.cost_center||'—'}</td>
-                    <td className="px-3 py-2 text-slate-400">{l.project_code||'—'}</td>
-                    <td className="px-3 py-2 font-mono font-bold text-slate-800">{l.debit>0?fmt(l.debit,3):'—'}</td>
-                    <td className="px-3 py-2 font-mono font-bold text-slate-800">{l.credit>0?fmt(l.credit,3):'—'}</td>
+          {/* القيد المحاسبي */}
+          {!editMode&&<div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-4 py-3 text-xs font-bold text-white" style={{background:GRAD}}>📒 القيد المحاسبي</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-3 py-2.5 text-right text-slate-500 font-semibold w-8">#</th>
+                    <th className="px-3 py-2.5 text-right text-slate-500 font-semibold w-28">الكود</th>
+                    <th className="px-3 py-2.5 text-right text-slate-500 font-semibold">اسم الحساب</th>
+                    <th className="px-3 py-2.5 text-center text-slate-500 font-semibold w-36">الأبعاد</th>
+                    <th className="px-3 py-2.5 text-center text-slate-500 font-semibold w-28">مدين</th>
+                    <th className="px-3 py-2.5 text-center text-slate-500 font-semibold w-28">دائن</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
-                <tr>
-                  <td colSpan={5} className="px-3 py-2 text-blue-800">الإجمالي</td>
-                  <td className="px-3 py-2 font-mono text-blue-800">{fmt(amt,3)}</td>
-                  <td className="px-3 py-2 font-mono text-blue-800">{fmt(amt,3)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {je_lines.map((l,i)=>{
+                    const lDims=l.branch_code||l.cost_center||l.project_code||l.expense_classification_code
+                    return(
+                      <tr key={i} className={`border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
+                        <td className="px-3 py-2.5 text-center"><span className="text-slate-400 bg-slate-100 rounded px-1 font-mono">{i+1}</span></td>
+                        <td className="px-3 py-2.5"><span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg">{l.account_code}</span></td>
+                        <td className="px-3 py-2.5 font-semibold text-slate-800">{l.account_name||'—'}</td>
+                        <td className="px-3 py-2.5">
+                          {lDims?<div className="flex flex-col gap-0.5">
+                            {l.branch_code&&<span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full w-fit">🏢 {branchName(l.branch_code)}</span>}
+                            {l.cost_center&&<span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full w-fit">💰 {ccName(l.cost_center)}</span>}
+                            {l.project_code&&<span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full w-fit">📁 {projName(l.project_code)}</span>}
+                            {l.expense_classification_code&&<span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full w-fit">🏷️ {expClsName(l.expense_classification_code)}</span>}
+                          </div>:<span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          {(parseFloat(l.debit)||0)>0
+                            ?<span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg">{fmt(l.debit,3)}</span>
+                            :<span className="text-slate-200">—</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          {(parseFloat(l.credit)||0)>0
+                            ?<span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg">{fmt(l.credit,3)}</span>
+                            :<span className="text-slate-200">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{background:'#1e3a5f'}}>
+                    <td colSpan={4} className="px-3 py-2.5 text-white font-bold">الإجمالي ({je_lines.length} سطر)</td>
+                    <td className="px-3 py-2.5 text-center font-mono font-bold" style={{color:'#93c5fd'}}>{fmt(totalDR,3)}</td>
+                    <td className="px-3 py-2.5 text-center font-mono font-bold" style={{color:'#6ee7b7'}}>{fmt(totalCR,3)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>}
         </div>
 
-        {/* رقم القيد بعد الترحيل */}
-        {tx.status==='posted' && tx.je_serial && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800">
-            ✅ تم الترحيل — القيد: <span className="font-mono font-bold">{tx.je_serial}</span>
+        {/* ── SIDEBAR ── */}
+        {!editMode&&<div className="w-64 shrink-0 border-r border-slate-200 overflow-y-auto p-3 space-y-3 bg-slate-50">
+
+          {/* ملخص */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="px-3 py-2.5 text-xs font-bold text-white" style={{background:GRAD}}>📊 ملخص</div>
+            <div className="p-3 space-y-3">
+              <div className={`flex items-center justify-center gap-2 p-2.5 rounded-xl text-xs font-bold border-2
+                ${isBalanced?'bg-emerald-50 text-emerald-700 border-emerald-300':'bg-red-50 text-red-600 border-red-300'}`}>
+                {isBalanced?'✅ قيد متوازن':'⚠️ غير متوازن'}
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">إجمالي المدين</span>
+                  <span className="font-mono font-bold text-blue-700">{fmt(totalDR,3)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">إجمالي الدائن</span>
+                  <span className="font-mono font-bold text-emerald-700">{fmt(totalCR,3)}</span>
+                </div>
+                <div className="flex justify-between text-xs border-t border-slate-100 pt-2">
+                  <span className="text-slate-400">نوع السند</span>
+                  <span className="font-bold text-slate-700">{TX_LABELS[tx.tx_type]||tx.tx_type}</span>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Impact Analysis */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="px-3 py-2.5 text-xs font-bold text-white" style={{background:GRAD}}>📈 Impact Analysis</div>
+            <div className="p-3 space-y-2">
+              {je_lines.filter(l=>(parseFloat(l.debit)||0)>0||(parseFloat(l.credit)||0)>0).map((l,i)=>(
+                <div key={i} className="flex items-center justify-between text-xs gap-1">
+                  <span className="text-slate-600 truncate flex-1">{l.account_name||l.account_code}</span>
+                  {(parseFloat(l.debit)||0)>0&&<span className="font-mono text-blue-600 shrink-0">+{fmt(l.debit,2)}</span>}
+                  {(parseFloat(l.credit)||0)>0&&<span className="font-mono text-emerald-600 shrink-0">+{fmt(l.credit,2)}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Applied Dimensions */}
+          {hasDims&&<div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="px-3 py-2.5 text-xs font-bold text-white" style={{background:GRAD}}>🏷️ Applied Dimensions</div>
+            <div className="p-3 space-y-2">
+              {tx.branch_code&&<div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 w-20 shrink-0">Branch</span>
+                <div>
+                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium block">{tx.branch_code}</span>
+                  <span className="text-slate-500 text-xs">{branchName(tx.branch_code)!==tx.branch_code?branchName(tx.branch_code):''}</span>
+                </div>
+              </div>}
+              {tx.cost_center&&<div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 w-20 shrink-0">Cost Center</span>
+                <div>
+                  <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium block">{tx.cost_center}</span>
+                  <span className="text-slate-500 text-xs">{ccName(tx.cost_center)!==tx.cost_center?ccName(tx.cost_center):''}</span>
+                </div>
+              </div>}
+              {tx.project_code&&<div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 w-20 shrink-0">Project</span>
+                <div>
+                  <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium block">{tx.project_code}</span>
+                  <span className="text-slate-500 text-xs">{projName(tx.project_code)!==tx.project_code?projName(tx.project_code):''}</span>
+                </div>
+              </div>}
+              {tx.expense_classification_code&&<div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 w-20 shrink-0">Expense Cls</span>
+                <div>
+                  <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium block">{tx.expense_classification_code}</span>
+                  <span className="text-slate-500 text-xs">{expClsName(tx.expense_classification_code)!==tx.expense_classification_code?expClsName(tx.expense_classification_code):''}</span>
+                </div>
+              </div>}
+            </div>
+          </div>}
+
+          {/* Audit Information */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="px-3 py-2.5 text-xs font-bold text-white" style={{background:GRAD}}>🔍 Audit Information</div>
+            <div className="p-3 space-y-3 text-xs">
+              {tx.created_by&&<div>
+                <div className="text-slate-400 mb-0.5">Created by</div>
+                <div className="font-semibold text-slate-800">{tx.created_by}</div>
+                {tx.created_at&&<div className="text-slate-400">{new Date(tx.created_at).toLocaleString('ar-SA')}</div>}
+              </div>}
+              {tx.posted_by&&<div className="border-t border-slate-100 pt-2">
+                <div className="text-slate-400 mb-0.5">Posted by</div>
+                <div className="font-semibold text-blue-700">{tx.posted_by}</div>
+                {tx.posted_at&&<div className="text-slate-400">{new Date(tx.posted_at).toLocaleString('ar-SA')}</div>}
+              </div>}
+              {tx.updated_by&&<div className="border-t border-slate-100 pt-2">
+                <div className="text-slate-400 mb-0.5">Updated by</div>
+                <div className="font-semibold text-slate-700">{tx.updated_by}</div>
+                {tx.updated_at&&<div className="text-slate-400">{new Date(tx.updated_at).toLocaleString('ar-SA')}</div>}
+              </div>}
+            </div>
+          </div>
+
+        </div>}
       </div>
     </SlideOver>
   )
@@ -996,7 +1220,7 @@ function TransferSlideOver({tx, accounts, onClose, onPosted, showToast}) {
               {loading?'⏳ جارٍ الترحيل...':'✅ ترحيل'}
             </button>}
         </div>}>
-      <div className="space-y-5" dir="rtl">
+      <div className="overflow-y-auto h-full px-6 py-5 space-y-5" dir="rtl">
         <div className="grid grid-cols-2 gap-3 text-sm">
           {[
             ['رقم السند', tx.serial||'—'],

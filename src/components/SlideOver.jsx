@@ -19,6 +19,7 @@ const SIZES = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
   xl: 'max-w-3xl',
+  '2xl': 'max-w-5xl',
 }
 
 export default function SlideOver({ open, onClose, title, subtitle, size = 'md', children, footer }) {
@@ -74,7 +75,7 @@ export default function SlideOver({ open, onClose, title, subtitle, size = 'md',
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-hidden">
           {children}
         </div>
 
