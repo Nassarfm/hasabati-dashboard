@@ -109,6 +109,8 @@ function AccountingTable({lines=[]}) {
   const totalDR=lines.reduce((s,l)=>s+(parseFloat(l.debit)||0),0)
   const totalCR=lines.reduce((s,l)=>s+(parseFloat(l.credit)||0),0)
   const balanced=Math.abs(totalDR-totalCR)<0.01
+  const hasExpClass=lines.some(l=>l.expense_classification_code)
+  const colSpan=hasExpClass?6:5
   return <div className="border-2 border-blue-200 rounded-2xl overflow-hidden">
     <div className="px-4 py-3 bg-blue-700 flex items-center justify-between">
       <span className="text-white font-bold text-sm">📒 القيد المحاسبي</span>
@@ -124,6 +126,7 @@ function AccountingTable({lines=[]}) {
           <th className="px-4 py-2.5 text-right font-semibold">الفرع</th>
           <th className="px-4 py-2.5 text-right font-semibold">مركز التكلفة</th>
           <th className="px-4 py-2.5 text-right font-semibold">المشروع</th>
+          {hasExpClass&&<th className="px-4 py-2.5 text-right font-semibold">تصنيف المصروف</th>}
           <th className="px-4 py-2.5 text-center font-semibold w-36">مدين</th>
           <th className="px-4 py-2.5 text-center font-semibold w-36">دائن</th>
         </tr>
@@ -136,6 +139,7 @@ function AccountingTable({lines=[]}) {
             <td className="px-4 py-2.5 text-slate-400 text-xs">{l.branch_code||'—'}</td>
             <td className="px-4 py-2.5 text-slate-400 text-xs">{l.cost_center||'—'}</td>
             <td className="px-4 py-2.5 text-slate-400 text-xs">{l.project_code||'—'}</td>
+            {hasExpClass&&<td className="px-4 py-2.5 text-xs"><span className={l.expense_classification_code?'bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full':'text-slate-400'}>{l.expense_classification_code||'—'}</span></td>}
             <td className="px-4 py-2.5 text-center font-mono font-bold">{l.debit>0?<span className="text-slate-800">{fmt(l.debit,3)}</span>:'—'}</td>
             <td className="px-4 py-2.5 text-center font-mono font-bold">{l.credit>0?<span className="text-slate-800">{fmt(l.credit,3)}</span>:'—'}</td>
           </tr>
@@ -143,7 +147,7 @@ function AccountingTable({lines=[]}) {
       </tbody>
       <tfoot>
         <tr className="bg-blue-50 border-t-2 border-blue-200 font-bold">
-          <td colSpan={5} className="px-4 py-3 text-blue-800 text-sm">الإجمالي</td>
+          <td colSpan={colSpan} className="px-4 py-3 text-blue-800 text-sm">الإجمالي</td>
           <td className="px-4 py-3 text-center font-mono text-blue-800">{fmt(totalDR,3)}</td>
           <td className="px-4 py-3 text-center font-mono text-blue-800">{fmt(totalCR,3)}</td>
         </tr>
@@ -156,6 +160,7 @@ function AccountingTable({lines=[]}) {
 function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
   const types={RV:'سند قبض نقدي',PV:'سند صرف نقدي',BR:'قبض بنكي',BP:'دفعة بنكية',BT:'تحويل بنكي',IT:'تحويل داخلي'}
   const title=types[tx.tx_type]||'سند خزينة'
+  const isPosted = tx.status==='posted'
   const w=window.open('','_blank','width=900,height=650')
   w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${title}</title>
   <style>
@@ -165,7 +170,7 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
     .company{font-size:16px;font-weight:bold;color:#1e3a5f}
     .voucher-title{font-size:22px;font-weight:bold;color:#1e3a5f;text-align:center}
     .serial{font-size:18px;font-weight:bold;color:#1e40af;font-family:monospace}
-    .amount-box{background:#f0f9ff;border:2px solid #1e40af;border-radius:12px;padding:12px 20px;text-align:center;margin:15px 0}
+    .amount-box{background:#f0f9ff;border:2px solid #1e40af;border-radius:12px;padding:12px 20px;text-align:center;margin:15px 0;position:relative}
     .amount-box .label{font-size:11px;color:#64748b;margin-bottom:4px}
     .amount-box .value{font-size:26px;font-weight:bold;color:#1e3a5f;font-family:monospace}
     .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}
@@ -182,6 +187,8 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
     .sign-box{text-align:center}
     .sign-line{border-top:2px solid #1e293b;width:160px;margin:0 auto 8px}
     .sign-label{font-size:12px;color:#64748b}
+    .stamp{position:absolute;top:50%;left:30px;transform:translateY(-50%) rotate(-20deg);border:4px solid #dc2626;border-radius:12px;padding:6px 16px;color:#dc2626;font-size:20px;font-weight:900;letter-spacing:2px;opacity:0.85}
+    .draft-stamp{position:absolute;top:50%;left:30px;transform:translateY(-50%) rotate(-20deg);border:4px solid #f59e0b;border-radius:12px;padding:6px 16px;color:#f59e0b;font-size:18px;font-weight:900;opacity:0.7}
     @media print{.no-print{display:none}body{padding:15px}}
   </style></head><body>
   <div class="header">
@@ -190,8 +197,10 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
     <div style="text-align:left"><div class="serial">${tx.serial||'—'}</div><div style="color:#64748b;font-size:12px">${fmtDate(tx.tx_date)}</div></div>
   </div>
   <div class="amount-box">
+    ${isPosted ? `<div class="stamp">مُرحَّل ✓</div>` : `<div class="draft-stamp">مسودة</div>`}
     <div class="label">المبلغ</div>
     <div class="value">${fmt(tx.amount,3)} ${tx.currency_code||'ر.س'}</div>
+    ${isPosted && tx.je_serial ? `<div style="font-size:11px;color:#16a34a;margin-top:6px">رقم القيد: ${tx.je_serial}</div>` : ''}
   </div>
   <div class="info-grid">
     <div class="info-item"><div class="label">الحساب / الصندوق</div><div class="value">${bankName||'—'}</div></div>
@@ -201,24 +210,26 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
     <div class="info-item"><div class="label">طريقة الدفع</div><div class="value">${tx.payment_method||'—'}</div></div>
     <div class="info-item"><div class="label">التاريخ</div><div class="value">${fmtDate(tx.tx_date)}</div></div>
   </div>
-  <table>
-    <thead><tr><th>رقم الحساب</th><th>اسم الحساب</th><th>مركز التكلفة</th><th>المشروع</th><th style="text-align:center">مدين</th><th style="text-align:center">دائن</th></tr></thead>
+  ${(()=>{const hasEC=lines.some(l=>l.expense_classification_code);const cs=hasEC?6:5;return`<table>
+    <thead><tr><th>رقم الحساب</th><th>اسم الحساب</th><th>الفرع</th><th>مركز التكلفة</th><th>المشروع</th>${hasEC?'<th>تصنيف المصروف</th>':''}<th style="text-align:center">مدين</th><th style="text-align:center">دائن</th></tr></thead>
     <tbody>
       ${lines.map(l=>`<tr>
         <td style="font-family:monospace;font-weight:bold;color:#1e40af">${l.account_code||''}</td>
         <td>${l.account_name||l.description||''}</td>
+        <td style="color:#94a3b8">${l.branch_code||'—'}</td>
         <td style="color:#94a3b8">${l.cost_center||'—'}</td>
         <td style="color:#94a3b8">${l.project_code||'—'}</td>
+        ${hasEC?`<td style="color:#b45309">${l.expense_classification_code||'—'}</td>`:''}
         <td style="text-align:center;font-family:monospace">${l.debit>0?fmt(l.debit,3):'—'}</td>
         <td style="text-align:center;font-family:monospace">${l.credit>0?fmt(l.credit,3):'—'}</td>
       </tr>`).join('')}
       <tr class="total-row">
-        <td colspan="4" style="text-align:center">الإجمالي</td>
+        <td colspan="${cs}" style="text-align:center">الإجمالي</td>
         <td style="text-align:center;font-family:monospace">${fmt(lines.reduce((s,l)=>s+(l.debit||0),0),3)}</td>
         <td style="text-align:center;font-family:monospace">${fmt(lines.reduce((s,l)=>s+(l.credit||0),0),3)}</td>
       </tr>
     </tbody>
-  </table>
+  </table>`})()}
   <div class="signatures">
     <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المُعِدّ</div></div>
     <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المراجع</div></div>
@@ -258,10 +269,10 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
   const se=(k,v)=>setEditForm(p=>({...p,[k]:v}))
 
   const je_lines = tx.tx_type==='RV'||tx.tx_type==='BR' ? [
-    {account_code:acc?.gl_account_code||'—', account_name:acc?.account_name||'الصندوق/البنك', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code},
+    {account_code:acc?.gl_account_code||'—', account_name:acc?.account_name||'الصندوق/البنك', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code},
     {account_code:tx.counterpart_account||'—', account_name:'الحساب المقابل', debit:0, credit:amt},
   ] : [
-    {account_code:tx.counterpart_account||'—', account_name:'الحساب المقابل', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code},
+    {account_code:tx.counterpart_account||'—', account_name:'الحساب المقابل', debit:amt, credit:0, branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code},
     {account_code:acc?.gl_account_code||'—', account_name:acc?.account_name||'الصندوق/البنك', debit:0, credit:amt},
   ]
 
@@ -380,6 +391,7 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
             ['الفرع', tx.branch_code||'—'],
             ['مركز التكلفة', tx.cost_center||'—'],
             ['المشروع', tx.project_code||'—'],
+            ...(tx.expense_classification_code ? [['تصنيف المصروف', tx.expense_classification_code]] : []),
             ['الحساب المقابل', tx.counterpart_account||'—'],
           ].map(([l,v],i)=>(
             <div key={i} className="flex gap-2 bg-slate-50 rounded-xl px-3 py-2">
@@ -924,23 +936,117 @@ function BankTxListTab({showToast,openView}) {
 // ══ TRANSFERS LIST ════════════════════════════════════════
 function TransfersListTab({showToast,openView}) {
   const [items,setItems]=useState([])
+  const [accounts,setAccounts]=useState([])
   const [loading,setLoading]=useState(true)
+  const [selected,setSelected]=useState(null)
 
   const load=useCallback(async()=>{
     setLoading(true)
-    try{const r=await api.treasury.listInternalTransfers();setItems(r?.data?.items||[])}
-    catch(e){showToast(e.message,'error')}finally{setLoading(false)}
+    try{
+      const [r,a]=await Promise.all([api.treasury.listInternalTransfers(),api.treasury.listBankAccounts()])
+      setItems(r?.data?.items||[])
+      setAccounts(a?.data||[])
+    }catch(e){showToast(e.message,'error')}finally{setLoading(false)}
   },[])
   useEffect(()=>{load()},[load])
-
-  const doPost=async(id)=>{try{await api.treasury.postInternalTransfer(id);load();showToast('تم الترحيل ✅')}catch(e){showToast(e.message,'error')}}
 
   return <div className="space-y-4">
     <div className="flex justify-end">
       <button onClick={()=>openView('new-transfer')} className="px-5 py-2.5 rounded-xl bg-purple-700 text-white text-sm font-semibold hover:bg-purple-800">🔄 تحويل داخلي جديد</button>
     </div>
-    <TxTable items={items} total={items.length} loading={loading} onPost={doPost}/>
+    <TxTable items={items} total={items.length} loading={loading} onView={setSelected}/>
+    <TransferSlideOver tx={selected} accounts={accounts} showToast={showToast}
+      onClose={()=>setSelected(null)}
+      onPosted={()=>{setSelected(null);load()}}/>
   </div>
+}
+
+// ── TransferSlideOver — معاينة التحويل الداخلي ───────────
+function TransferSlideOver({tx, accounts, onClose, onPosted, showToast}) {
+  const [loading,setLoading]=useState(false)
+  if(!tx) return null
+
+  const fromAcc = accounts.find(a=>a.id===tx.from_account_id)
+  const toAcc   = accounts.find(a=>a.id===tx.to_account_id)
+  const amt = parseFloat(tx.amount)||0
+  const je_lines = [
+    {account_code:toAcc?.gl_account_code||'—',   account_name:toAcc?.account_name||tx.to_account_name||'الحساب المحوَّل إليه',   debit:amt, credit:0},
+    {account_code:fromAcc?.gl_account_code||'—', account_name:fromAcc?.account_name||tx.from_account_name||'الحساب المحوَّل منه', debit:0,   credit:amt},
+  ]
+
+  const doPost = async() => {
+    setLoading(true)
+    try { await api.treasury.postInternalTransfer(tx.id); showToast('تم الترحيل ✅'); onPosted() }
+    catch(e) { showToast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+
+  const doPrint = () => printVoucher({...tx, tx_type:'IT'}, je_lines, fromAcc?.account_name||'—')
+
+  return (
+    <SlideOver open={!!tx} onClose={onClose} size="xl"
+      title={`تحويل داخلي — ${tx.serial||'مسودة'}`}
+      subtitle={`${fmtDate(tx.tx_date)} | ${tx.description||''}`}
+      footer={
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-slate-600 border border-slate-200 hover:bg-slate-50">إغلاق</button>
+          <button onClick={doPrint} className="px-4 py-2 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50">🖨️ طباعة</button>
+          {tx.status==='draft' &&
+            <button onClick={doPost} disabled={loading} className="flex-1 px-4 py-2 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
+              {loading?'⏳ جارٍ الترحيل...':'✅ ترحيل'}
+            </button>}
+        </div>}>
+      <div className="space-y-5" dir="rtl">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          {[
+            ['رقم السند', tx.serial||'—'],
+            ['الحالة', <StatusBadge status={tx.status}/>],
+            ['التاريخ', fmtDate(tx.tx_date)],
+            ['المبلغ', <span className="font-mono font-bold">{fmt(amt,3)} {tx.currency_code||'ر.س'}</span>],
+            ['من حساب', fromAcc?.account_name||tx.from_account_name||'—'],
+            ['إلى حساب', toAcc?.account_name||tx.to_account_name||'—'],
+            ['المرجع', tx.reference||'—'],
+          ].map(([l,v],i)=>(
+            <div key={i} className="flex gap-2 bg-slate-50 rounded-xl px-3 py-2">
+              <span className="text-slate-400 shrink-0">{l}:</span>
+              <span className="text-slate-700 font-medium">{v}</span>
+            </div>
+          ))}
+        </div>
+        {tx.description && <div className="bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-800"><span className="font-semibold">البيان: </span>{tx.description}</div>}
+        <div>
+          <h3 className="text-sm font-bold text-slate-700 mb-2">📒 القيد المحاسبي</h3>
+          <div className="border border-blue-200 rounded-xl overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-blue-700 text-white">
+                <tr>{['رقم الحساب','اسم الحساب','مدين','دائن'].map(h=><th key={h} className="px-3 py-2 text-right font-semibold">{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {je_lines.map((l,i)=>(
+                  <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50'}`}>
+                    <td className="px-3 py-2 font-mono font-bold text-blue-700">{l.account_code}</td>
+                    <td className="px-3 py-2 text-slate-700">{l.account_name}</td>
+                    <td className="px-3 py-2 font-mono font-bold">{l.debit>0?fmt(l.debit,3):'—'}</td>
+                    <td className="px-3 py-2 font-mono font-bold">{l.credit>0?fmt(l.credit,3):'—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
+                <tr><td colSpan={2} className="px-3 py-2 text-blue-800">الإجمالي</td>
+                <td className="px-3 py-2 font-mono text-blue-800">{fmt(amt,3)}</td>
+                <td className="px-3 py-2 font-mono text-blue-800">{fmt(amt,3)}</td></tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        {tx.status==='posted' && tx.je_serial && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800">
+            ✅ تم الترحيل — القيد: <span className="font-mono font-bold">{tx.je_serial}</span>
+          </div>
+        )}
+      </div>
+    </SlideOver>
+  )
 }
 
 // ══ SHARED TABLE ══════════════════════════════════════════
@@ -1116,11 +1222,13 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const [branches,setBranches]=useState([])
   const [costCenters,setCostCenters]=useState([])
   const [projects,setProjects]=useState([])
+  const [expClass,setExpClass]=useState([])
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
     description:'', party_name:'', reference:'',
-    payment_method:'cash', branch_code:'', cost_center:'', project_code:'', notes:''
+    payment_method:'cash', branch_code:'', cost_center:'', project_code:'',
+    expense_classification_code:'', notes:''
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
@@ -1131,11 +1239,14 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       api.settings.listBranches().catch(()=>({data:[]})),
       api.settings.listCostCenters().catch(()=>({data:[]})),
       api.settings.listProjects().catch(()=>({data:[]})),
-    ]).then(([a,b,cc,p])=>{
+      api.dimensions?.list?.().catch(()=>({data:[]})) ?? Promise.resolve({data:[]}),
+    ]).then(([a,b,cc,p,dims])=>{
       setAccounts(a?.data||[])
       setBranches(b?.data||[])
       setCostCenters(cc?.data||[])
       setProjects(p?.data||[])
+      const expDim=(dims?.data||[]).find(d=>d.code==='expense_classification')
+      setExpClass(expDim?.values||[])
     })
   },[])
 
@@ -1143,7 +1254,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const amt=parseFloat(form.amount)||0
 
   // التوجيه المحاسبي
-  const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null}
+  const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
   const je_lines = selectedBank && form.counterpart_account && amt>0 ? (isPV?[
     {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:amt,  credit:0,   ...dims},
     {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,              debit:0,    credit:amt},
@@ -1258,6 +1369,13 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
           </select>
         </div>
       </div>
+      {expClass.length>0&&<div>
+        <label className="text-sm font-semibold text-slate-600 block mb-1.5">🏷️ تصنيف المصروف</label>
+        <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.expense_classification_code} onChange={e=>s('expense_classification_code',e.target.value)}>
+          <option value="">— اختر التصنيف —</option>
+          {expClass.map(ec=><option key={ec.code||ec.id} value={ec.code||ec.id}>{ec.name_ar||ec.name||ec.code||ec.id}</option>)}
+        </select>
+      </div>}
 
       {/* جدول القيد المحاسبي */}
       <div>
@@ -1287,13 +1405,14 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   const [branches,setBranches]=useState([])
   const [costCenters,setCostCenters]=useState([])
   const [projects,setProjects]=useState([])
+  const [expClass,setExpClass]=useState([])
   const [payType,setPayType]=useState('expense')
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
     beneficiary_name:'', beneficiary_iban:'', beneficiary_bank:'',
     description:'', reference:'', payment_method:'wire',
-    branch_code:'', cost_center:'', project_code:'', notes:''
+    branch_code:'', cost_center:'', project_code:'', expense_classification_code:'', notes:''
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
@@ -1305,18 +1424,21 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       api.settings.listBranches().catch(()=>({data:[]})),
       api.settings.listCostCenters().catch(()=>({data:[]})),
       api.settings.listProjects().catch(()=>({data:[]})),
-    ]).then(([a,v,b,cc,p])=>{
+      api.dimensions?.list?.().catch(()=>({data:[]})) ?? Promise.resolve({data:[]}),
+    ]).then(([a,v,b,cc,p,dims])=>{
       setAccounts(a?.data||[])
       setVendors(v?.data?.items||[])
       setBranches(b?.data||[])
       setCostCenters(cc?.data||[])
       setProjects(p?.data||[])
+      const expDim=(dims?.data||[]).find(d=>d.code==='expense_classification')
+      setExpClass(expDim?.values||[])
     })
   },[])
 
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
-  const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null}
+  const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
   const je_lines = selectedBank&&form.counterpart_account&&amt>0 ? (type==='BR'?[
     {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:amt, credit:0},
     {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:0, credit:amt, ...dims},
@@ -1442,6 +1564,13 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
           </select>
         </div>
       </div>
+      {expClass.length>0&&<div>
+        <label className="text-sm font-semibold text-slate-600 block mb-1.5">🏷️ تصنيف المصروف</label>
+        <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.expense_classification_code} onChange={e=>s('expense_classification_code',e.target.value)}>
+          <option value="">— اختر التصنيف —</option>
+          {expClass.map(ec=><option key={ec.code||ec.id} value={ec.code||ec.id}>{ec.name_ar||ec.name||ec.code||ec.id}</option>)}
+        </select>
+      </div>}
 
       <AccountingTable lines={je_lines}/>
 
