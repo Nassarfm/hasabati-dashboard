@@ -104,7 +104,7 @@ function AccountPicker({value,onChange,label,required=false}) {
 
 // ── AccountingTable — جدول القيد المحاسبي ─────────────────
 function AccountingTable({lines=[]}) {
-  if(!lines.length) return null
+  // يعرض الجدول دائماً حتى قبل اكتمال البيانات
   const totalDR=lines.reduce((s,l)=>s+(parseFloat(l.debit)||0),0)
   const totalCR=lines.reduce((s,l)=>s+(parseFloat(l.credit)||0),0)
   const balanced=Math.abs(totalDR-totalCR)<0.01
@@ -829,7 +829,12 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       </div>
 
       {/* جدول القيد المحاسبي */}
-      <AccountingTable lines={je_lines}/>
+      <div>
+        <AccountingTable lines={je_lines}/>
+        {je_lines.length===0&&<div className="border-2 border-dashed border-blue-200 rounded-2xl p-6 text-center text-slate-400 text-sm bg-blue-50/30">
+          📒 اختر الصندوق والحساب المقابل وأدخل المبلغ لعرض التوجيه المحاسبي
+        </div>}
+      </div>
 
       {/* أزرار */}
       <div className="flex gap-3 pt-2">
