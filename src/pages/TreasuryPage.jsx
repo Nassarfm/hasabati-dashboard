@@ -2325,14 +2325,17 @@ function DashboardTab({showToast,setTab,openView}) {
 
     {/* توقع المركز النقدي — 30 يوم */}
     {forecast&&forecast.days&&forecast.days.length>0&&(()=>{
-      const days=forecast.days
-      const minBal=Math.min(...days.map(d=>d.balance))
-      const maxBal=Math.max(...days.map(d=>d.balance))
-      const endBal=days[days.length-1].balance
-      const change=endBal-forecast.start_balance
-      const evDays=days.filter(d=>d.inflow>0||d.outflow>0)
+      const days    = forecast.days
+      const endBal  = days[days.length-1].balance
+      const change  = endBal - forecast.start_balance
+      const evDays  = days.filter(d=>d.inflow>0||d.outflow>0)
+      const summary = forecast.summary || {}
+      // legend colors per source
+      const srcColor = { ap:'bg-red-100 text-red-700', ar:'bg-emerald-100 text-emerald-700', recurring:'bg-purple-100 text-purple-700' }
+      const srcLabel = { ap:'AP مورد', ar:'AR عميل', recurring:'متكرر' }
       return (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {/* Header */}
           <div className="px-4 py-3 font-bold text-sm text-white flex items-center justify-between" style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)'}}>
             <span>🔮 توقع المركز النقدي — 30 يوم قادم</span>
             <div className="flex gap-4 text-xs font-normal opacity-80">
@@ -2342,6 +2345,28 @@ function DashboardTab({showToast,setTab,openView}) {
               </span>
             </div>
           </div>
+
+          {/* Summary pills — AP / AR / Recurring */}
+          <div className="grid grid-cols-4 divide-x divide-x-reverse divide-slate-100 border-b border-slate-100 text-center text-xs">
+            <div className="py-2.5 px-3">
+              <div className="text-slate-400 mb-0.5">مستحقات موردين (AP)</div>
+              <div className="font-bold text-red-600">-{fmt(summary.ap_due||0,2)} ر.س</div>
+            </div>
+            <div className="py-2.5 px-3">
+              <div className="text-slate-400 mb-0.5">تحصيلات عملاء (AR)</div>
+              <div className="font-bold text-emerald-600">+{fmt(summary.ar_due||0,2)} ر.س</div>
+            </div>
+            <div className="py-2.5 px-3">
+              <div className="text-slate-400 mb-0.5">مدفوعات متكررة</div>
+              <div className="font-bold text-orange-500">-{fmt(summary.rec_out||0,2)} ر.س</div>
+            </div>
+            <div className="py-2.5 px-3">
+              <div className="text-slate-400 mb-0.5">تحصيلات متكررة</div>
+              <div className="font-bold text-blue-600">+{fmt(summary.rec_in||0,2)} ر.س</div>
+            </div>
+          </div>
+
+          {/* Chart */}
           <div className="p-3">
             <ResponsiveContainer width="100%" height={140}>
               <AreaChart data={days.filter((_,i)=>i%3===0||days[i].inflow>0||days[i].outflow>0)}
@@ -2356,30 +2381,68 @@ function DashboardTab({showToast,setTab,openView}) {
                 <XAxis dataKey="date" tick={{fontSize:8}} tickFormatter={v=>v?.slice(5)||''}/>
                 <YAxis tick={{fontSize:8}} tickFormatter={v=>fmt(v,0)}/>
                 <Tooltip
-                  formatter={(v,n)=>[fmt(v,2)+' ر.س', n==='balance'?'الرصيد المتوقع':n==='inflow'?'دخل متوقع':'صرف متوقع']}
-                  labelFormatter={l=>`تاريخ: ${l}`}
-                  contentStyle={{fontSize:11,direction:'rtl'}}/>
+                  content={({active,payload,label})=>{
+                    if(!active||!payload?.length) return null
+                    const pt=payload[0]?.payload
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-2.5 text-xs" dir="rtl" style={{minWidth:180}}>
+                        <div className="font-bold text-slate-700 mb-1.5">{label}</div>
+                        <div className="flex justify-between gap-4 mb-1">
+                          <span className="text-slate-500">الرصيد المتوقع</span>
+                          <span className="font-mono font-bold text-purple-700">{fmt(pt?.balance,2)} ر.س</span>
+                        </div>
+                        {pt?.inflow>0&&<div className="flex justify-between gap-4">
+                          <span className="text-emerald-600">دخل</span>
+                          <span className="font-mono text-emerald-600">+{fmt(pt.inflow,2)}</span>
+                        </div>}
+                        {pt?.outflow>0&&<div className="flex justify-between gap-4">
+                          <span className="text-red-500">صرف</span>
+                          <span className="font-mono text-red-500">-{fmt(pt.outflow,2)}</span>
+                        </div>}
+                        {pt?.items?.length>0&&(
+                          <div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5">
+                            {pt.items.map((it,i)=>(
+                              <div key={i} className="flex items-center gap-1.5">
+                                <span className={`px-1 rounded text-[10px] font-medium ${srcColor[it.source]||'bg-slate-100 text-slate-600'}`}>{srcLabel[it.source]||it.source}</span>
+                                <span className="text-slate-500 truncate flex-1">{it.label}</span>
+                                <span className={`font-mono font-bold ${it.direction==='inflow'?'text-emerald-600':'text-red-500'}`}>
+                                  {it.direction==='inflow'?'+':'-'}{fmt(it.amount,0)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }}
+                />
                 <Area type="monotone" dataKey="balance" stroke="#7c3aed" fill="url(#gForecast)" strokeWidth={2} dot={false}/>
               </AreaChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Events list */}
           {evDays.length>0&&(
             <div className="border-t border-slate-100 px-4 py-3">
               <div className="text-xs font-bold text-slate-500 mb-2">أحداث نقدية متوقعة</div>
               <div className="flex flex-wrap gap-2">
-                {evDays.slice(0,8).map(d=>(
+                {evDays.slice(0,10).map(d=>(
                   <div key={d.date} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs">
                     <span className="text-slate-400">{d.date.slice(5)}</span>
+                    {d.items?.filter(it=>it.source==='ap').length>0&&
+                      <span className="px-1 rounded bg-red-100 text-red-700 text-[10px]">AP</span>}
+                    {d.items?.filter(it=>it.source==='ar').length>0&&
+                      <span className="px-1 rounded bg-emerald-100 text-emerald-700 text-[10px]">AR</span>}
                     {d.inflow>0&&<span className="text-emerald-600 font-mono font-bold">+{fmt(d.inflow,0)}</span>}
                     {d.outflow>0&&<span className="text-red-500 font-mono font-bold">-{fmt(d.outflow,0)}</span>}
                   </div>
                 ))}
-                {evDays.length>8&&<span className="text-xs text-slate-400 self-center">+{evDays.length-8} أخرى</span>}
+                {evDays.length>10&&<span className="text-xs text-slate-400 self-center">+{evDays.length-10} أخرى</span>}
               </div>
             </div>
           )}
           {evDays.length===0&&(
-            <div className="px-4 pb-3 text-xs text-slate-400 text-center">لا توجد معاملات متكررة مجدولة — <button onClick={()=>setTab('operations')} className="text-purple-500 underline">أضف معاملة متكررة</button></div>
+            <div className="px-4 pb-3 text-xs text-slate-400 text-center">لا توجد أحداث نقدية مجدولة خلال 30 يوم</div>
           )}
         </div>
       )
