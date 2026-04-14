@@ -310,6 +310,10 @@ export const api = {
     // سجل النشاط
     activityLog: (p={}) => get('/treasury/activity-log', p),
 
+    // ترحيل جماعي
+    bulkPostCash: (ids) => post('/treasury/cash-transactions/bulk-post', { ids }),
+    bulkPostBank: (ids) => post('/treasury/bank-transactions/bulk-post', { ids }),
+
     // التقارير
     cashPositionReport:    () => get('/treasury/reports/cash-position'),
     outstandingChecks:     () => get('/treasury/reports/outstanding-checks'),

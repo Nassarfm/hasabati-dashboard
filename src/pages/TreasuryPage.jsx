@@ -2046,9 +2046,12 @@ function CashListTab({showToast,openView}) {
   const [filters,setFilters]=useState({tx_type:'',status:'',date_from:'',date_to:''})
   const [accounts,setAccounts]=useState([])
   const [selected,setSelected]=useState(null)
+  const [selectedIds,setSelectedIds]=useState(new Set())
+  const [bulkPosting,setBulkPosting]=useState(false)
 
   const load=useCallback(async()=>{
     setLoading(true)
+    setSelectedIds(new Set())
     try{
       const p=Object.fromEntries(Object.entries(filters).filter(([,v])=>v))
       const [r,a]=await Promise.all([api.treasury.listCashTransactions(p),api.treasury.listBankAccounts()])
@@ -2057,10 +2060,28 @@ function CashListTab({showToast,openView}) {
   },[filters])
   useEffect(()=>{load()},[load])
 
+  const handleSelectAll=(checked)=>{
+    if(checked) setSelectedIds(new Set(items.filter(x=>x.status==='draft').map(x=>x.id)))
+    else setSelectedIds(new Set())
+  }
+  const handleSelectOne=(id,checked)=>{
+    setSelectedIds(prev=>{const s=new Set(prev); checked?s.add(id):s.delete(id); return s})
+  }
+  const handleBulkPost=async()=>{
+    if(!selectedIds.size) return
+    setBulkPosting(true)
+    try{
+      const res=await api.treasury.bulkPostCash([...selectedIds])
+      showToast(res?.message||'تم الترحيل','success')
+      load()
+    }catch(e){showToast(e.message,'error')}finally{setBulkPosting(false)}
+  }
+
   const drafts   = items.filter(x=>x.status==='draft').length
   const posted   = items.filter(x=>x.status==='posted').length
   const totalRV  = items.filter(x=>x.tx_type==='RV').reduce((s,x)=>s+parseFloat(x.amount||0),0)
   const totalPV  = items.filter(x=>x.tx_type==='PV').reduce((s,x)=>s+parseFloat(x.amount||0),0)
+  const selTotal = items.filter(x=>selectedIds.has(x.id)).reduce((s,x)=>s+parseFloat(x.amount||0),0)
 
   return <div className="space-y-4">
     <KPIBar cards={[
@@ -2069,6 +2090,25 @@ function CashListTab({showToast,openView}) {
       {icon:'💰', label:'إجمالي القبض (RV)', value:fmt(totalRV,2), sub:'ر.س', iconBg:'bg-blue-100', color:'text-blue-700'},
       {icon:'💸', label:'إجمالي الصرف (PV)', value:fmt(totalPV,2), sub:'ر.س', iconBg:'bg-red-100', color:'text-red-600'},
     ]}/>
+
+    {selectedIds.size>0 && (
+      <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3 gap-3 flex-wrap animate-fade-in">
+        <div className="flex items-center gap-3 text-sm">
+          <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">{selectedIds.size}</span>
+          <span className="text-blue-800 font-semibold">مستند محدد</span>
+          <span className="text-blue-600">|</span>
+          <span className="text-blue-700 font-mono font-bold">{fmt(selTotal,2)} ر.س</span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={()=>setSelectedIds(new Set())} className="px-3 py-1.5 rounded-xl text-xs text-slate-600 hover:bg-slate-100 border border-slate-200">إلغاء التحديد</button>
+          <button onClick={handleBulkPost} disabled={bulkPosting}
+            className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2">
+            {bulkPosting?<><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ الترحيل...</>:<>✅ ترحيل {selectedIds.size} مستند</>}
+          </button>
+        </div>
+      </div>
+    )}
+
     <div className="flex items-center justify-between flex-wrap gap-3">
       <div className="flex gap-2">
         <button onClick={()=>openView('new-cash','RV')} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">💰 سند قبض جديد</button>
@@ -2092,7 +2132,8 @@ function CashListTab({showToast,openView}) {
         )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
       </div>
     </div>
-    <TxTable items={items} total={total} loading={loading} onView={setSelected}/>
+    <TxTable items={items} total={total} loading={loading} onView={setSelected}
+      selectable selectedIds={selectedIds} onSelectAll={handleSelectAll} onSelectOne={handleSelectOne}/>
     <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
       onClose={()=>setSelected(null)}
       onPosted={()=>{setSelected(null);load()}}
@@ -2108,9 +2149,12 @@ function BankTxListTab({showToast,openView}) {
   const [filters,setFilters]=useState({tx_type:'',status:'',date_from:'',date_to:'',min_amount:''})
   const [accounts,setAccounts]=useState([])
   const [selected,setSelected]=useState(null)
+  const [selectedIds,setSelectedIds]=useState(new Set())
+  const [bulkPosting,setBulkPosting]=useState(false)
 
   const load=useCallback(async()=>{
     setLoading(true)
+    setSelectedIds(new Set())
     try{
       const p=Object.fromEntries(Object.entries(filters).filter(([,v])=>v))
       const [r,a]=await Promise.all([api.treasury.listBankTransactions(p),api.treasury.listBankAccounts()])
@@ -2119,10 +2163,28 @@ function BankTxListTab({showToast,openView}) {
   },[filters])
   useEffect(()=>{load()},[load])
 
+  const handleSelectAll=(checked)=>{
+    if(checked) setSelectedIds(new Set(items.filter(x=>x.status==='draft').map(x=>x.id)))
+    else setSelectedIds(new Set())
+  }
+  const handleSelectOne=(id,checked)=>{
+    setSelectedIds(prev=>{const s=new Set(prev); checked?s.add(id):s.delete(id); return s})
+  }
+  const handleBulkPost=async()=>{
+    if(!selectedIds.size) return
+    setBulkPosting(true)
+    try{
+      const res=await api.treasury.bulkPostBank([...selectedIds])
+      showToast(res?.message||'تم الترحيل','success')
+      load()
+    }catch(e){showToast(e.message,'error')}finally{setBulkPosting(false)}
+  }
+
   const bDrafts  = items.filter(x=>x.status==='draft').length
   const bPosted  = items.filter(x=>x.status==='posted').length
   const totalBP  = items.filter(x=>x.tx_type==='BP').reduce((s,x)=>s+parseFloat(x.amount||0),0)
   const totalBR  = items.filter(x=>x.tx_type==='BR').reduce((s,x)=>s+parseFloat(x.amount||0),0)
+  const selTotal = items.filter(x=>selectedIds.has(x.id)).reduce((s,x)=>s+parseFloat(x.amount||0),0)
 
   return <div className="space-y-4">
     <KPIBar cards={[
@@ -2131,6 +2193,25 @@ function BankTxListTab({showToast,openView}) {
       {icon:'💸', label:'إجمالي الدفعات (BP)', value:fmt(totalBP,2), sub:'ر.س', iconBg:'bg-red-100', color:'text-red-600'},
       {icon:'🏦', label:'إجمالي القبض (BR)', value:fmt(totalBR,2), sub:'ر.س', iconBg:'bg-blue-100', color:'text-blue-700'},
     ]}/>
+
+    {selectedIds.size>0 && (
+      <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3 gap-3 flex-wrap animate-fade-in">
+        <div className="flex items-center gap-3 text-sm">
+          <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">{selectedIds.size}</span>
+          <span className="text-blue-800 font-semibold">مستند محدد</span>
+          <span className="text-blue-600">|</span>
+          <span className="text-blue-700 font-mono font-bold">{fmt(selTotal,2)} ر.س</span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={()=>setSelectedIds(new Set())} className="px-3 py-1.5 rounded-xl text-xs text-slate-600 hover:bg-slate-100 border border-slate-200">إلغاء التحديد</button>
+          <button onClick={handleBulkPost} disabled={bulkPosting}
+            className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2">
+            {bulkPosting?<><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ الترحيل...</>:<>✅ ترحيل {selectedIds.size} مستند</>}
+          </button>
+        </div>
+      </div>
+    )}
+
     <div className="flex items-center justify-between flex-wrap gap-3">
       <div className="flex gap-2 flex-wrap">
         {[{t:'BP',l:'💸 دفعة بنكية',c:'bg-red-600 hover:bg-red-700'},{t:'BR',l:'🏦 قبض بنكي',c:'bg-emerald-600 hover:bg-emerald-700'},{t:'BT',l:'↔️ تحويل بنكي',c:'bg-blue-600 hover:bg-blue-700'}].map(b=>(
@@ -2155,7 +2236,8 @@ function BankTxListTab({showToast,openView}) {
         )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
       </div>
     </div>
-    <TxTable items={items} total={total} loading={loading} onView={setSelected}/>
+    <TxTable items={items} total={total} loading={loading} onView={setSelected}
+      selectable selectedIds={selectedIds} onSelectAll={handleSelectAll} onSelectOne={handleSelectOne}/>
     <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
       onClose={()=>setSelected(null)}
       onPosted={()=>{setSelected(null);load()}}
@@ -2288,19 +2370,44 @@ const TX_META={
   BT:{label:'تحويل بنكي',color:'text-blue-700'},
   IT:{label:'تحويل داخلي',color:'text-purple-700'},
 }
-function TxTable({items,total,loading,onView}) {
+function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,onSelectOne}) {
+  const cols = selectable
+    ? '2rem 1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr'
+    : '1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr'
+  const draftItems = items.filter(x=>x.status==='draft')
+  const allDraftSelected = draftItems.length>0 && draftItems.every(x=>selectedIds?.has(x.id))
   return <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-    <div className="grid text-white text-xs font-semibold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:'1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr'}}>
+    <div className="grid text-white text-xs font-semibold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:cols}}>
+      {selectable && (
+        <div className="px-3 py-3 flex items-center">
+          <input type="checkbox" className="w-3.5 h-3.5 accent-blue-400 cursor-pointer"
+            checked={allDraftSelected}
+            onChange={e=>onSelectAll&&onSelectAll(e.target.checked)}
+            title="تحديد كل المسودات"/>
+        </div>
+      )}
       {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ','الحالة'].map(h=><div key={h} className="px-3 py-3">{h}</div>)}
     </div>
     {loading?<div className="py-10 text-center text-slate-400">جارٍ التحميل...</div>:
     items.length===0?<div className="py-12 text-center text-slate-400">لا توجد مستندات</div>:
     items.map((item,i)=>{
       const meta=TX_META[item.tx_type]||{}
+      const isDraft = item.status==='draft'
+      const isSelected = selectedIds?.has(item.id)
       return <div key={item.id}
         onClick={()=>onView&&onView(item)}
-        className={`grid items-center border-b border-slate-50 text-xs cursor-pointer hover:bg-blue-50/40 transition-colors ${i%2===0?'bg-white':'bg-slate-50/30'}`}
-        style={{gridTemplateColumns:'1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr'}}>
+        className={`grid items-center border-b border-slate-50 text-xs cursor-pointer hover:bg-blue-50/40 transition-colors ${isSelected?'bg-blue-50':''}${!isSelected&&i%2===0?' bg-white':''}${!isSelected&&i%2!==0?' bg-slate-50/30':''}`}
+        style={{gridTemplateColumns:cols}}>
+        {selectable && (
+          <div className="px-3 py-3 flex items-center" onClick={e=>e.stopPropagation()}>
+            {isDraft
+              ? <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600 cursor-pointer"
+                  checked={isSelected||false}
+                  onChange={e=>onSelectOne&&onSelectOne(item.id, e.target.checked)}/>
+              : <span className="w-3.5 h-3.5 flex items-center justify-center text-emerald-500 text-[10px]">✓</span>
+            }
+          </div>
+        )}
         <div className={`px-3 py-3 font-mono font-bold ${meta.color}`}>{item.serial}</div>
         <div className={`px-3 py-3 font-medium ${meta.color}`}>{meta.label}</div>
         <div className="px-3 py-3 text-slate-500">{fmtDate(item.tx_date)}</div>
