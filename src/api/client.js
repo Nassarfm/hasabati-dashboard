@@ -304,9 +304,10 @@ export const api = {
     activityLog: (p={}) => get('/treasury/activity-log', p),
 
     // التقارير
-    cashPositionReport: () => get('/treasury/reports/cash-position'),
-    outstandingChecks:  () => get('/treasury/reports/outstanding-checks'),
-    pettyCashStatement: (p={}) => get('/treasury/reports/petty-cash-statement', p),
+    cashPositionReport:    () => get('/treasury/reports/cash-position'),
+    outstandingChecks:     () => get('/treasury/reports/outstanding-checks'),
+    pettyCashStatement:    (p={}) => get('/treasury/reports/petty-cash-statement', p),
+    monthlyCashFlow:       (p={}) => get('/treasury/reports/monthly-cash-flow', p),
   },
 
   // ══════════════════════════════════════════════════════

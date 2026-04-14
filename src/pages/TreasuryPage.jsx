@@ -6,7 +6,8 @@
  * - زر ترحيل من القائمة
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import * as XLSX from 'xlsx'
 import api from '../api/client'
 import SlideOver from '../components/SlideOver'
 
@@ -14,6 +15,16 @@ const fmt    = (n,d=3) => (parseFloat(n)||0).toLocaleString('ar-SA',{minimumFrac
 const today  = () => new Date().toISOString().split('T')[0]
 const fmtDate= dt => dt ? new Date(dt).toLocaleDateString('ar-SA') : '—'
 const TID    = '00000000-0000-0000-0000-000000000001'
+
+// ── تصدير Excel ───────────────────────────────────────────
+function exportXLS(rows, headers, filename) {
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  // RTL + column widths
+  ws['!cols'] = headers.map(h=>({wch: Math.max(h.length+4, 14)}))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'البيانات')
+  XLSX.writeFile(wb, `${filename}_${today()}.xlsx`)
+}
 
 // ── Toast ─────────────────────────────────────────────────
 function Toast({msg,type,onClose}) {
@@ -1324,21 +1335,22 @@ function ReportsSection({showToast}) {
   const sf=(k,v)=>setFilters(p=>({...p,[k]:v}))
 
   const SUBS = [
-    {id:'balances',     icon:'🏦', label:'أرصدة البنوك'},
-    {id:'cash-flow',    icon:'📈', label:'التدفقات النقدية'},
-    {id:'bank-expenses',icon:'💸', label:'المصاريف البنكية'},
-    {id:'statement',    icon:'📄', label:'كشف الحساب البنكي'},
-    {id:'inactive',     icon:'🔒', label:'الحسابات غير النشطة'},
+    {id:'balances',       icon:'🏦', label:'أرصدة البنوك'},
+    {id:'monthly-flow',   icon:'📊', label:'التدفق الشهري'},
+    {id:'cash-flow',      icon:'📈', label:'سندات القبض والصرف'},
+    {id:'bank-expenses',  icon:'💸', label:'المصاريف البنكية'},
+    {id:'inactive',       icon:'🔒', label:'الحسابات غير النشطة'},
   ]
 
   const load = async() => {
     setLoading(true); setData(null)
     try {
       let r
-      if(sub==='balances')      r = await api.treasury.cashPositionReport()
+      if(sub==='balances')       r = await api.treasury.cashPositionReport()
+      else if(sub==='monthly-flow') r = await api.treasury.monthlyCashFlow({months:12})
       else if(sub==='cash-flow') r = await api.treasury.listCashTransactions({status:'posted',date_from:filters.date_from,date_to:filters.date_to})
       else if(sub==='bank-expenses') r = await api.treasury.listBankTransactions({tx_type:'BP',status:'posted',date_from:filters.date_from,date_to:filters.date_to})
-      else if(sub==='inactive') r = await api.treasury.listBankAccounts({is_active:false})
+      else if(sub==='inactive')  r = await api.treasury.listBankAccounts({is_active:false})
       setData(r?.data||null)
     } catch(e){ showToast(e.message,'error') }
     finally{ setLoading(false) }
@@ -1395,6 +1407,79 @@ function ReportsSection({showToast}) {
     {/* Report Output */}
     {!data && !loading && <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 text-sm">اضغط "عرض التقرير" لتحميل البيانات</div>}
     {loading && <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto mb-3"/><p className="text-sm">جارٍ التحميل...</p></div>}
+
+    {/* التدفق الشهري — مخطط شريطي */}
+    {sub==='monthly-flow' && data && (() => {
+      const rows = data.rows || []
+      const totalRec = rows.reduce((s,r)=>s+r.total_receipts,0)
+      const totalPay = rows.reduce((s,r)=>s+r.total_payments,0)
+      const netTotal = totalRec - totalPay
+      return <div className="space-y-4">
+        <KPIBar cards={[
+          {icon:'📥', label:'إجمالي القبض (12 شهر)', value:`${fmt(totalRec,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+          {icon:'📤', label:'إجمالي الصرف (12 شهر)', value:`${fmt(totalPay,2)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
+          {icon:'📊', label:'الصافي', value:`${netTotal>=0?'+':''}${fmt(netTotal,2)} ر.س`, iconBg:netTotal>=0?'bg-emerald-100':'bg-red-100', color:netTotal>=0?'text-emerald-700':'text-red-600', bg:netTotal>=0?'bg-emerald-50 border-emerald-200':'bg-red-50 border-red-200'},
+        ]}/>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <span className="font-bold text-slate-700 text-sm">📊 التدفق النقدي الشهري — آخر 12 شهر</span>
+            <div className="flex gap-3 text-xs text-slate-400">
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-emerald-500 inline-block"/>قبض</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-400 inline-block"/>صرف</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-blue-400 inline-block"/>صافي</span>
+            </div>
+          </div>
+          {rows.length===0
+            ?<div className="py-10 text-center text-slate-400 text-sm">لا توجد بيانات</div>
+            :<ResponsiveContainer width="100%" height={260}>
+              <BarChart data={rows} margin={{top:5,right:10,left:-10,bottom:5}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                <XAxis dataKey="month" tick={{fontSize:10}} tickFormatter={v=>v?.slice(2)||''}/>
+                <YAxis tick={{fontSize:10}}/>
+                <Tooltip
+                  formatter={(v,n)=>[fmt(v,0)+' ر.س', n==='total_receipts'?'قبض':n==='total_payments'?'صرف':'صافي']}
+                  labelFormatter={l=>`الشهر: ${l}`} contentStyle={{fontSize:11,direction:'rtl'}}/>
+                <Bar dataKey="total_receipts" fill="#10b981" radius={[3,3,0,0]} name="قبض"/>
+                <Bar dataKey="total_payments" fill="#ef4444" radius={[3,3,0,0]} name="صرف"/>
+                <Bar dataKey="net" fill="#3b82f6" radius={[3,3,0,0]} name="صافي"/>
+              </BarChart>
+            </ResponsiveContainer>}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200"><tr>
+              {['الشهر','قبض نقدي','صرف نقدي','قبض بنكي','صرف بنكي','إجمالي القبض','إجمالي الصرف','الصافي'].map(h=><th key={h} className="px-3 py-2.5 text-right font-semibold text-slate-500">{h}</th>)}
+            </tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r,i)=>(
+                <tr key={i} className="hover:bg-slate-50">
+                  <td className="px-3 py-2.5 font-mono font-bold text-slate-700">{r.month}</td>
+                  <td className="px-3 py-2.5 font-mono text-emerald-600">{fmt(r.cash_receipts,2)}</td>
+                  <td className="px-3 py-2.5 font-mono text-red-500">{fmt(r.cash_payments,2)}</td>
+                  <td className="px-3 py-2.5 font-mono text-emerald-600">{fmt(r.bank_receipts,2)}</td>
+                  <td className="px-3 py-2.5 font-mono text-red-500">{fmt(r.bank_payments,2)}</td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">{fmt(r.total_receipts,2)}</td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-red-600">{fmt(r.total_payments,2)}</td>
+                  <td className={`px-3 py-2.5 font-mono font-bold ${r.net>=0?'text-emerald-700':'text-red-600'}`}>{r.net>=0?'+':''}{fmt(r.net,2)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-blue-50 border-t-2 border-blue-200">
+              <tr>
+                <td className="px-3 py-2.5 font-bold text-blue-800 text-xs">الإجمالي</td>
+                <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">{fmt(rows.reduce((s,r)=>s+r.cash_receipts,0),2)}</td>
+                <td className="px-3 py-2.5 font-mono font-bold text-red-600">{fmt(rows.reduce((s,r)=>s+r.cash_payments,0),2)}</td>
+                <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">{fmt(rows.reduce((s,r)=>s+r.bank_receipts,0),2)}</td>
+                <td className="px-3 py-2.5 font-mono font-bold text-red-600">{fmt(rows.reduce((s,r)=>s+r.bank_payments,0),2)}</td>
+                <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">{fmt(totalRec,2)}</td>
+                <td className="px-3 py-2.5 font-mono font-bold text-red-600">{fmt(totalPay,2)}</td>
+                <td className={`px-3 py-2.5 font-mono font-bold ${netTotal>=0?'text-emerald-700':'text-red-600'}`}>{netTotal>=0?'+':''}{fmt(netTotal,2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    })()}
 
     {/* أرصدة البنوك */}
     {sub==='balances' && data && <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -1771,6 +1856,11 @@ function CashListTab({showToast,openView}) {
         <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none" value={filters.date_to} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
         <input type="number" min="0" placeholder="الحد الأدنى للمبلغ" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none w-36" value={filters.min_amount||''} onChange={e=>setFilters(p=>({...p,min_amount:e.target.value}))}/>
         <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍 بحث</button>
+        <button onClick={()=>exportXLS(
+          items.map(i=>[i.serial,i.tx_type==='RV'?'قبض':'صرف',fmtDate(i.tx_date),i.counterpart_account||'',parseFloat(i.amount||0),i.currency_code,i.status==='posted'?'مُرحَّل':'مسودة',i.description||'',i.created_by||'']),
+          ['الرقم','النوع','التاريخ','الحساب المقابل','المبلغ','العملة','الحالة','البيان','بواسطة'],
+          'سندات_نقدية'
+        )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
       </div>
     </div>
     <TxTable items={items} total={total} loading={loading} onView={setSelected}/>
@@ -1829,6 +1919,11 @@ function BankTxListTab({showToast,openView}) {
         <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none" value={filters.date_to||''} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
         <input type="number" min="0" placeholder="الحد الأدنى للمبلغ" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none w-36" value={filters.min_amount||''} onChange={e=>setFilters(p=>({...p,min_amount:e.target.value}))}/>
         <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍 بحث</button>
+        <button onClick={()=>exportXLS(
+          items.map(i=>[i.serial,i.tx_type,fmtDate(i.tx_date),i.bank_account_name||'',i.counterpart_account||'',parseFloat(i.amount||0),i.currency_code,i.status==='posted'?'مُرحَّل':'مسودة',i.description||'',i.created_by||'']),
+          ['الرقم','النوع','التاريخ','الحساب البنكي','الحساب المقابل','المبلغ','العملة','الحالة','البيان','بواسطة'],
+          'حركات_بنكية'
+        )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
       </div>
     </div>
     <TxTable items={items} total={total} loading={loading} onView={setSelected}/>
@@ -2716,7 +2811,40 @@ function ChecksTab({showToast}) {
   const updateStatus=async(id,st)=>{try{await api.treasury.updateCheckStatus(id,st);load();showToast('تم التحديث ✅')}catch(e){showToast(e.message,'error')}}
   const S={issued:{l:'صادر',b:'bg-blue-100 text-blue-700'},deposited:{l:'مودَع',b:'bg-amber-100 text-amber-700'},cleared:{l:'محصَّل',b:'bg-emerald-100 text-emerald-700'},bounced:{l:'مرتجع',b:'bg-red-100 text-red-700'},cancelled:{l:'ملغي',b:'bg-slate-100 text-slate-500'}}
 
+  const overdueItems = items.filter(ck=>ck.due_date&&new Date(ck.due_date)<new Date()&&ck.status==='issued')
+  const totalIssued  = items.filter(x=>x.status==='issued').reduce((s,x)=>s+parseFloat(x.amount||0),0)
+  const totalCleared = items.filter(x=>x.status==='cleared').reduce((s,x)=>s+parseFloat(x.amount||0),0)
+
   return <div className="space-y-4">
+    <KPIBar cards={[
+      {icon:'📝', label:'إجمالي الشيكات', value:items.length, iconBg:'bg-slate-100', color:'text-slate-800'},
+      {icon:'🔵', label:'صادرة', value:items.filter(x=>x.status==='issued').length, sub:`${fmt(totalIssued,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
+      {icon:'⚠️', label:'متأخرة', value:overdueItems.length, sub:overdueItems.length>0?'تجاوزت تاريخ الاستحقاق':'لا يوجد تأخر', iconBg:'bg-amber-100', color:'text-amber-700', bg:overdueItems.length>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
+      {icon:'✅', label:'محصّلة', value:items.filter(x=>x.status==='cleared').length, sub:`${fmt(totalCleared,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+    ]}/>
+
+    {overdueItems.length>0&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+      <div className="font-bold text-amber-800 text-sm mb-3">⚠️ شيكات متأخرة — تجاوزت تاريخ الاستحقاق</div>
+      <div className="grid grid-cols-2 gap-2">
+        {overdueItems.map(ck=>{
+          const days=Math.floor((new Date()-new Date(ck.due_date))/(1000*60*60*24))
+          return <div key={ck.id} className="bg-white rounded-xl border border-amber-200 px-4 py-3 flex justify-between items-center">
+            <div>
+              <div className="font-semibold text-slate-800 text-sm">{ck.payee_name||ck.check_number}</div>
+              <div className="text-xs text-slate-400">تاريخ الاستحقاق: {fmtDate(ck.due_date)}</div>
+              <div className="text-xs text-red-500 font-semibold">متأخر {days} يوم</div>
+            </div>
+            <div className="text-left">
+              <div className="font-mono font-bold text-slate-800">{fmt(ck.amount,2)}</div>
+              <select className="text-xs border border-amber-200 rounded-lg px-1 py-0.5 mt-1" onChange={e=>e.target.value&&updateStatus(ck.id,e.target.value)} defaultValue="">
+                <option value="">تسوية</option><option value="cleared">محصَّل</option><option value="bounced">مرتجع</option>
+              </select>
+            </div>
+          </div>
+        })}
+      </div>
+    </div>}
+
     <div className="flex items-center justify-between">
       <div className="flex gap-1">
         {['','issued','deposited','cleared','bounced'].map(s=>(
@@ -2724,7 +2852,14 @@ function ChecksTab({showToast}) {
             {s?(S[s]?.l||s):'الكل'}</button>
         ))}
       </div>
-      <button onClick={()=>setShowNew(true)} className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">📝 شيك جديد</button>
+      <div className="flex gap-2">
+        <button onClick={()=>exportXLS(
+          items.map(ck=>[ck.serial,ck.check_number,ck.check_type==='outgoing'?'صادر':'وارد',fmtDate(ck.check_date),fmtDate(ck.due_date),ck.payee_name||'',parseFloat(ck.amount||0),ck.bank_account_name||'',S[ck.status]?.l||ck.status]),
+          ['الرقم','رقم الشيك','النوع','تاريخ الشيك','الاستحقاق','الجهة','المبلغ','الحساب','الحالة'],
+          'الشيكات'
+        )} className="px-4 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
+        <button onClick={()=>setShowNew(true)} className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">📝 شيك جديد</button>
+      </div>
     </div>
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="grid text-white text-xs font-semibold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:'1.2fr 1fr 1fr 1fr 1fr 1.5fr 1.2fr 1fr 80px'}}>
