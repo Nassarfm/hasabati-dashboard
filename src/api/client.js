@@ -314,9 +314,24 @@ export const api = {
     bulkPostCash: (ids) => post('/treasury/cash-transactions/bulk-post', { ids }),
     bulkPostBank: (ids) => post('/treasury/bank-transactions/bulk-post', { ids }),
 
+    // عكس القيد
+    reverseCashTransaction: (id, b={}) => post(`/treasury/cash-transactions/${id}/reverse`, b),
+    reverseBankTransaction: (id, b={}) => post(`/treasury/bank-transactions/${id}/reverse`, b),
+
+    // سير العمل
+    submitCashTransaction:  (id) => post(`/treasury/cash-transactions/${id}/submit`, {}),
+    approveCashTransaction: (id) => post(`/treasury/cash-transactions/${id}/approve`, {}),
+    rejectCashTransaction:  (id, note='') => post(`/treasury/cash-transactions/${id}/reject`, { note }),
+    submitBankTransaction:  (id) => post(`/treasury/bank-transactions/${id}/submit`, {}),
+    approveBankTransaction: (id) => post(`/treasury/bank-transactions/${id}/approve`, {}),
+    rejectBankTransaction:  (id, note='') => post(`/treasury/bank-transactions/${id}/reject`, { note }),
+
     // التقارير
     balanceHistory:        (p={}) => get('/treasury/reports/balance-history', p),
     cashForecast:          (p={}) => get('/treasury/reports/cash-forecast', p),
+    accountStatement:      (p={}) => get('/treasury/reports/account-statement', p),
+    checkAging:            ()    => get('/treasury/reports/check-aging'),
+    lowBalanceAlerts:      ()    => get('/treasury/reports/low-balance-alerts'),
     cashPositionReport:    () => get('/treasury/reports/cash-position'),
     outstandingChecks:     () => get('/treasury/reports/outstanding-checks'),
     pettyCashStatement:    (p={}) => get('/treasury/reports/petty-cash-statement', p),

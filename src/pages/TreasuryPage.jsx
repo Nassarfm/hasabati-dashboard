@@ -168,6 +168,32 @@ function AccountingTable({lines=[]}) {
   </div>
 }
 
+// ── تفقيط المبلغ ─────────────────────────────────────────
+function amountToWords(n) {
+  const ones=['','واحد','اثنان','ثلاثة','أربعة','خمسة','ستة','سبعة','ثمانية','تسعة','عشرة',
+    'أحد عشر','اثنا عشر','ثلاثة عشر','أربعة عشر','خمسة عشر','ستة عشر','سبعة عشر','ثمانية عشر','تسعة عشر']
+  const tens=['','','عشرون','ثلاثون','أربعون','خمسون','ستون','سبعون','ثمانون','تسعون']
+  const hundreds=['','مئة','مئتان','ثلاثمئة','أربعمئة','خمسمئة','ستمئة','سبعمئة','ثمانمئة','تسعمئة']
+  if(n===0) return 'صفر'
+  if(n<0) return 'سالب '+amountToWords(-n)
+  function below1000(x) {
+    if(x===0) return ''
+    if(x<20) return ones[x]
+    const t=Math.floor(x/10), o=x%10, h=Math.floor(x/100)
+    if(x>=100) return hundreds[h]+(x%100>0?' و'+below1000(x%100):'')
+    return tens[t]+(o>0?' و'+ones[o]:'')
+  }
+  const int_part=Math.floor(n)
+  const dec_part=Math.round((n-int_part)*100)
+  const groups=[]
+  let rem=int_part
+  const labels=['','ألف','مليون','مليار']
+  let gi=0
+  while(rem>0){groups.unshift({v:rem%1000,l:labels[gi]});rem=Math.floor(rem/1000);gi++}
+  const words=groups.filter(g=>g.v>0).map(g=>below1000(g.v)+(g.l?' '+g.l:'')).join(' و')
+  return words+' ريال سعودي'+(dec_part>0?' و'+below1000(dec_part)+' هللة':'') +' فقط لا غير'
+}
+
 // ── Print ─────────────────────────────────────────────────
 function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
   const types={RV:'سند قبض نقدي',PV:'سند صرف نقدي',BR:'قبض بنكي',BP:'دفعة بنكية',BT:'تحويل بنكي',IT:'تحويل داخلي'}
@@ -177,80 +203,148 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
   w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${title}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',Arial,sans-serif;padding:30px;color:#1e293b;direction:rtl;font-size:13px}
-    .header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1e3a5f;padding-bottom:15px;margin-bottom:20px}
-    .company{font-size:16px;font-weight:bold;color:#1e3a5f}
-    .voucher-title{font-size:22px;font-weight:bold;color:#1e3a5f;text-align:center}
-    .serial{font-size:18px;font-weight:bold;color:#1e40af;font-family:monospace}
-    .amount-box{background:#f0f9ff;border:2px solid #1e40af;border-radius:12px;padding:12px 20px;text-align:center;margin:15px 0;position:relative}
-    .amount-box .label{font-size:11px;color:#64748b;margin-bottom:4px}
-    .amount-box .value{font-size:26px;font-weight:bold;color:#1e3a5f;font-family:monospace}
-    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}
-    .info-item{background:#f8fafc;border-radius:8px;padding:10px 14px}
-    .info-item .label{font-size:11px;color:#94a3b8;margin-bottom:3px}
-    .info-item .value{font-weight:bold;font-size:13px}
-    table{width:100%;border-collapse:collapse;margin:15px 0}
-    thead tr{background:#1e3a5f;color:white}
-    th{padding:10px 12px;text-align:right;font-size:12px;font-weight:600}
-    td{padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:12px}
-    tr:nth-child(even){background:#f8fafc}
-    .total-row{background:#eff6ff!important;font-weight:bold;border-top:2px solid #1e3a5f}
-    .signatures{display:flex;justify-content:space-around;margin-top:40px;padding-top:20px;border-top:1px solid #e2e8f0}
-    .sign-box{text-align:center}
-    .sign-line{border-top:2px solid #1e293b;width:160px;margin:0 auto 8px}
-    .sign-label{font-size:12px;color:#64748b}
-    .stamp{position:absolute;top:50%;left:30px;transform:translateY(-50%) rotate(-20deg);border:4px solid #dc2626;border-radius:12px;padding:6px 16px;color:#dc2626;font-size:20px;font-weight:900;letter-spacing:2px;opacity:0.85}
-    .draft-stamp{position:absolute;top:50%;left:30px;transform:translateY(-50%) rotate(-20deg);border:4px solid #f59e0b;border-radius:12px;padding:6px 16px;color:#f59e0b;font-size:18px;font-weight:900;opacity:0.7}
-    @media print{.no-print{display:none}body{padding:15px}}
-  </style></head><body>
+    body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#1e293b;direction:rtl;font-size:13px}
+    @media print{.no-print{display:none!important}body{padding:0}@page{margin:15mm}}
+    .page{max-width:210mm;margin:0 auto;padding:20px 25px}
+    /* شريط علوي ملوّن */
+    .top-bar{background:linear-gradient(135deg,#1e3a5f,#1e40af);height:8px;border-radius:4px 4px 0 0;margin-bottom:0}
+    /* رأس السند */
+    .header{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 0 14px;border-bottom:2px solid #e2e8f0;margin-bottom:16px}
+    .company-block .name{font-size:17px;font-weight:800;color:#1e3a5f}
+    .company-block .sub{font-size:10px;color:#94a3b8;margin-top:2px}
+    .title-block{text-align:center}
+    .title-block .type{font-size:20px;font-weight:800;color:#1e3a5f;letter-spacing:0.5px}
+    .title-block .badge{display:inline-block;margin-top:5px;padding:3px 14px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:1px}
+    .badge-posted{background:#dcfce7;color:#16a34a;border:1px solid #86efac}
+    .badge-draft{background:#fef9c3;color:#854d0e;border:1px solid #fde047}
+    .badge-pending{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd}
+    .badge-reversed{background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4}
+    .serial-block{text-align:left;min-width:130px}
+    .serial-block .num{font-size:18px;font-weight:800;color:#1e40af;font-family:monospace}
+    .serial-block .date{font-size:11px;color:#64748b;margin-top:3px}
+    /* صندوق المبلغ */
+    .amount-box{background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #93c5fd;border-radius:14px;padding:14px 22px;text-align:center;margin:14px 0;position:relative;overflow:hidden}
+    .amount-box .watermark{position:absolute;top:50%;left:18px;transform:translateY(-50%) rotate(-18deg);font-size:22px;font-weight:900;letter-spacing:3px;opacity:0.12;pointer-events:none}
+    .watermark-posted{color:#16a34a}.watermark-draft{color:#f59e0b}.watermark-pending{color:#3b82f6}.watermark-reversed{color:#ec4899}
+    .amount-box .lbl{font-size:11px;color:#3b82f6;font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+    .amount-box .val{font-size:28px;font-weight:900;color:#1e3a5f;font-family:monospace;letter-spacing:1px}
+    .amount-box .words{font-size:12px;color:#1e40af;margin-top:8px;background:#fff;border-radius:8px;padding:5px 12px;display:inline-block;border:1px solid #bfdbfe}
+    .amount-box .je{font-size:11px;color:#16a34a;margin-top:6px;font-weight:600}
+    /* شبكة المعلومات */
+    .info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 0}
+    .info-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:9px 13px}
+    .info-item .lbl{font-size:10px;color:#94a3b8;font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px}
+    .info-item .val{font-weight:700;font-size:12.5px;color:#1e293b}
+    /* جدول القيود */
+    table{width:100%;border-collapse:collapse;margin:14px 0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0}
+    thead tr{background:linear-gradient(135deg,#1e3a5f,#1e40af);color:white}
+    th{padding:9px 11px;text-align:right;font-size:11.5px;font-weight:600}
+    td{padding:7px 11px;border-bottom:1px solid #f1f5f9;font-size:11.5px}
+    tr:nth-child(even) td{background:#f8fafc}
+    .total-row td{background:#eff6ff!important;font-weight:700;border-top:2px solid #1e40af;color:#1e3a5f}
+    /* التوقيعات */
+    .signatures{display:flex;justify-content:space-around;margin-top:35px;padding-top:18px;border-top:1px dashed #e2e8f0}
+    .sign-box{text-align:center;min-width:130px}
+    .sign-line{border-top:2px solid #1e293b;width:130px;margin:0 auto 7px}
+    .sign-label{font-size:11px;color:#64748b;font-weight:600}
+    .sign-date{font-size:10px;color:#94a3b8;margin-top:3px}
+    /* الذيل */
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding-top:10px;border-top:1px solid #f1f5f9;font-size:10px;color:#cbd5e1}
+    .footer .code{font-family:monospace;background:#f1f5f9;padding:2px 8px;border-radius:4px}
+  </style></head><body><div class="page">
+  <div class="top-bar"></div>
   <div class="header">
-    <div><div class="company">${companyName}</div><div style="color:#64748b;font-size:11px">نظام حساباتي ERP</div></div>
-    <div class="voucher-title">${title}</div>
-    <div style="text-align:left"><div class="serial">${tx.serial||'—'}</div><div style="color:#64748b;font-size:12px">${fmtDate(tx.tx_date)}</div></div>
+    <div class="company-block">
+      <div class="name">🏦 ${companyName}</div>
+      <div class="sub">نظام حساباتي ERP v2.0</div>
+    </div>
+    <div class="title-block">
+      <div class="type">${title}</div>
+      <div>
+        ${tx.status==='posted'?'<span class="badge badge-posted">✓ مُرحَّل</span>':
+          tx.status==='pending_approval'?'<span class="badge badge-pending">⏳ بانتظار الاعتماد</span>':
+          tx.status==='reversed'?'<span class="badge badge-reversed">↩ معكوس</span>':
+          '<span class="badge badge-draft">مسودة</span>'}
+      </div>
+    </div>
+    <div class="serial-block">
+      <div class="num">${tx.serial||'مسودة'}</div>
+      <div class="date">${fmtDate(tx.tx_date)}</div>
+      ${tx.je_serial?`<div style="font-size:10px;color:#16a34a;margin-top:2px">قيد: ${tx.je_serial}</div>`:''}
+    </div>
   </div>
+
   <div class="amount-box">
-    ${isPosted ? `<div class="stamp">مُرحَّل ✓</div>` : `<div class="draft-stamp">مسودة</div>`}
-    <div class="label">المبلغ</div>
-    <div class="value">${fmt(tx.amount,3)} ${tx.currency_code||'ر.س'}</div>
-    ${isPosted && tx.je_serial ? `<div style="font-size:11px;color:#16a34a;margin-top:6px">رقم القيد: ${tx.je_serial}</div>` : ''}
+    <div class="watermark ${tx.status==='posted'?'watermark-posted':tx.status==='reversed'?'watermark-reversed':tx.status==='pending_approval'?'watermark-pending':'watermark-draft'}">
+      ${tx.status==='posted'?'POSTED':tx.status==='reversed'?'REVERSED':tx.status==='pending_approval'?'PENDING':'DRAFT'}
+    </div>
+    <div class="lbl">إجمالي المبلغ</div>
+    <div class="val">${fmt(tx.amount,3)} <span style="font-size:16px;color:#3b82f6">${tx.currency_code||'ر.س'}</span></div>
+    <div class="words">${amountToWords(parseFloat(tx.amount||0))}</div>
+    ${tx.je_serial?`<div class="je">رقم القيد المحاسبي: ${tx.je_serial}</div>`:''}
   </div>
+
   <div class="info-grid">
-    <div class="info-item"><div class="label">الحساب / الصندوق</div><div class="value">${bankName||'—'}</div></div>
-    <div class="info-item"><div class="label">الطرف</div><div class="value">${tx.party_name||tx.beneficiary_name||'—'}</div></div>
-    <div class="info-item"><div class="label">البيان</div><div class="value">${tx.description||'—'}</div></div>
-    <div class="info-item"><div class="label">المرجع</div><div class="value">${tx.reference||'—'}</div></div>
-    <div class="info-item"><div class="label">طريقة الدفع</div><div class="value">${tx.payment_method||'—'}</div></div>
-    <div class="info-item"><div class="label">التاريخ</div><div class="value">${fmtDate(tx.tx_date)}</div></div>
+    <div class="info-item"><div class="lbl">الحساب / الصندوق</div><div class="val">${bankName||'—'}</div></div>
+    <div class="info-item"><div class="lbl">الطرف المقابل</div><div class="val">${tx.party_name||tx.beneficiary_name||'—'}</div></div>
+    <div class="info-item"><div class="lbl">البيان</div><div class="val">${tx.description||'—'}</div></div>
+    <div class="info-item"><div class="lbl">المرجع</div><div class="val">${tx.reference||'—'}</div></div>
+    <div class="info-item"><div class="lbl">طريقة الدفع</div><div class="val">${tx.payment_method||'—'}</div></div>
+    <div class="info-item"><div class="lbl">تاريخ السند</div><div class="val">${fmtDate(tx.tx_date)}</div></div>
+    ${tx.branch_code?`<div class="info-item"><div class="lbl">الفرع</div><div class="val">${tx.branch_code}</div></div>`:''}
+    ${tx.cost_center?`<div class="info-item"><div class="lbl">مركز التكلفة</div><div class="val">${tx.cost_center}</div></div>`:''}
+    ${tx.project_code?`<div class="info-item"><div class="lbl">المشروع</div><div class="val">${tx.project_code}</div></div>`:''}
   </div>
-  ${(()=>{const hasEC=lines.some(l=>l.expense_classification_code);const cs=hasEC?6:5;return`<table>
-    <thead><tr><th>رقم الحساب</th><th>اسم الحساب</th><th>الفرع</th><th>مركز التكلفة</th><th>المشروع</th>${hasEC?'<th>تصنيف المصروف</th>':''}<th style="text-align:center">مدين</th><th style="text-align:center">دائن</th></tr></thead>
+
+  ${(()=>{
+    const hasEC=lines.some(l=>l.expense_classification_code)
+    const cs=hasEC?6:5
+    const totalDR=lines.reduce((s,l)=>s+(l.debit||0),0)
+    const totalCR=lines.reduce((s,l)=>s+(l.credit||0),0)
+    return `<table>
+    <thead><tr>
+      <th>رقم الحساب</th><th>اسم الحساب</th>
+      <th>الفرع</th><th>مركز التكلفة</th><th>المشروع</th>
+      ${hasEC?'<th>تصنيف المصروف</th>':''}
+      <th style="text-align:center">مدين</th><th style="text-align:center">دائن</th>
+    </tr></thead>
     <tbody>
       ${lines.map(l=>`<tr>
-        <td style="font-family:monospace;font-weight:bold;color:#1e40af">${l.account_code||''}</td>
+        <td style="font-family:monospace;font-weight:700;color:#1e40af">${l.account_code||''}</td>
         <td>${l.account_name||l.description||''}</td>
-        <td style="color:#94a3b8">${l.branch_code||'—'}</td>
-        <td style="color:#94a3b8">${l.cost_center||'—'}</td>
-        <td style="color:#94a3b8">${l.project_code||'—'}</td>
-        ${hasEC?`<td style="color:#b45309">${l.expense_classification_code||'—'}</td>`:''}
-        <td style="text-align:center;font-family:monospace">${l.debit>0?fmt(l.debit,3):'—'}</td>
-        <td style="text-align:center;font-family:monospace">${l.credit>0?fmt(l.credit,3):'—'}</td>
+        <td style="color:#94a3b8;font-size:11px">${l.branch_code||'—'}</td>
+        <td style="color:#94a3b8;font-size:11px">${l.cost_center||'—'}</td>
+        <td style="color:#94a3b8;font-size:11px">${l.project_code||'—'}</td>
+        ${hasEC?`<td style="color:#b45309;font-size:11px">${l.expense_classification_code||'—'}</td>`:''}
+        <td style="text-align:center;font-family:monospace;font-weight:700;color:#1e3a5f">${l.debit>0?fmt(l.debit,3):'—'}</td>
+        <td style="text-align:center;font-family:monospace;font-weight:700;color:#1e3a5f">${l.credit>0?fmt(l.credit,3):'—'}</td>
       </tr>`).join('')}
       <tr class="total-row">
-        <td colspan="${cs}" style="text-align:center">الإجمالي</td>
-        <td style="text-align:center;font-family:monospace">${fmt(lines.reduce((s,l)=>s+(l.debit||0),0),3)}</td>
-        <td style="text-align:center;font-family:monospace">${fmt(lines.reduce((s,l)=>s+(l.credit||0),0),3)}</td>
+        <td colspan="${cs}" style="text-align:center;font-size:12px">الإجمالي</td>
+        <td style="text-align:center;font-family:monospace">${fmt(totalDR,3)}</td>
+        <td style="text-align:center;font-family:monospace">${fmt(totalCR,3)}</td>
       </tr>
     </tbody>
-  </table>`})()}
+  </table>`
+  })()}
+
   <div class="signatures">
-    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المُعِدّ</div></div>
-    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المراجع</div></div>
-    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المعتمد</div></div>
+    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المُعِدّ</div><div class="sign-date">${tx.created_by||''}</div></div>
+    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المراجع</div><div class="sign-date">&nbsp;</div></div>
+    <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المعتمد</div><div class="sign-date">${tx.approved_by||''}</div></div>
   </div>
-  <div class="no-print" style="text-align:center;margin-top:20px">
-    <button onclick="window.print()" style="background:#1e3a5f;color:white;border:none;padding:10px 30px;border-radius:8px;cursor:pointer;font-size:14px">🖨️ طباعة</button>
+
+  <div class="footer">
+    <span>طُبع بتاريخ: ${new Date().toLocaleDateString('ar-SA')}</span>
+    <span class="code">${tx.serial||'—'} | ${tx.id||''}</span>
+    <span>حساباتي ERP v2.0 — هذا السند رسمي</span>
   </div>
-  </body></html>`)
+
+  <div class="no-print" style="text-align:center;margin-top:24px;padding:16px 0;border-top:1px solid #e2e8f0">
+    <button onclick="window.print()" style="background:linear-gradient(135deg,#1e3a5f,#1e40af);color:white;border:none;padding:11px 36px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;letter-spacing:0.5px">🖨️ طباعة / حفظ PDF</button>
+    <button onclick="window.close()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:11px 20px;border-radius:10px;cursor:pointer;font-size:14px;margin-right:10px">✕ إغلاق</button>
+  </div>
+</div></body></html>`)
   w.document.close()
 }
 
@@ -274,8 +368,20 @@ function KPIBar({cards}) {
 
 // ── StatusBadge ───────────────────────────────────────────
 function StatusBadge({status}) {
-  const c={draft:'bg-amber-100 text-amber-700',posted:'bg-emerald-100 text-emerald-700',cancelled:'bg-red-100 text-red-600'}
-  const l={draft:'مسودة',posted:'مُرحَّل',cancelled:'ملغي'}
+  const c={
+    draft:            'bg-amber-100 text-amber-700',
+    posted:           'bg-emerald-100 text-emerald-700',
+    cancelled:        'bg-red-100 text-red-600',
+    pending_approval: 'bg-blue-100 text-blue-700',
+    reversed:         'bg-purple-100 text-purple-700',
+  }
+  const l={
+    draft:            'مسودة',
+    posted:           'مُرحَّل',
+    cancelled:        'ملغي',
+    pending_approval: '⏳ بانتظار الاعتماد',
+    reversed:         '↩ معكوس',
+  }
   return <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${c[status]||'bg-slate-100 text-slate-600'}`}>{l[status]||status}</span>
 }
 
@@ -358,6 +464,37 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
     catch(e){showToast(e.message,'error')}
     finally{setLoading(false)}
   }
+  const doSubmit = async()=>{
+    setLoading(true)
+    try{
+      const fn = isCashTx ? api.treasury.submitCashTransaction : api.treasury.submitBankTransaction
+      await fn(tx.id); showToast('تم إرسال السند للاعتماد ✅'); onPosted()
+    } catch(e){showToast(e.message,'error')} finally{setLoading(false)}
+  }
+  const doApprove = async()=>{
+    setLoading(true)
+    try{
+      const fn = isCashTx ? api.treasury.approveCashTransaction : api.treasury.approveBankTransaction
+      const r = await fn(tx.id); showToast(r?.message||'تم الاعتماد ✅'); onPosted()
+    } catch(e){showToast(e.message,'error')} finally{setLoading(false)}
+  }
+  const doReject = async()=>{
+    const note = window.prompt('سبب الرفض (اختياري):','')
+    if(note===null) return
+    setLoading(true)
+    try{
+      const fn = isCashTx ? api.treasury.rejectCashTransaction : api.treasury.rejectBankTransaction
+      await fn(tx.id, note); showToast('تم رفض السند وإعادته للمسودة'); onPosted()
+    } catch(e){showToast(e.message,'error')} finally{setLoading(false)}
+  }
+  const doReverse = async()=>{
+    if(!window.confirm('هل تريد عكس هذا السند؟ سيتم إنشاء قيد عكسي.')) return
+    setLoading(true)
+    try{
+      const fn = isCashTx ? api.treasury.reverseCashTransaction : api.treasury.reverseBankTransaction
+      const r = await fn(tx.id); showToast(r?.message||'تم إنشاء القيد العكسي ✅'); onPosted()
+    } catch(e){showToast(e.message,'error')} finally{setLoading(false)}
+  }
   const doCancel = async()=>{
     if(!window.confirm('هل تريد إلغاء هذا السند؟')) return
     setLoading(true)
@@ -396,14 +533,46 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-slate-600 border border-slate-200 hover:bg-slate-50">إغلاق</button>
           <div className="flex gap-2">
             {!editMode&&<button onClick={doPrint} className="px-4 py-2.5 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50">🖨️ طباعة</button>}
+            {/* مسودة */}
             {tx.status==='draft'&&isCashTx&&!editMode&&<>
               <button onClick={()=>{setEditForm({...tx});setEditMode(true)}}
                 className="px-4 py-2.5 rounded-xl text-sm text-amber-700 border border-amber-200 hover:bg-amber-50">✏️ تعديل</button>
               <button onClick={doCancel} disabled={loading}
                 className="px-4 py-2.5 rounded-xl text-sm text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50">🚫 إلغاء</button>
+              <button onClick={doSubmit} disabled={loading}
+                className="px-4 py-2.5 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50 disabled:opacity-50">
+                📤 إرسال للاعتماد
+              </button>
               <button onClick={doPost} disabled={loading}
                 className="px-5 py-2.5 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
-                {loading?'⏳ ترحيل...':'✅ ترحيل'}
+                {loading?'⏳ ترحيل...':'✅ ترحيل مباشر'}
+              </button>
+            </>}
+            {/* مسودة — بنكي */}
+            {tx.status==='draft'&&!isCashTx&&!editMode&&<>
+              <button onClick={doSubmit} disabled={loading}
+                className="px-4 py-2.5 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50 disabled:opacity-50">
+                📤 إرسال للاعتماد
+              </button>
+              <button onClick={doPost} disabled={loading}
+                className="px-5 py-2.5 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                {loading?'⏳ ترحيل...':'✅ ترحيل مباشر'}
+              </button>
+            </>}
+            {/* بانتظار الاعتماد */}
+            {tx.status==='pending_approval'&&!editMode&&<>
+              <button onClick={doReject} disabled={loading}
+                className="px-4 py-2.5 rounded-xl text-sm text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50">❌ رفض</button>
+              <button onClick={doApprove} disabled={loading}
+                className="px-5 py-2.5 rounded-xl text-sm bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50">
+                {loading?'⏳ اعتماد...':'✅ اعتماد وترحيل'}
+              </button>
+            </>}
+            {/* مُرحَّل — زر العكس */}
+            {tx.status==='posted'&&!editMode&&<>
+              <button onClick={doReverse} disabled={loading}
+                className="px-4 py-2.5 rounded-xl text-sm text-purple-700 border border-purple-200 hover:bg-purple-50 disabled:opacity-50">
+                {loading?'⏳...':'↩️ عكس القيد'}
               </button>
             </>}
             {editMode&&<>
@@ -880,9 +1049,10 @@ function ReconciliationSection({showToast}) {
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
             <span className="font-bold text-sm text-slate-700">📄 أسطر كشف البنك</span>
             <div className="flex gap-1.5">
-              <label className="text-xs text-emerald-600 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-50 cursor-pointer">
+              {/* استيراد CSV */}
+              <label title="استيراد CSV — الأعمدة: Date,Description,Reference,Debit,Credit,Balance" className="text-xs text-emerald-600 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-50 cursor-pointer">
                 📂 CSV
-                <input type="file" accept=".csv" className="hidden" onChange={async(e)=>{
+                <input type="file" accept=".csv,.txt" className="hidden" onChange={async(e)=>{
                   const file=e.target.files?.[0]; if(!file) return
                   const text=await file.text()
                   const lines_=text.trim().split('\n')
@@ -890,17 +1060,69 @@ function ReconciliationSection({showToast}) {
                     const cols=l.split(',').map(c=>c.trim().replace(/^"|"$/g,''))
                     return {date:cols[0]||'',description:cols[1]||'',reference:cols[2]||'',debit:parseFloat(cols[3]||0)||0,credit:parseFloat(cols[4]||0)||0,running_balance:cols[5]?parseFloat(cols[5]):undefined}
                   }).filter(r=>r.date)
-                  if(!parsed.length){alert('لا توجد بيانات صالحة في الملف');return}
-                  if(!confirm(`استيراد ${parsed.length} سطر من الكشف؟`)) return
-                  try{
-                    await api.treasury.importStatementLines(selected.id, parsed)
-                    alert(`✅ تم استيراد ${parsed.length} سطر`)
-                    openSession(selected)
-                  }catch(err){alert('خطأ: '+err.message)}
+                  if(!parsed.length){showToast('لا توجد بيانات صالحة في ملف CSV','error');return}
+                  if(!window.confirm(`استيراد ${parsed.length} سطر؟`)) return
+                  try{await api.treasury.importStatementLines(selected.id, parsed);showToast(`✅ تم استيراد ${parsed.length} سطر`);openSession(selected)}
+                  catch(err){showToast('خطأ: '+err.message,'error')}
                   e.target.value=''
                 }}/>
               </label>
-              <button onClick={()=>setShowAddLine(v=>!v)} className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50">+ إضافة</button>
+              {/* استيراد Excel */}
+              <label title="استيراد Excel — نفس أعمدة CSV" className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50 cursor-pointer">
+                📊 Excel
+                <input type="file" accept=".xlsx,.xls" className="hidden" onChange={async(e)=>{
+                  const file=e.target.files?.[0]; if(!file) return
+                  try{
+                    const buf=await file.arrayBuffer()
+                    const wb=XLSX.read(buf,{type:'array'})
+                    const ws=wb.Sheets[wb.SheetNames[0]]
+                    const rows=XLSX.utils.sheet_to_json(ws,{header:1})
+                    const parsed=rows.slice(1).map(r=>({
+                      date:r[0]?(r[0] instanceof Date?r[0].toISOString().slice(0,10):String(r[0]).trim()):'',
+                      description:String(r[1]||''),
+                      reference:String(r[2]||''),
+                      debit:parseFloat(r[3]||0)||0,
+                      credit:parseFloat(r[4]||0)||0,
+                      running_balance:r[5]?parseFloat(r[5]):undefined,
+                    })).filter(r=>r.date)
+                    if(!parsed.length){showToast('لا توجد بيانات صالحة في ملف Excel','error');return}
+                    if(!window.confirm(`استيراد ${parsed.length} سطر من Excel؟`)) return
+                    await api.treasury.importStatementLines(selected.id, parsed)
+                    showToast(`✅ تم استيراد ${parsed.length} سطر من Excel`)
+                    openSession(selected)
+                  }catch(err){showToast('خطأ في قراءة Excel: '+err.message,'error')}
+                  e.target.value=''
+                }}/>
+              </label>
+              {/* استيراد MT940 */}
+              <label title="استيراد MT940 — تنسيق SWIFT البنكي" className="text-xs text-purple-600 border border-purple-200 px-2 py-1 rounded-lg hover:bg-purple-50 cursor-pointer">
+                🏦 MT940
+                <input type="file" accept=".mt940,.txt,.sta" className="hidden" onChange={async(e)=>{
+                  const file=e.target.files?.[0]; if(!file) return
+                  try{
+                    const text=await file.text()
+                    // MT940 parser: كل حركة تبدأ بـ :61:
+                    const txBlocks=text.split(/(?=:61:)/g).filter(b=>b.includes(':61:'))
+                    const parsed=txBlocks.map(block=>{
+                      const m61=block.match(/:61:(\d{6})(\d{6})?(C|D)([A-Z]?)(\d+,\d{0,2})(.{0,16})?/)
+                      if(!m61) return null
+                      const dateStr=m61[1]; const y='20'+dateStr.slice(0,2), mo=dateStr.slice(2,4), d=dateStr.slice(4,6)
+                      const isCredit=m61[3]==='C'
+                      const amtStr=(m61[5]||'0').replace(',','.')
+                      const amt=parseFloat(amtStr)||0
+                      const ref86=block.match(/:86:([\s\S]*?)(?=:|$)/); const desc=(ref86?.[1]||'').replace(/\n/g,' ').trim().slice(0,100)
+                      return {date:`${y}-${mo}-${d}`,description:desc,reference:m61[6]?.trim()||'',debit:isCredit?0:amt,credit:isCredit?amt:0}
+                    }).filter(Boolean)
+                    if(!parsed.length){showToast('لم يتم تحليل أي حركات من ملف MT940','error');return}
+                    if(!window.confirm(`استيراد ${parsed.length} حركة من MT940؟`)) return
+                    await api.treasury.importStatementLines(selected.id, parsed)
+                    showToast(`✅ تم استيراد ${parsed.length} حركة من MT940`)
+                    openSession(selected)
+                  }catch(err){showToast('خطأ في ملف MT940: '+err.message,'error')}
+                  e.target.value=''
+                }}/>
+              </label>
+              <button onClick={()=>setShowAddLine(v=>!v)} className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50">+ يدوي</button>
             </div>
           </div>
           {showAddLine&&<div className="p-3 bg-blue-50 border-b border-blue-100 space-y-2">
@@ -1563,23 +1785,33 @@ function ReportsSection({showToast}) {
   const [filters,setFilters] = useState({date_from:'',date_to:'',month:'',year:new Date().getFullYear()})
   const sf=(k,v)=>setFilters(p=>({...p,[k]:v}))
 
+  const [accounts,setAccounts] = useState([])
+  useEffect(()=>{api.treasury.listBankAccounts().then(r=>setAccounts(r?.data||[])).catch(()=>{})},[])
+
   const SUBS = [
-    {id:'balances',       icon:'🏦', label:'أرصدة البنوك'},
-    {id:'monthly-flow',   icon:'📊', label:'التدفق الشهري'},
-    {id:'cash-flow',      icon:'📈', label:'سندات القبض والصرف'},
-    {id:'bank-expenses',  icon:'💸', label:'المصاريف البنكية'},
-    {id:'inactive',       icon:'🔒', label:'الحسابات غير النشطة'},
+    {id:'balances',         icon:'🏦', label:'أرصدة البنوك'},
+    {id:'account-statement',icon:'📄', label:'كشف حساب'},
+    {id:'monthly-flow',     icon:'📊', label:'التدفق الشهري'},
+    {id:'check-aging',      icon:'⏱️', label:'أعمار الديون'},
+    {id:'cash-flow',        icon:'📈', label:'سندات القبض والصرف'},
+    {id:'bank-expenses',    icon:'💸', label:'المصاريف البنكية'},
+    {id:'inactive',         icon:'🔒', label:'الحسابات غير النشطة'},
   ]
 
   const load = async() => {
     setLoading(true); setData(null)
     try {
       let r
-      if(sub==='balances')       r = await api.treasury.cashPositionReport()
-      else if(sub==='monthly-flow') r = await api.treasury.monthlyCashFlow({months:12})
-      else if(sub==='cash-flow') r = await api.treasury.listCashTransactions({status:'posted',date_from:filters.date_from,date_to:filters.date_to})
+      if(sub==='balances')           r = await api.treasury.cashPositionReport()
+      else if(sub==='account-statement') {
+        if(!filters.account_id){showToast('اختر حساباً أولاً','error');setLoading(false);return}
+        r = await api.treasury.accountStatement({account_id:filters.account_id,date_from:filters.date_from,date_to:filters.date_to})
+      }
+      else if(sub==='monthly-flow')  r = await api.treasury.monthlyCashFlow({months:12})
+      else if(sub==='check-aging')   r = await api.treasury.checkAging()
+      else if(sub==='cash-flow')     r = await api.treasury.listCashTransactions({status:'posted',date_from:filters.date_from,date_to:filters.date_to})
       else if(sub==='bank-expenses') r = await api.treasury.listBankTransactions({tx_type:'BP',status:'posted',date_from:filters.date_from,date_to:filters.date_to})
-      else if(sub==='inactive')  r = await api.treasury.listBankAccounts({is_active:false})
+      else if(sub==='inactive')      r = await api.treasury.listBankAccounts({is_active:false})
       setData(r?.data||null)
     } catch(e){ showToast(e.message,'error') }
     finally{ setLoading(false) }
@@ -1627,6 +1859,14 @@ function ReportsSection({showToast}) {
           {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
         </select>
       </div>
+      {sub==='account-statement'&&<div>
+        <label className="text-xs text-slate-500 block mb-1">الحساب البنكي</label>
+        <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 min-w-[180px]"
+          value={filters.account_id||''} onChange={e=>sf('account_id',e.target.value)}>
+          <option value="">— اختر حساباً —</option>
+          {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}
+        </select>
+      </div>}
       <button onClick={load} disabled={loading}
         className="px-5 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 disabled:opacity-50">
         {loading?'⏳ جارٍ التحميل...':'🔍 عرض التقرير'}
@@ -1737,6 +1977,123 @@ function ReportsSection({showToast}) {
       </table>
     </div>}
 
+    {/* كشف حساب بنكي */}
+    {sub==='account-statement' && data && (()=>{
+      const rows = data.rows||[]
+      const acc = data.account||{}
+      return <div className="space-y-4">
+        <KPIBar cards={[
+          {icon:'🏦', label:acc.account_name||'الحساب', value:acc.account_code||'', iconBg:'bg-blue-100', color:'text-blue-700'},
+          {icon:'💰', label:'الرصيد الافتتاحي', value:`${fmt(data.opening_balance,2)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-700'},
+          {icon:'📥', label:'إجمالي المدين', value:`${fmt(data.total_debit,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+          {icon:'📤', label:'إجمالي الدائن', value:`${fmt(data.total_credit,2)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
+          {icon:'🔵', label:'الرصيد الختامي', value:`${fmt(data.closing_balance,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-800', bg:'bg-blue-50 border-blue-200'},
+        ]}/>
+        <div className="flex justify-end gap-2">
+          <button onClick={()=>exportXLS(
+            rows.map(r=>[r.serial,r.tx_type,fmtDate(r.tx_date),r.party||'',r.description||'',r.reference||'',r.debit>0?r.debit:0,r.credit>0?r.credit:0,r.balance]),
+            ['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'],
+            `كشف_${acc.account_name||'حساب'}`
+          )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 text-white font-bold text-sm flex justify-between" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+            <span>📄 كشف حساب: {acc.account_name}</span>
+            <span className="font-mono text-blue-200 text-xs">
+              {filters.date_from&&`من ${fmtDate(filters.date_from)}`} {filters.date_to&&`إلى ${fmtDate(filters.date_to)}`}
+            </span>
+          </div>
+          {/* رصيد افتتاحي */}
+          <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-xs font-bold text-slate-600">
+            <span>رصيد افتتاحي</span>
+            <span className="font-mono text-slate-800">{fmt(data.opening_balance,2)} ر.س</span>
+          </div>
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-slate-500"><tr>
+              {['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'].map(h=>(
+                <th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {rows.length===0?<tr><td colSpan={9} className="text-center py-8 text-slate-400">لا توجد حركات</td></tr>:
+              rows.map((r,i)=>(
+                <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
+                  <td className="px-3 py-2 font-mono font-bold text-blue-700">{r.serial}</td>
+                  <td className="px-3 py-2"><span className={`font-semibold ${TX_META[r.tx_type]?.color||'text-slate-600'}`}>{TX_META[r.tx_type]?.label||r.tx_type}</span></td>
+                  <td className="px-3 py-2 text-slate-500">{fmtDate(r.tx_date)}</td>
+                  <td className="px-3 py-2 text-slate-600 max-w-[100px] truncate">{r.party||'—'}</td>
+                  <td className="px-3 py-2 text-slate-500 max-w-[140px] truncate">{r.description||'—'}</td>
+                  <td className="px-3 py-2 text-slate-400 font-mono text-[10px]">{r.reference||'—'}</td>
+                  <td className="px-3 py-2 font-mono font-bold text-emerald-700">{r.debit>0?fmt(r.debit,2):'—'}</td>
+                  <td className="px-3 py-2 font-mono font-bold text-red-600">{r.credit>0?fmt(r.credit,2):'—'}</td>
+                  <td className={`px-3 py-2 font-mono font-bold ${r.balance<0?'text-red-600':'text-slate-800'}`}>{fmt(r.balance,2)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-blue-50 border-t-2 border-blue-200 text-xs font-bold">
+              <tr>
+                <td colSpan={6} className="px-3 py-3 text-blue-800">الإجمالي</td>
+                <td className="px-3 py-3 font-mono text-emerald-700">{fmt(data.total_debit,2)}</td>
+                <td className="px-3 py-3 font-mono text-red-600">{fmt(data.total_credit,2)}</td>
+                <td className="px-3 py-3 font-mono font-bold text-blue-800">{fmt(data.closing_balance,2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    })()}
+
+    {/* أعمار الديون */}
+    {sub==='check-aging' && data && (()=>{
+      const checks = data.checks||[]
+      const buckets = data.buckets||{}
+      const BUCKET_LABELS = {future:'قادمة',today:'اليوم','1-30':'1-30 يوم','31-60':'31-60 يوم','61-90':'61-90 يوم','90+':'أكثر من 90'}
+      const BUCKET_COLORS = {future:'bg-blue-50 text-blue-700 border-blue-200',today:'bg-amber-50 text-amber-700 border-amber-200','1-30':'bg-orange-50 text-orange-700 border-orange-200','31-60':'bg-red-50 text-red-600 border-red-200','61-90':'bg-red-100 text-red-700 border-red-300','90+':'bg-red-200 text-red-900 border-red-400'}
+      return <div className="space-y-4">
+        <div className="grid grid-cols-6 gap-3">
+          {Object.entries(buckets).map(([k,v])=>(
+            <div key={k} className={`rounded-2xl border p-3 text-center ${BUCKET_COLORS[k]||''}`}>
+              <div className="text-xs font-bold mb-1">{BUCKET_LABELS[k]||k}</div>
+              <div className="text-lg font-bold font-mono">{v.count}</div>
+              <div className="text-xs font-mono mt-1">{fmt(v.total,0)} ر.س</div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 text-white font-bold text-sm" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>⏱️ تقرير أعمار الشيكات والمدفوعات المستحقة</div>
+          {checks.length===0?<div className="py-10 text-center text-slate-400 text-sm">لا توجد شيكات مستحقة</div>:
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-slate-500"><tr>
+              {['رقم الشيك','الحساب','المستفيد','تاريخ الاستحقاق','المبلغ','الحالة','الأيام'].map(h=>(
+                <th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {checks.map((c,i)=>(
+                <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
+                  <td className="px-3 py-2.5 font-mono font-bold text-blue-700">{c.check_number||'—'}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{c.bank_account_name||'—'}</td>
+                  <td className="px-3 py-2.5 text-slate-700">{c.payee||c.party_name||'—'}</td>
+                  <td className="px-3 py-2.5 font-mono text-slate-500">{fmtDate(c.due_date)}</td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-slate-800">{fmt(c.amount,2)}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${c.status==='pending'?'bg-amber-100 text-amber-700':'bg-blue-100 text-blue-700'}`}>
+                      {c.status==='pending'?'معلق':'مودع'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className={`font-bold font-mono ${c.days_overdue>90?'text-red-700':c.days_overdue>30?'text-red-500':c.days_overdue>0?'text-orange-500':c.days_overdue===0?'text-amber-600':'text-blue-600'}`}>
+                      {c.days_overdue<0?`-${Math.abs(c.days_overdue)} قادماً`:c.days_overdue===0?'اليوم':`${c.days_overdue} يوم`}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>}
+        </div>
+      </div>
+    })()}
+
     {/* التدفقات النقدية / المصاريف البنكية */}
     {(sub==='cash-flow'||sub==='bank-expenses') && data && <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-3 bg-blue-700 text-white font-bold text-sm">
@@ -1799,12 +2156,34 @@ function DashboardTab({showToast,setTab,openView}) {
   const [data,setData]=useState(null)
   const [forecast,setForecast]=useState(null)
   const [loading,setLoading]=useState(true)
+  const [alertsDismissed,setAlertsDismissed]=useState(false)
+
   useEffect(()=>{
     Promise.all([
       api.treasury.dashboard().catch(()=>null),
       api.treasury.cashForecast({days:30}).catch(()=>null),
     ]).then(([d,f])=>{setData(d?.data); setForecast(f?.data)}).finally(()=>setLoading(false))
   },[])
+
+  // تنبيهات الرصيد المنخفض — polling كل 90 ثانية
+  useEffect(()=>{
+    let prev=[]
+    const check=async()=>{
+      try{
+        const r=await api.treasury.lowBalanceAlerts()
+        const alerts=r?.data||[]
+        // تنبيه فقط عند ظهور حسابات جديدة
+        const newOnes=alerts.filter(a=>!prev.some(p=>p.id===a.id))
+        newOnes.forEach(a=>{
+          showToast(`⚠️ رصيد منخفض: ${a.account_name} — ${parseFloat(a.current_balance).toLocaleString('ar')} ر.س`,'warning')
+        })
+        prev=alerts
+      }catch{}
+    }
+    check()
+    const t=setInterval(check,90000)
+    return ()=>clearInterval(t)
+  },[showToast])
   if(loading) return <div className="py-20 text-center"><div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/><p className="text-slate-400 mt-3 text-sm">جارٍ التحميل...</p></div>
   if(!data) return <div className="py-20 text-center text-red-500 bg-red-50 rounded-2xl p-6">⚠️ تعذّر تحميل البيانات — تحقق من Railway logs</div>
 
