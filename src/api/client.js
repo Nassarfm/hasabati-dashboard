@@ -315,6 +315,8 @@ export const api = {
     bulkPostBank: (ids) => post('/treasury/bank-transactions/bulk-post', { ids }),
 
     // التقارير
+    balanceHistory:        (p={}) => get('/treasury/reports/balance-history', p),
+    cashForecast:          (p={}) => get('/treasury/reports/cash-forecast', p),
     cashPositionReport:    () => get('/treasury/reports/cash-position'),
     outstandingChecks:     () => get('/treasury/reports/outstanding-checks'),
     pettyCashStatement:    (p={}) => get('/treasury/reports/petty-cash-statement', p),

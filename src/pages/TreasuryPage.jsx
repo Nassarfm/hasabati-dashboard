@@ -1797,9 +1797,13 @@ function ReportsSection({showToast}) {
 // ══ DASHBOARD ═════════════════════════════════════════════
 function DashboardTab({showToast,setTab,openView}) {
   const [data,setData]=useState(null)
+  const [forecast,setForecast]=useState(null)
   const [loading,setLoading]=useState(true)
   useEffect(()=>{
-    api.treasury.dashboard().then(d=>setData(d?.data)).catch(e=>showToast(e.message,'error')).finally(()=>setLoading(false))
+    Promise.all([
+      api.treasury.dashboard().catch(()=>null),
+      api.treasury.cashForecast({days:30}).catch(()=>null),
+    ]).then(([d,f])=>{setData(d?.data); setForecast(f?.data)}).finally(()=>setLoading(false))
   },[])
   if(loading) return <div className="py-20 text-center"><div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/><p className="text-slate-400 mt-3 text-sm">جارٍ التحميل...</p></div>
   if(!data) return <div className="py-20 text-center text-red-500 bg-red-50 rounded-2xl p-6">⚠️ تعذّر تحميل البيانات — تحقق من Railway logs</div>
@@ -1939,18 +1943,115 @@ function DashboardTab({showToast,setTab,openView}) {
         </div>
       </div>}
     </div>
+
+    {/* توقع المركز النقدي — 30 يوم */}
+    {forecast&&forecast.days&&forecast.days.length>0&&(()=>{
+      const days=forecast.days
+      const minBal=Math.min(...days.map(d=>d.balance))
+      const maxBal=Math.max(...days.map(d=>d.balance))
+      const endBal=days[days.length-1].balance
+      const change=endBal-forecast.start_balance
+      const evDays=days.filter(d=>d.inflow>0||d.outflow>0)
+      return (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 font-bold text-sm text-white flex items-center justify-between" style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)'}}>
+            <span>🔮 توقع المركز النقدي — 30 يوم قادم</span>
+            <div className="flex gap-4 text-xs font-normal opacity-80">
+              <span>الرصيد الحالي: <strong>{fmt(forecast.start_balance,2)} ر.س</strong></span>
+              <span className={change>=0?'text-emerald-300':'text-red-300'}>
+                {change>=0?'▲':'▼'} {fmt(Math.abs(change),2)} ر.س بعد 30 يوم
+              </span>
+            </div>
+          </div>
+          <div className="p-3">
+            <ResponsiveContainer width="100%" height={140}>
+              <AreaChart data={days.filter((_,i)=>i%3===0||days[i].inflow>0||days[i].outflow>0)}
+                         margin={{top:5,right:5,left:-20,bottom:0}}>
+                <defs>
+                  <linearGradient id="gForecast" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                <XAxis dataKey="date" tick={{fontSize:8}} tickFormatter={v=>v?.slice(5)||''}/>
+                <YAxis tick={{fontSize:8}} tickFormatter={v=>fmt(v,0)}/>
+                <Tooltip
+                  formatter={(v,n)=>[fmt(v,2)+' ر.س', n==='balance'?'الرصيد المتوقع':n==='inflow'?'دخل متوقع':'صرف متوقع']}
+                  labelFormatter={l=>`تاريخ: ${l}`}
+                  contentStyle={{fontSize:11,direction:'rtl'}}/>
+                <Area type="monotone" dataKey="balance" stroke="#7c3aed" fill="url(#gForecast)" strokeWidth={2} dot={false}/>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          {evDays.length>0&&(
+            <div className="border-t border-slate-100 px-4 py-3">
+              <div className="text-xs font-bold text-slate-500 mb-2">أحداث نقدية متوقعة</div>
+              <div className="flex flex-wrap gap-2">
+                {evDays.slice(0,8).map(d=>(
+                  <div key={d.date} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs">
+                    <span className="text-slate-400">{d.date.slice(5)}</span>
+                    {d.inflow>0&&<span className="text-emerald-600 font-mono font-bold">+{fmt(d.inflow,0)}</span>}
+                    {d.outflow>0&&<span className="text-red-500 font-mono font-bold">-{fmt(d.outflow,0)}</span>}
+                  </div>
+                ))}
+                {evDays.length>8&&<span className="text-xs text-slate-400 self-center">+{evDays.length-8} أخرى</span>}
+              </div>
+            </div>
+          )}
+          {evDays.length===0&&(
+            <div className="px-4 pb-3 text-xs text-slate-400 text-center">لا توجد معاملات متكررة مجدولة — <button onClick={()=>setTab('operations')} className="text-purple-500 underline">أضف معاملة متكررة</button></div>
+          )}
+        </div>
+      )
+    })()}
   </div>
 }
 
 // ══ BANK ACCOUNTS LIST ════════════════════════════════════
+function AccountSparkline({history}) {
+  if(!history||history.length<2) return <div className="h-10 flex items-center justify-center text-xs text-slate-300">—</div>
+  const min=Math.min(...history.map(h=>h.balance))
+  const max=Math.max(...history.map(h=>h.balance))
+  const range=max-min||1
+  const W=80,H=28,pts=history.length
+  const points=history.map((h,i)=>{
+    const x=Math.round((i/(pts-1))*W)
+    const y=Math.round(H-((h.balance-min)/range)*(H-4))
+    return `${x},${y}`
+  }).join(' ')
+  const trend=history[history.length-1].balance-history[0].balance
+  const col=trend>=0?'#10b981':'#ef4444'
+  return (
+    <div className="flex items-center gap-1.5">
+      <svg width={W} height={H} className="shrink-0">
+        <polyline fill="none" stroke={col} strokeWidth="1.5" strokeLinejoin="round" points={points}/>
+        {/* last dot */}
+        {(() => {
+          const last=history[history.length-1]
+          const x=W; const y=Math.round(H-((last.balance-min)/range)*(H-4))
+          return <circle cx={x} cy={y} r="2.5" fill={col}/>
+        })()}
+      </svg>
+      <span className={`text-[10px] font-mono font-bold ${trend>=0?'text-emerald-600':'text-red-600'}`}>
+        {trend>=0?'▲':'▼'}{fmt(Math.abs(trend),0)}
+      </span>
+    </div>
+  )
+}
+
 function BankAccountsTab({showToast,openView}) {
   const [accounts,setAccounts]=useState([])
+  const [balHistory,setBalHistory]=useState([])
   const [loading,setLoading]=useState(true)
   const load=useCallback(()=>{
     setLoading(true)
-    api.treasury.listBankAccounts().then(d=>setAccounts(d?.data||[])).catch(e=>showToast(e.message,'error')).finally(()=>setLoading(false))
+    Promise.all([api.treasury.listBankAccounts(),api.treasury.balanceHistory({months:6})])
+      .then(([d,h])=>{setAccounts(d?.data||[]);setBalHistory(h?.data||[])})
+      .catch(e=>showToast(e.message,'error')).finally(()=>setLoading(false))
   },[])
   useEffect(()=>{load()},[load])
+  const historyMap=Object.fromEntries(balHistory.map(h=>[h.id,h.history||[]]))
 
   const banks  = accounts.filter(a=>a.account_type==='bank')
   const funds  = accounts.filter(a=>a.account_type==='cash_fund')
@@ -2023,6 +2124,7 @@ function BankAccountsTab({showToast,openView}) {
                 <div className="text-xs text-blue-600 font-mono">GL: {a.gl_account_code}</div>
                 {a.contact_person&&<div className="text-xs text-slate-400">👤 {a.contact_person}{a.contact_phone&&` · ${a.contact_phone}`}</div>}
                 {a.iban&&<div className="text-xs text-slate-300 font-mono truncate max-w-[180px]">{a.iban}</div>}
+                <div className="mt-1.5"><AccountSparkline history={historyMap[a.id]}/></div>
               </div>
               <div className="text-left flex flex-col items-end gap-2 shrink-0 ml-2">
                 <div className={`font-mono font-bold text-lg ${parseFloat(a.current_balance)<0?'text-red-600':parseFloat(a.current_balance)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0?'text-amber-600':'text-emerald-700'}`}>{fmt(a.current_balance,3)}</div>
