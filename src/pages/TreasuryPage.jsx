@@ -2425,7 +2425,10 @@ function BankAccountsTab({showToast,openView}) {
   const [loading,setLoading]=useState(true)
   const load=useCallback(()=>{
     setLoading(true)
-    Promise.all([api.treasury.listBankAccounts(),api.treasury.balanceHistory({months:6})])
+    Promise.all([
+      api.treasury.listBankAccounts(),
+      api.treasury.balanceHistory({months:6}).catch(()=>({data:[]})),
+    ])
       .then(([d,h])=>{setAccounts(d?.data||[]);setBalHistory(h?.data||[])})
       .catch(e=>showToast(e.message,'error')).finally(()=>setLoading(false))
   },[])
