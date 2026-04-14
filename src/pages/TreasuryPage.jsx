@@ -1057,6 +1057,8 @@ function BankAccountsTab({showToast,openView}) {
   const totalFund = funds.reduce((s,a)=>s+parseFloat(a.current_balance||0),0)
   const alerts = accounts.filter(a=>parseFloat(a.current_balance||0)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0)
 
+  const SUB_LABELS={'checking':'جاري','savings':'توفير','credit':'ائتمان','term':'وديعة آجلة'}
+
   return <div className="space-y-4">
     <KPIBar cards={[
       {icon:'🏦', label:'الحسابات البنكية', value:banks.length, sub:`إجمالي: ${fmt(totalBank,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
@@ -1064,6 +1066,38 @@ function BankAccountsTab({showToast,openView}) {
       {icon:'💰', label:'إجمالي الأرصدة', value:`${fmt(totalBank+totalFund,2)}`, sub:'ر.س', iconBg:'bg-slate-100', color:'text-slate-800'},
       {icon:'⚠️', label:'تنبيهات الرصيد', value:alerts.length, sub:alerts.length>0?'رصيد منخفض':'جميع الأرصدة سليمة', iconBg:'bg-amber-100', color:alerts.length>0?'text-amber-600':'text-emerald-600', bg:alerts.length>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
     ]}/>
+
+    {/* تنبيهات الرصيد المنخفض */}
+    {alerts.length>0&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">⚠️</span>
+        <span className="font-bold text-amber-800 text-sm">حسابات تحتاج انتباهاً — الرصيد وصل حد التنبيه أو أقل</span>
+      </div>
+      <div className="space-y-2">
+        {alerts.map(a=>{
+          const bal=parseFloat(a.current_balance||0)
+          const threshold=parseFloat(a.low_balance_alert||0)
+          const pct=threshold>0?Math.min(100,Math.round(bal/threshold*100)):100
+          return <div key={a.id} className="flex items-center gap-4 bg-white rounded-xl border border-amber-200 px-4 py-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-base shrink-0">
+              {a.account_type==='bank'?'🏦':'💵'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-slate-800 text-sm">{a.account_name}</div>
+              <div className="text-xs text-slate-400">{a.bank_name||a.account_code}</div>
+              <div className="mt-1 w-full bg-amber-100 rounded-full h-1.5">
+                <div className="bg-amber-500 h-1.5 rounded-full" style={{width:`${pct}%`}}/>
+              </div>
+            </div>
+            <div className="text-left shrink-0">
+              <div className={`font-bold font-mono text-sm ${bal<0?'text-red-600':'text-amber-700'}`}>{fmt(bal,2)}</div>
+              <div className="text-xs text-slate-400">الحد: {fmt(threshold,2)}</div>
+            </div>
+            <button onClick={()=>openView('new-bank-account',a)} className="text-xs text-blue-500 border border-blue-200 rounded-lg px-2 py-1 hover:bg-blue-50 shrink-0">✏️</button>
+          </div>
+        })}
+      </div>
+    </div>}
     <div className="flex justify-end">
       <button onClick={()=>openView('new-bank-account')} className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">+ إضافة حساب بنكي / صندوق</button>
     </div>
@@ -1078,16 +1112,21 @@ function BankAccountsTab({showToast,openView}) {
           <div className="py-8 text-center text-slate-400 text-sm">لا توجد حسابات</div>:
           accounts.filter(a=>a.account_type===type).map(a=>(
             <div key={a.id} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 hover:bg-blue-50/30">
-              <div>
-                <div className="font-bold text-slate-800">{a.account_name}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-slate-800 flex items-center gap-2">
+                  {a.account_name}
+                  {a.account_sub_type&&<span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">{SUB_LABELS[a.account_sub_type]||a.account_sub_type}</span>}
+                </div>
                 <div className="text-xs font-mono text-slate-400 mt-0.5">{a.account_code}</div>
                 {a.bank_name&&<div className="text-xs text-slate-400">{a.bank_name}{a.bank_branch&&` · ${a.bank_branch}`}</div>}
                 <div className="text-xs text-blue-600 font-mono">GL: {a.gl_account_code}</div>
-                {a.iban&&<div className="text-xs text-slate-300 font-mono">{a.iban}</div>}
+                {a.contact_person&&<div className="text-xs text-slate-400">👤 {a.contact_person}{a.contact_phone&&` · ${a.contact_phone}`}</div>}
+                {a.iban&&<div className="text-xs text-slate-300 font-mono truncate max-w-[180px]">{a.iban}</div>}
               </div>
-              <div className="text-left flex flex-col items-end gap-2">
-                <div className={`font-mono font-bold text-lg ${parseFloat(a.current_balance)<0?'text-red-600':'text-emerald-700'}`}>{fmt(a.current_balance,3)}</div>
+              <div className="text-left flex flex-col items-end gap-2 shrink-0 ml-2">
+                <div className={`font-mono font-bold text-lg ${parseFloat(a.current_balance)<0?'text-red-600':parseFloat(a.current_balance)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0?'text-amber-600':'text-emerald-700'}`}>{fmt(a.current_balance,3)}</div>
                 <div className="text-xs text-slate-400">{a.currency_code}</div>
+                {parseFloat(a.current_balance||0)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0&&<span className="text-[10px] text-amber-600 font-semibold">⚠️ رصيد منخفض</span>}
                 <button onClick={()=>openView('new-bank-account',a)} className="text-xs text-blue-500 hover:underline px-2 py-1 border border-blue-200 rounded-lg">✏️ تعديل</button>
               </div>
             </div>
@@ -1372,21 +1411,33 @@ function TxTable({items,total,loading,onView}) {
 // ══════════════════════════════════════════════════════════
 
 // ── صفحة إضافة / تعديل حساب بنكي ───────────────────────
+// ── مكوّن تلميح بسيط ──────────────────────────────────────
+function Tip({text}) {
+  return (
+    <span title={text} className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help hover:bg-blue-100 hover:text-blue-600 mr-1">?</span>
+  )
+}
+
 function BankAccountPage({account,onBack,onSaved,showToast}) {
   const isEdit=!!account
   const [form,setForm]=useState({
-    account_code:  account?.account_code||'',
-    account_name:  account?.account_name||'',
-    account_type:  account?.account_type||'bank',
-    bank_name:     account?.bank_name||'',
-    bank_branch:   account?.bank_branch||'',
-    account_number:account?.account_number||'',
-    iban:          account?.iban||'',
-    swift_code:    account?.swift_code||'',
-    currency_code: account?.currency_code||'SAR',
-    gl_account_code:account?.gl_account_code||'',
-    opening_balance:account?.opening_balance||'0',
-    low_balance_alert:account?.low_balance_alert||'0',
+    account_code:         account?.account_code||'',
+    account_name:         account?.account_name||'',
+    account_type:         account?.account_type||'bank',
+    account_sub_type:     account?.account_sub_type||'',
+    bank_name:            account?.bank_name||'',
+    bank_branch:          account?.bank_branch||'',
+    account_number:       account?.account_number||'',
+    iban:                 account?.iban||'',
+    swift_code:           account?.swift_code||'',
+    currency_code:        account?.currency_code||'SAR',
+    gl_account_code:      account?.gl_account_code||'',
+    opening_balance:      account?.opening_balance||'0',
+    low_balance_alert:    account?.low_balance_alert||'0',
+    opening_date:         account?.opening_date||'',
+    contact_person:       account?.contact_person||'',
+    contact_phone:        account?.contact_phone||'',
+    notes:                account?.notes||'',
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
@@ -1403,6 +1454,8 @@ function BankAccountPage({account,onBack,onSaved,showToast}) {
     }catch(e){showToast(e.message,'error')}finally{setSaving(false)}
   }
 
+  const iBank=form.account_type==='bank'
+
   return <div className="max-w-4xl" dir="rtl">
     <div className="flex items-center gap-3 mb-6">
       <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-sm">← رجوع</button>
@@ -1413,74 +1466,139 @@ function BankAccountPage({account,onBack,onSaved,showToast}) {
     </div>
 
     <div className="bg-white rounded-2xl border-2 border-slate-200 p-6 space-y-6">
-      {/* النوع والكود */}
-      <div className="grid grid-cols-3 gap-5">
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">النوع</label>
-          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.account_type} onChange={e=>s('account_type',e.target.value)}>
-            <option value="bank">🏦 حساب بنكي</option>
-            <option value="cash_fund">💵 صندوق نقدي</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">كود الحساب <span className="text-red-500">*</span></label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_code} onChange={e=>s('account_code',e.target.value)} placeholder="BANK1"/>
-        </div>
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">العملة</label>
-          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.currency_code} onChange={e=>s('currency_code',e.target.value)}>
-            {['SAR','USD','EUR','GBP','AED','KWD'].map(c=><option key={c}>{c}</option>)}
-          </select>
-        </div>
-      </div>
 
-      {/* الاسم */}
+      {/* ── القسم 1: التعريف الأساسي */}
       <div>
-        <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم الحساب <span className="text-red-500">*</span></label>
-        <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.account_name} onChange={e=>s('account_name',e.target.value)} placeholder="مثال: مصرف الراجحي — الحساب الجاري"/>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">التعريف الأساسي</h3>
+        <div className="grid grid-cols-3 gap-5">
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              النوع <Tip text="حساب بنكي: مرتبط بمصرف. صندوق نقدي: نقد في الشركة."/>
+            </label>
+            <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.account_type} onChange={e=>s('account_type',e.target.value)}>
+              <option value="bank">🏦 حساب بنكي</option>
+              <option value="cash_fund">💵 صندوق نقدي</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              كود الحساب <span className="text-red-500">*</span>
+              <Tip text="معرّف فريد للحساب — يُستخدم في التقارير. مثال: BANK1 أو CASH-HO"/>
+            </label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_code} onChange={e=>s('account_code',e.target.value)} placeholder="BANK1"/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              العملة <Tip text="عملة الحساب. تُستخدم في القيود متعددة العملات."/>
+            </label>
+            <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.currency_code} onChange={e=>s('currency_code',e.target.value)}>
+              {['SAR','USD','EUR','GBP','AED','KWD'].map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم الحساب <span className="text-red-500">*</span></label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.account_name} onChange={e=>s('account_name',e.target.value)} placeholder="مثال: مصرف الراجحي — الحساب الجاري"/>
+        </div>
       </div>
 
-      {/* بيانات البنك — تظهر للحسابات البنكية فقط */}
-      {form.account_type==='bank'&&<div className="grid grid-cols-2 gap-5">
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم البنك</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_name} onChange={e=>s('bank_name',e.target.value)}/>
-        </div>
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">الفرع</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_branch} onChange={e=>s('bank_branch',e.target.value)}/>
-        </div>
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">رقم الحساب</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_number} onChange={e=>s('account_number',e.target.value)}/>
-        </div>
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">IBAN</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono uppercase focus:outline-none focus:border-blue-500" value={form.iban} onChange={e=>s('iban',e.target.value.toUpperCase())} placeholder="SA03 8000 0000..."/>
-        </div>
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">Swift Code</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono uppercase focus:outline-none focus:border-blue-500" value={form.swift_code} onChange={e=>s('swift_code',e.target.value.toUpperCase())}/>
+      {/* ── القسم 2: بيانات البنك */}
+      {iBank&&<div>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">بيانات البنك</h3>
+        <div className="grid grid-cols-2 gap-5">
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم البنك</label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_name} onChange={e=>s('bank_name',e.target.value)} placeholder="مصرف الراجحي"/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              النوع الفرعي <Tip text="جاري: للتشغيل اليومي. توفير: للإيداع. ائتمان: بطاقة ائتمانية. آجل: وديعة."/>
+            </label>
+            <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.account_sub_type} onChange={e=>s('account_sub_type',e.target.value)}>
+              <option value="">— اختر —</option>
+              <option value="checking">🔄 حساب جاري</option>
+              <option value="savings">💹 حساب توفير</option>
+              <option value="credit">💳 بطاقة ائتمان</option>
+              <option value="term">🔒 وديعة آجلة</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">الفرع</label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_branch} onChange={e=>s('bank_branch',e.target.value)}/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              تاريخ الفتح <Tip text="تاريخ فتح الحساب لدى البنك"/>
+            </label>
+            <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.opening_date} onChange={e=>s('opening_date',e.target.value)}/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">رقم الحساب</label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_number} onChange={e=>s('account_number',e.target.value)}/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              IBAN <Tip text="رقم الآيبان الدولي — يبدأ بـ SA للسعودية"/>
+            </label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono uppercase focus:outline-none focus:border-blue-500" value={form.iban} onChange={e=>s('iban',e.target.value.toUpperCase())} placeholder="SA03 8000 0000..."/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              Swift Code <Tip text="رمز التحويل الدولي SWIFT/BIC"/>
+            </label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono uppercase focus:outline-none focus:border-blue-500" value={form.swift_code} onChange={e=>s('swift_code',e.target.value.toUpperCase())}/>
+          </div>
         </div>
       </div>}
 
-      {/* حساب الأستاذ */}
+      {/* ── القسم 3: مسؤول التواصل */}
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">مسؤول التواصل</h3>
+        <div className="grid grid-cols-2 gap-5">
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              شخص التواصل <Tip text="اسم الموظف المسؤول عن هذا الحساب داخل الشركة أو لدى البنك"/>
+            </label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.contact_person} onChange={e=>s('contact_person',e.target.value)} placeholder="مثال: أحمد العمري"/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">رقم التواصل</label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.contact_phone} onChange={e=>s('contact_phone',e.target.value)} placeholder="05xxxxxxxx" dir="ltr"/>
+          </div>
+        </div>
+      </div>
+
+      {/* ── القسم 4: حساب الأستاذ */}
       <div className="bg-blue-50 rounded-2xl p-4 border-2 border-blue-200">
         <AccountPicker label="حساب الأستاذ العام" required value={form.gl_account_code}
           onChange={(code,name)=>s('gl_account_code',code)}/>
         <p className="text-xs text-blue-600 mt-2">⚠️ هذا الحساب يُستخدم في القيود المحاسبية عند كل حركة</p>
       </div>
 
-      {/* الأرصدة */}
-      <div className="grid grid-cols-2 gap-5">
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">الرصيد الافتتاحي</label>
-          <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.opening_balance} onChange={e=>s('opening_balance',e.target.value)}/>
+      {/* ── القسم 5: الأرصدة والتنبيهات */}
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">الأرصدة والتنبيهات</h3>
+        <div className="grid grid-cols-2 gap-5">
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              الرصيد الافتتاحي <Tip text="الرصيد عند إنشاء الحساب في النظام — لا يتغير بالحركات اللاحقة"/>
+            </label>
+            <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.opening_balance} onChange={e=>s('opening_balance',e.target.value)}/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              حد تنبيه الرصيد المنخفض <Tip text="عند وصول الرصيد لهذا الحد أو أقل يظهر تنبيه في لوحة الخزينة"/>
+            </label>
+            <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.low_balance_alert} onChange={e=>s('low_balance_alert',e.target.value)}/>
+          </div>
         </div>
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">حد تنبيه الرصيد المنخفض</label>
-          <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.low_balance_alert} onChange={e=>s('low_balance_alert',e.target.value)}/>
-        </div>
+      </div>
+
+      {/* ── القسم 6: ملاحظات */}
+      <div>
+        <label className="text-sm font-semibold text-slate-600 block mb-1.5">ملاحظات</label>
+        <textarea rows={3} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none" value={form.notes} onChange={e=>s('notes',e.target.value)} placeholder="أي معلومات إضافية عن الحساب..."/>
       </div>
 
       {/* أزرار */}
