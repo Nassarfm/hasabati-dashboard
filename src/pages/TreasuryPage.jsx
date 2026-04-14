@@ -242,6 +242,24 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
   w.document.close()
 }
 
+// ── KPIBar — شريط مؤشرات الأداء ─────────────────────────
+function KPIBar({cards}) {
+  return (
+    <div className="grid gap-3" style={{gridTemplateColumns:`repeat(${cards.length},1fr)`}}>
+      {cards.map((k,i)=>(
+        <div key={i} className={`rounded-2xl border p-4 flex items-center gap-3 ${k.bg||'bg-white border-slate-200'}`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 ${k.iconBg||'bg-slate-100'}`}>{k.icon}</div>
+          <div className="min-w-0">
+            <div className="text-xs text-slate-400 truncate">{k.label}</div>
+            <div className={`text-lg font-bold font-mono truncate ${k.color||'text-slate-800'}`}>{k.value}</div>
+            {k.sub&&<div className="text-xs text-slate-400 truncate">{k.sub}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── StatusBadge ───────────────────────────────────────────
 function StatusBadge({status}) {
   const c={draft:'bg-amber-100 text-amber-700',posted:'bg-emerald-100 text-emerald-700',cancelled:'bg-red-100 text-red-600'}
@@ -1033,7 +1051,19 @@ function BankAccountsTab({showToast,openView}) {
   },[])
   useEffect(()=>{load()},[load])
 
+  const banks  = accounts.filter(a=>a.account_type==='bank')
+  const funds  = accounts.filter(a=>a.account_type==='cash_fund')
+  const totalBank = banks.reduce((s,a)=>s+parseFloat(a.current_balance||0),0)
+  const totalFund = funds.reduce((s,a)=>s+parseFloat(a.current_balance||0),0)
+  const alerts = accounts.filter(a=>parseFloat(a.current_balance||0)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0)
+
   return <div className="space-y-4">
+    <KPIBar cards={[
+      {icon:'🏦', label:'الحسابات البنكية', value:banks.length, sub:`إجمالي: ${fmt(totalBank,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
+      {icon:'💵', label:'الصناديق النقدية', value:funds.length, sub:`إجمالي: ${fmt(totalFund,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+      {icon:'💰', label:'إجمالي الأرصدة', value:`${fmt(totalBank+totalFund,2)}`, sub:'ر.س', iconBg:'bg-slate-100', color:'text-slate-800'},
+      {icon:'⚠️', label:'تنبيهات الرصيد', value:alerts.length, sub:alerts.length>0?'رصيد منخفض':'جميع الأرصدة سليمة', iconBg:'bg-amber-100', color:alerts.length>0?'text-amber-600':'text-emerald-600', bg:alerts.length>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
+    ]}/>
     <div className="flex justify-end">
       <button onClick={()=>openView('new-bank-account')} className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">+ إضافة حساب بنكي / صندوق</button>
     </div>
@@ -1087,7 +1117,18 @@ function CashListTab({showToast,openView}) {
   },[filters])
   useEffect(()=>{load()},[load])
 
+  const drafts   = items.filter(x=>x.status==='draft').length
+  const posted   = items.filter(x=>x.status==='posted').length
+  const totalRV  = items.filter(x=>x.tx_type==='RV').reduce((s,x)=>s+parseFloat(x.amount||0),0)
+  const totalPV  = items.filter(x=>x.tx_type==='PV').reduce((s,x)=>s+parseFloat(x.amount||0),0)
+
   return <div className="space-y-4">
+    <KPIBar cards={[
+      {icon:'📋', label:'مسودة', value:drafts, sub:'في انتظار الترحيل', iconBg:'bg-amber-100', color:'text-amber-600', bg:'bg-amber-50 border-amber-200'},
+      {icon:'✅', label:'مُرحَّل', value:posted, sub:'قيود محاسبية', iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+      {icon:'💰', label:'إجمالي القبض (RV)', value:fmt(totalRV,2), sub:'ر.س', iconBg:'bg-blue-100', color:'text-blue-700'},
+      {icon:'💸', label:'إجمالي الصرف (PV)', value:fmt(totalPV,2), sub:'ر.س', iconBg:'bg-red-100', color:'text-red-600'},
+    ]}/>
     <div className="flex items-center justify-between flex-wrap gap-3">
       <div className="flex gap-2">
         <button onClick={()=>openView('new-cash','RV')} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">💰 سند قبض جديد</button>
@@ -1102,6 +1143,7 @@ function CashListTab({showToast,openView}) {
         </select>
         <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none" value={filters.date_from} onChange={e=>setFilters(p=>({...p,date_from:e.target.value}))}/>
         <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none" value={filters.date_to} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
+        <input type="number" min="0" placeholder="الحد الأدنى للمبلغ" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none w-36" value={filters.min_amount||''} onChange={e=>setFilters(p=>({...p,min_amount:e.target.value}))}/>
         <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍 بحث</button>
       </div>
     </div>
@@ -1118,7 +1160,7 @@ function BankTxListTab({showToast,openView}) {
   const [items,setItems]=useState([])
   const [total,setTotal]=useState(0)
   const [loading,setLoading]=useState(true)
-  const [filters,setFilters]=useState({tx_type:'',status:''})
+  const [filters,setFilters]=useState({tx_type:'',status:'',date_from:'',date_to:'',min_amount:''})
   const [accounts,setAccounts]=useState([])
   const [selected,setSelected]=useState(null)
 
@@ -1132,21 +1174,35 @@ function BankTxListTab({showToast,openView}) {
   },[filters])
   useEffect(()=>{load()},[load])
 
+  const bDrafts  = items.filter(x=>x.status==='draft').length
+  const bPosted  = items.filter(x=>x.status==='posted').length
+  const totalBP  = items.filter(x=>x.tx_type==='BP').reduce((s,x)=>s+parseFloat(x.amount||0),0)
+  const totalBR  = items.filter(x=>x.tx_type==='BR').reduce((s,x)=>s+parseFloat(x.amount||0),0)
+
   return <div className="space-y-4">
+    <KPIBar cards={[
+      {icon:'📋', label:'مسودة', value:bDrafts, sub:'في انتظار الترحيل', iconBg:'bg-amber-100', color:'text-amber-600', bg:'bg-amber-50 border-amber-200'},
+      {icon:'✅', label:'مُرحَّل', value:bPosted, sub:'قيود محاسبية', iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+      {icon:'💸', label:'إجمالي الدفعات (BP)', value:fmt(totalBP,2), sub:'ر.س', iconBg:'bg-red-100', color:'text-red-600'},
+      {icon:'🏦', label:'إجمالي القبض (BR)', value:fmt(totalBR,2), sub:'ر.س', iconBg:'bg-blue-100', color:'text-blue-700'},
+    ]}/>
     <div className="flex items-center justify-between flex-wrap gap-3">
       <div className="flex gap-2 flex-wrap">
         {[{t:'BP',l:'💸 دفعة بنكية',c:'bg-red-600 hover:bg-red-700'},{t:'BR',l:'🏦 قبض بنكي',c:'bg-emerald-600 hover:bg-emerald-700'},{t:'BT',l:'↔️ تحويل بنكي',c:'bg-blue-600 hover:bg-blue-700'}].map(b=>(
           <button key={b.t} onClick={()=>openView('new-bank-tx',b.t)} className={`px-3 py-2 rounded-xl text-white text-sm font-semibold ${b.c}`}>{b.l}</button>
         ))}
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap items-center">
         <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none" value={filters.tx_type} onChange={e=>setFilters(p=>({...p,tx_type:e.target.value}))}>
           <option value="">كل الأنواع</option><option value="BP">دفعة</option><option value="BR">قبض</option><option value="BT">تحويل</option>
         </select>
         <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none" value={filters.status} onChange={e=>setFilters(p=>({...p,status:e.target.value}))}>
           <option value="">كل الحالات</option><option value="draft">مسودة</option><option value="posted">مُرحَّل</option>
         </select>
-        <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍</button>
+        <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none" value={filters.date_from||''} onChange={e=>setFilters(p=>({...p,date_from:e.target.value}))}/>
+        <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none" value={filters.date_to||''} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
+        <input type="number" min="0" placeholder="الحد الأدنى للمبلغ" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none w-36" value={filters.min_amount||''} onChange={e=>setFilters(p=>({...p,min_amount:e.target.value}))}/>
+        <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍 بحث</button>
       </div>
     </div>
     <TxTable items={items} total={total} loading={loading} onView={setSelected}/>
@@ -1443,10 +1499,13 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const isPV=type==='PV'
   const typeLabel=isPV?'سند صرف نقدي':'سند قبض نقدي'
   const [accounts,setAccounts]=useState([])
+  const [vendors,setVendors]=useState([])
   const [branches,setBranches]=useState([])
   const [costCenters,setCostCenters]=useState([])
   const [projects,setProjects]=useState([])
   const [expClass,setExpClass]=useState([])
+  const [dimDefs,setDimDefs]=useState([])       // تعريفات الأبعاد لمعرفة الإلزامي
+  const [payType,setPayType]=useState('expense') // expense | vendor  (PV فقط)
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
@@ -1460,22 +1519,32 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   useEffect(()=>{
     Promise.all([
       api.treasury.listBankAccounts({account_type:'cash_fund'}),
+      api.ap?.listVendors({limit:200}).catch(()=>({data:{items:[]}})),
       api.settings.listBranches().catch(()=>({data:[]})),
       api.settings.listCostCenters().catch(()=>({data:[]})),
       api.settings.listProjects().catch(()=>({data:[]})),
       api.dimensions?.list?.().catch(()=>({data:[]})) ?? Promise.resolve({data:[]}),
-    ]).then(([a,b,cc,p,dims])=>{
+    ]).then(([a,v,b,cc,p,dims])=>{
       setAccounts(a?.data||[])
+      setVendors(v?.data?.items||[])
       setBranches(b?.data||[])
       setCostCenters(cc?.data||[])
       setProjects(p?.data||[])
-      const expDim=(dims?.data||[]).find(d=>d.code==='expense_classification')
+      const allDims=dims?.data||[]
+      setDimDefs(allDims)
+      const expDim=allDims.find(d=>d.code==='expense_classification')
       setExpClass(expDim?.values||[])
     })
   },[])
 
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
+
+  const selectVendor=(v)=>{
+    s('party_name',v.vendor_name)
+    s('counterpart_account',v.gl_account_code||'210101')
+    s('counterpart_name',v.vendor_name)
+  }
 
   // التوجيه المحاسبي
   const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
@@ -1487,11 +1556,24 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
     {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:0,    credit:amt,  ...dims},
   ]) : []
 
+  // التحقق من الأبعاد الإلزامية
+  const validateDims=()=>{
+    const req=dimDefs.filter(d=>d.is_required)
+    for(const d of req){
+      if(d.code==='branch'         && !form.branch_code)                  {showToast('الفرع إلزامي','error');return false}
+      if(d.code==='cost_center'    && !form.cost_center)                  {showToast('مركز التكلفة إلزامي','error');return false}
+      if(d.code==='project'        && !form.project_code)                 {showToast('المشروع إلزامي','error');return false}
+      if(d.code==='expense_classification'&&!form.expense_classification_code){showToast('تصنيف المصروف إلزامي','error');return false}
+    }
+    return true
+  }
+
   const save=async()=>{
     if(!form.bank_account_id){showToast('اختر الصندوق','error');return}
     if(!form.amount||parseFloat(form.amount)<=0){showToast('أدخل المبلغ','error');return}
     if(!form.counterpart_account){showToast('اختر الحساب المقابل','error');return}
     if(!form.description.trim()){showToast('أدخل البيان','error');return}
+    if(!validateDims()) return
     setSaving(true)
     try{await api.treasury.createCashTransaction(form);onSaved(`تم إنشاء ${typeLabel} ✅`)}
     catch(e){showToast(e.message,'error')}finally{setSaving(false)}
@@ -1499,8 +1581,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
 
   const handlePrint=()=>{
     if(!form.amount||!form.bank_account_id){showToast('أكمل البيانات أولاً','error');return}
-    const mockTx={...form,serial:'مسودة',tx_date:form.tx_date}
-    printVoucher(mockTx,je_lines,selectedBank?.account_name||'—')
+    printVoucher({...form,serial:'مسودة'},je_lines,selectedBank?.account_name||'—')
   }
 
   return <div className="max-w-4xl" dir="rtl">
@@ -1549,10 +1630,32 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
         </div>
       </div>
 
+      {/* نوع الدفعة — PV فقط */}
+      {isPV&&<div>
+        <label className="text-sm font-semibold text-slate-600 block mb-2">نوع الصرف</label>
+        <div className="flex gap-3">
+          {[{v:'expense',l:'💼 مصروف / قيد محاسبي'},{v:'vendor',l:'🏢 سداد مورد'}].map(opt=>(
+            <button key={opt.v} onClick={()=>setPayType(opt.v)}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition-all
+                ${payType===opt.v?'bg-red-600 text-white border-red-600':'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              {opt.l}
+            </button>
+          ))}
+        </div>
+        {payType==='vendor'&&vendors.length>0&&<div className="mt-3">
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اختر المورد</label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+            onChange={e=>{const v=vendors.find(x=>x.id===e.target.value);if(v)selectVendor(v)}}>
+            <option value="">— اختر المورد —</option>
+            {vendors.map(v=><option key={v.id} value={v.id}>{v.vendor_name}</option>)}
+          </select>
+        </div>}
+      </div>}
+
       {/* الحساب المقابل */}
       <div className="bg-blue-50 rounded-2xl p-4 border-2 border-blue-200">
         <AccountPicker
-          label={isPV?'الحساب المقابل — مصروف / ذمة مورد / حساب':'الحساب المقابل — ذمة عميل / إيراد / حساب'}
+          label={isPV&&payType==='vendor'?'حساب ذمم الموردين':isPV?'الحساب المقابل — مصروف / حساب':'الحساب المقابل — ذمة عميل / إيراد / حساب'}
           required value={form.counterpart_account}
           onChange={(code,name)=>{s('counterpart_account',code);s('counterpart_name',name)}}/>
       </div>
@@ -1630,6 +1733,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   const [costCenters,setCostCenters]=useState([])
   const [projects,setProjects]=useState([])
   const [expClass,setExpClass]=useState([])
+  const [dimDefs,setDimDefs]=useState([])
   const [payType,setPayType]=useState('expense')
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
@@ -1655,7 +1759,9 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       setBranches(b?.data||[])
       setCostCenters(cc?.data||[])
       setProjects(p?.data||[])
-      const expDim=(dims?.data||[]).find(d=>d.code==='expense_classification')
+      const allDims=dims?.data||[]
+      setDimDefs(allDims)
+      const expDim=allDims.find(d=>d.code==='expense_classification')
       setExpClass(expDim?.values||[])
     })
   },[])
@@ -1673,8 +1779,20 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
 
   const selectVendor=(v)=>{s('beneficiary_name',v.vendor_name);s('counterpart_account',v.gl_account_code||'210101');s('counterpart_name',v.vendor_name)}
 
+  const validateDims=()=>{
+    const req=dimDefs.filter(d=>d.is_required)
+    for(const d of req){
+      if(d.code==='branch'               && !form.branch_code)                    {showToast('الفرع إلزامي','error');return false}
+      if(d.code==='cost_center'          && !form.cost_center)                    {showToast('مركز التكلفة إلزامي','error');return false}
+      if(d.code==='project'              && !form.project_code)                   {showToast('المشروع إلزامي','error');return false}
+      if(d.code==='expense_classification'&&!form.expense_classification_code)    {showToast('تصنيف المصروف إلزامي','error');return false}
+    }
+    return true
+  }
+
   const save=async()=>{
     if(!form.bank_account_id||!form.amount||!form.description){showToast('تأكد من الحساب والمبلغ والبيان','error');return}
+    if(!validateDims()) return
     setSaving(true)
     try{await api.treasury.createBankTransaction(form);onSaved(`تم إنشاء ${labels[type]} ✅`)}
     catch(e){showToast(e.message,'error')}finally{setSaving(false)}
