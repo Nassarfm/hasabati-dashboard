@@ -6,6 +6,7 @@
  * - زر ترحيل من القائمة
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import api from '../api/client'
 import SlideOver from '../components/SlideOver'
 
@@ -700,7 +701,7 @@ export default function TreasuryPage() {
   const [view,setView]     = useState('main')
   const [viewData,setViewData] = useState(null)
   const [toast,setToast]   = useState(null)
-  const [section,setSection] = useState('operations') // settings | operations | petty | reconciliation | reports
+  const [section,setSection] = useState('dashboard') // dashboard | settings | operations | petty | reconciliation | reports
   const showToast = (msg,type='success') => setToast({msg,type})
 
   const openView  = (v,data=null) => { setView(v); setViewData(data); window.scrollTo(0,0) }
@@ -713,10 +714,11 @@ export default function TreasuryPage() {
   if(view==='new-bank-account') return <BankAccountPage account={viewData} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
 
   const SECTIONS = [
+    { id:'dashboard',      icon:'🏠',  label:'لوحة التحكم' },
     { id:'settings',       icon:'⚙️',  label:'الإعدادات' },
     { id:'operations',     icon:'💼',  label:'العمليات' },
     { id:'petty',          icon:'👜',  label:'العهدة النثرية' },
-    { id:'reconciliation', icon:'🔗',  label:'التسويات البنكية' },
+    { id:'reconciliation', icon:'🔗',  label:'التسويات' },
     { id:'reports',        icon:'📊',  label:'التقارير' },
   ]
 
@@ -730,7 +732,7 @@ export default function TreasuryPage() {
     </div>
 
     {/* Main Navigation — بطاقات */}
-    <div className="grid grid-cols-5 gap-3">
+    <div className="grid grid-cols-6 gap-3">
       {SECTIONS.map(s=>(
         <button key={s.id} onClick={()=>setSection(s.id)}
           className={`flex flex-col items-center gap-2 py-4 px-3 rounded-2xl border-2 font-semibold text-sm transition-all
@@ -744,11 +746,277 @@ export default function TreasuryPage() {
     </div>
 
     {/* Content */}
+    {section==='dashboard'      && <DashboardTab showToast={showToast} openView={openView}/>}
     {section==='settings'       && <SettingsSection showToast={showToast} openView={openView}/>}
     {section==='operations'     && <OperationsSection showToast={showToast} openView={openView}/>}
     {section==='petty'          && <PettyCashTab showToast={showToast}/>}
-    {section==='reconciliation' && <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">🔗 التسويات البنكية — قريباً</div>}
+    {section==='reconciliation' && <ReconciliationSection showToast={showToast}/>}
     {section==='reports'        && <ReportsSection showToast={showToast}/>}
+  </div>
+}
+
+// ══ RECONCILIATION SECTION ════════════════════════════════
+function ReconciliationSection({showToast}) {
+  const [sessions,setSessions] = useState([])
+  const [accounts,setAccounts] = useState([])
+  const [loading,setLoading]   = useState(true)
+  const [selected,setSelected] = useState(null)      // جلسة مفتوحة
+  const [lines,setLines]       = useState([])        // أسطر كشف البنك
+  const [txns,setTxns]         = useState([])        // حركات النظام
+  const [loadingLines,setLoadingLines] = useState(false)
+  const [showNewSession,setShowNewSession] = useState(false)
+  const [newForm,setNewForm] = useState({bank_account_id:'',statement_date:today(),statement_balance:'',notes:''})
+  const snf=(k,v)=>setNewForm(p=>({...p,[k]:v}))
+  const [saving,setSaving] = useState(false)
+  const [showAddLine,setShowAddLine] = useState(false)
+  const [lineForm,setLineForm] = useState({date:today(),description:'',reference:'',debit:'',credit:''})
+  const slf=(k,v)=>setLineForm(p=>({...p,[k]:v}))
+
+  const loadSessions = useCallback(()=>{
+    setLoading(true)
+    Promise.all([
+      api.treasury.listReconciliationSessions(),
+      api.treasury.listBankAccounts(),
+    ]).then(([s,a])=>{
+      setSessions(s?.data||[])
+      setAccounts(a?.data||[])
+    }).catch(e=>showToast(e.message,'error')).finally(()=>setLoading(false))
+  },[])
+
+  useEffect(()=>{loadSessions()},[loadSessions])
+
+  const openSession = async(sess)=>{
+    setSelected(sess)
+    setLoadingLines(true)
+    try{
+      const [linesRes, txRes] = await Promise.all([
+        api.treasury.getSessionLines(sess.id),
+        api.treasury.listBankTransactions({bank_account_id:sess.bank_account_id, limit:200}),
+      ])
+      setLines(linesRes?.data||[])
+      setTxns(txRes?.data?.items||txRes?.data||[])
+    }catch(e){showToast(e.message,'error')}finally{setLoadingLines(false)}
+  }
+
+  const createSession = async()=>{
+    if(!newForm.bank_account_id){showToast('اختر الحساب','error');return}
+    if(!newForm.statement_balance){showToast('أدخل رصيد الكشف','error');return}
+    setSaving(true)
+    try{
+      await api.treasury.createReconciliationSession(newForm)
+      showToast('تم إنشاء جلسة التسوية ✅')
+      setShowNewSession(false)
+      setNewForm({bank_account_id:'',statement_date:today(),statement_balance:'',notes:''})
+      loadSessions()
+    }catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+  }
+
+  const addLine = async()=>{
+    if(!lineForm.date){showToast('أدخل التاريخ','error');return}
+    if(!lineForm.debit&&!lineForm.credit){showToast('أدخل مدين أو دائن','error');return}
+    setSaving(true)
+    try{
+      await api.treasury.importStatementLines(selected.id,[{
+        date:lineForm.date, description:lineForm.description,
+        reference:lineForm.reference,
+        debit:parseFloat(lineForm.debit||0), credit:parseFloat(lineForm.credit||0),
+      }])
+      showToast('تم إضافة السطر ✅')
+      setShowAddLine(false)
+      setLineForm({date:today(),description:'',reference:'',debit:'',credit:''})
+      openSession(selected)
+    }catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+  }
+
+  const matchLine = async(lineId, txId, txType)=>{
+    try{
+      await api.treasury.matchReconciliation(selected.id, lineId, txId, txType)
+      showToast('✅ تمت المطابقة')
+      openSession(selected)
+    }catch(e){showToast(e.message,'error')}
+  }
+
+  const STATUS={open:{l:'مفتوحة',c:'bg-amber-100 text-amber-700'},closed:{l:'مغلقة',c:'bg-emerald-100 text-emerald-700'}}
+
+  // ── عرض تفاصيل الجلسة ──
+  if(selected) {
+    const matched   = lines.filter(l=>l.match_status==='matched').length
+    const unmatched = lines.filter(l=>l.match_status!=='matched').length
+    const stmtBal   = parseFloat(selected.statement_balance||0)
+    const bookBal   = parseFloat(selected.book_balance||0)
+    const diff      = stmtBal - bookBal
+
+    return <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={()=>setSelected(null)} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-sm">← الجلسات</button>
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">🔗 جلسة تسوية: {selected.serial}</h3>
+          <p className="text-xs text-slate-400">{selected.bank_account_name} · {fmtDate(selected.statement_date)}</p>
+        </div>
+      </div>
+
+      <KPIBar cards={[
+        {icon:'📄', label:'رصيد الكشف', value:`${fmt(stmtBal,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
+        {icon:'📒', label:'رصيد الدفاتر', value:`${fmt(bookBal,2)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-800'},
+        {icon:'📊', label:'الفرق', value:`${diff>=0?'+':''}${fmt(diff,2)} ر.س`, iconBg:Math.abs(diff)<0.01?'bg-emerald-100':'bg-red-100', color:Math.abs(diff)<0.01?'text-emerald-700':'text-red-600', bg:Math.abs(diff)<0.01?'bg-emerald-50 border-emerald-200':'bg-red-50 border-red-200'},
+        {icon:'✅', label:'مطابق', value:matched, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+        {icon:'❓', label:'غير مطابق', value:unmatched, iconBg:'bg-amber-100', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
+      ]}/>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* أسطر كشف البنك */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+            <span className="font-bold text-sm text-slate-700">📄 أسطر كشف البنك</span>
+            <button onClick={()=>setShowAddLine(v=>!v)} className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50">+ إضافة سطر</button>
+          </div>
+          {showAddLine&&<div className="p-3 bg-blue-50 border-b border-blue-100 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="text-[10px] text-slate-500 block">التاريخ</label><input type="date" className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value={lineForm.date} onChange={e=>slf('date',e.target.value)}/></div>
+              <div><label className="text-[10px] text-slate-500 block">مرجع</label><input className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value={lineForm.reference} onChange={e=>slf('reference',e.target.value)}/></div>
+              <div><label className="text-[10px] text-slate-500 block">مدين (صرف)</label><input type="number" step="0.001" className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono" value={lineForm.debit} onChange={e=>slf('debit',e.target.value)}/></div>
+              <div><label className="text-[10px] text-slate-500 block">دائن (قبض)</label><input type="number" step="0.001" className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono" value={lineForm.credit} onChange={e=>slf('credit',e.target.value)}/></div>
+              <div className="col-span-2"><label className="text-[10px] text-slate-500 block">البيان</label><input className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value={lineForm.description} onChange={e=>slf('description',e.target.value)}/></div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={()=>setShowAddLine(false)} className="text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600">إلغاء</button>
+              <button onClick={addLine} disabled={saving} className="text-xs px-4 py-1.5 bg-blue-700 text-white rounded-lg font-semibold disabled:opacity-50">{saving?'...':'حفظ'}</button>
+            </div>
+          </div>}
+          {loadingLines?<div className="py-6 text-center text-slate-400 text-sm">...</div>:
+          lines.length===0?<div className="py-8 text-center text-slate-400 text-sm">لا توجد أسطر — أضف أسطر الكشف</div>:
+          <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+            {lines.map(l=>(
+              <div key={l.id} className={`px-3 py-2.5 ${l.match_status==='matched'?'bg-emerald-50/60':''}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-mono text-slate-500">{fmtDate(l.line_date)}{l.reference&&` · ${l.reference}`}</div>
+                    <div className="text-xs text-slate-700 truncate">{l.description||'—'}</div>
+                  </div>
+                  <div className="text-left shrink-0">
+                    {parseFloat(l.debit||0)>0&&<div className="text-xs font-mono font-bold text-red-600">-{fmt(l.debit,2)}</div>}
+                    {parseFloat(l.credit||0)>0&&<div className="text-xs font-mono font-bold text-emerald-600">+{fmt(l.credit,2)}</div>}
+                  </div>
+                  {l.match_status==='matched'
+                    ?<span className="text-[10px] text-emerald-600 font-bold shrink-0">✅</span>
+                    :<span className="text-[10px] text-amber-500 font-bold shrink-0">❓</span>}
+                </div>
+              </div>
+            ))}
+          </div>}
+        </div>
+
+        {/* حركات النظام */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+            <span className="font-bold text-sm text-slate-700">🏛️ حركات النظام (مرحّلة)</span>
+          </div>
+          {loadingLines?<div className="py-6 text-center text-slate-400 text-sm">...</div>:
+          txns.filter(t=>t.status==='posted').length===0?<div className="py-8 text-center text-slate-400 text-sm">لا توجد حركات مرحّلة</div>:
+          <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+            {txns.filter(t=>t.status==='posted').map(t=>{
+              const unmatched_line=lines.find(l=>l.match_status!=='matched'&&(
+                (t.tx_type==='BP'&&parseFloat(l.debit||0)===parseFloat(t.amount||0))||
+                (t.tx_type==='BR'&&parseFloat(l.credit||0)===parseFloat(t.amount||0))
+              ))
+              return <div key={t.id} className={`px-3 py-2.5 ${t.is_reconciled?'bg-emerald-50/60':''}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-mono text-slate-500">{t.serial} · {fmtDate(t.tx_date)}</div>
+                    <div className="text-xs text-slate-700 truncate">{t.description||t.counterpart_account||'—'}</div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${t.tx_type==='BP'?'bg-red-100 text-red-600':'bg-emerald-100 text-emerald-600'}`}>{t.tx_type}</span>
+                    </div>
+                  </div>
+                  <div className="text-left shrink-0">
+                    <div className={`text-xs font-mono font-bold ${t.tx_type==='BP'?'text-red-600':'text-emerald-600'}`}>{t.tx_type==='BP'?'-':'+'}{fmt(t.amount,2)}</div>
+                  </div>
+                  {t.is_reconciled
+                    ?<span className="text-[10px] text-emerald-600 font-bold shrink-0">✅</span>
+                    :unmatched_line
+                      ?<button onClick={()=>matchLine(unmatched_line.id,t.id,t.tx_type)} className="text-[10px] text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded font-semibold shrink-0 hover:bg-blue-50">مطابقة</button>
+                      :<span className="text-[10px] text-slate-300 shrink-0">—</span>}
+                </div>
+              </div>
+            })}
+          </div>}
+        </div>
+      </div>
+    </div>
+  }
+
+  // ── قائمة الجلسات ──
+  return <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <div>
+        <h3 className="text-lg font-bold text-slate-800">🔗 التسويات البنكية</h3>
+        <p className="text-xs text-slate-400 mt-0.5">مطابقة كشوف الحسابات مع حركات النظام</p>
+      </div>
+      <button onClick={()=>setShowNewSession(v=>!v)} className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">+ جلسة تسوية جديدة</button>
+    </div>
+
+    {showNewSession&&<div className="bg-white rounded-2xl border-2 border-blue-200 p-5 space-y-4">
+      <h4 className="font-bold text-slate-700 text-sm">إنشاء جلسة تسوية جديدة</h4>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">الحساب البنكي <span className="text-red-500">*</span></label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={newForm.bank_account_id} onChange={e=>snf('bank_account_id',e.target.value)}>
+            <option value="">— اختر —</option>
+            {accounts.filter(a=>a.account_type==='bank').map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">تاريخ الكشف</label>
+          <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={newForm.statement_date} onChange={e=>snf('statement_date',e.target.value)}/>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">رصيد الكشف البنكي <span className="text-red-500">*</span></label>
+          <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono" value={newForm.statement_balance} onChange={e=>snf('statement_balance',e.target.value)} placeholder="0.000"/>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">ملاحظات</label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={newForm.notes} onChange={e=>snf('notes',e.target.value)}/>
+        </div>
+      </div>
+      <div className="flex gap-3">
+        <button onClick={()=>setShowNewSession(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
+        <button onClick={createSession} disabled={saving} className="px-6 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">{saving?'جارٍ الحفظ...':'✅ إنشاء الجلسة'}</button>
+      </div>
+    </div>}
+
+    {loading?<div className="py-10 text-center text-slate-400">...</div>:
+    sessions.length===0?<div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 text-sm">لا توجد جلسات تسوية — أنشئ جلسة جديدة لبدء المطابقة</div>:
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 border-b border-slate-200">
+          <tr className="text-right">
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الرقم</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الحساب</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">تاريخ الكشف</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold text-left">رصيد الكشف</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold text-left">رصيد الدفاتر</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold text-left">الفرق</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الحالة</th>
+            <th className="px-2 py-3"/>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {sessions.map(s=>{
+            const diff=parseFloat(s.statement_balance||0)-parseFloat(s.book_balance||0)
+            return <tr key={s.id} className="hover:bg-blue-50/30 cursor-pointer" onClick={()=>openSession(s)}>
+              <td className="px-4 py-3 font-mono text-blue-700 font-bold">{s.serial}</td>
+              <td className="px-4 py-3 text-slate-700">{s.bank_account_name}</td>
+              <td className="px-4 py-3 text-slate-500">{fmtDate(s.statement_date)}</td>
+              <td className="px-4 py-3 font-mono text-left">{fmt(s.statement_balance,2)}</td>
+              <td className="px-4 py-3 font-mono text-left">{fmt(s.book_balance,2)}</td>
+              <td className={`px-4 py-3 font-mono font-bold text-left ${Math.abs(diff)<0.01?'text-emerald-600':'text-red-600'}`}>{diff>=0?'+':''}{fmt(diff,2)}</td>
+              <td className="px-4 py-3"><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${(STATUS[s.status]||STATUS.open).c}`}>{(STATUS[s.status]||STATUS.open).l}</span></td>
+              <td className="px-2 py-3"><span className="text-blue-400 text-sm">←</span></td>
+            </tr>
+          })}
+        </tbody>
+      </table>
+    </div>}
   </div>
 }
 
@@ -1258,40 +1526,104 @@ function DashboardTab({showToast,setTab,openView}) {
     <div className="grid grid-cols-2 gap-5">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 font-bold text-sm text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>💼 أرصدة الحسابات</div>
-        <div className="divide-y divide-slate-100">
-          {accounts.length===0?<div className="py-8 text-center text-slate-400 text-sm">لا توجد حسابات — <button onClick={()=>openView('new-bank-account')} className="text-blue-500 underline">أضف حساباً</button></div>:
-          accounts.map(a=>(
-            <div key={a.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{a.account_type==='bank'?'🏦':'💵'}</span>
-                <div>
-                  <div className="text-sm font-semibold">{a.account_name}</div>
-                  <div className="text-xs text-blue-600 font-mono">{a.gl_account_code} · {a.currency_code}</div>
+        {accounts.length===0
+          ?<div className="py-8 text-center text-slate-400 text-sm">لا توجد حسابات — <button onClick={()=>openView('new-bank-account')} className="text-blue-500 underline">أضف حساباً</button></div>
+          :<>
+            <div className="p-3">
+              <ResponsiveContainer width="100%" height={130}>
+                <BarChart data={accounts.map(a=>({name:a.account_name.slice(0,12),balance:parseFloat(a.current_balance||0),type:a.account_type}))}
+                          margin={{top:5,right:5,left:-20,bottom:0}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                  <XAxis dataKey="name" tick={{fontSize:9}}/>
+                  <YAxis tick={{fontSize:9}}/>
+                  <Tooltip formatter={(v)=>[fmt(v,2)+' ر.س','الرصيد']} contentStyle={{fontSize:11}}/>
+                  <Bar dataKey="balance" radius={[4,4,0,0]}
+                    fill="#1d4ed8"
+                    label={false}/>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {accounts.map(a=>(
+                <div key={a.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{a.account_type==='bank'?'🏦':'💵'}</span>
+                    <div>
+                      <div className="text-sm font-semibold">{a.account_name}</div>
+                      <div className="text-xs text-blue-600 font-mono">{a.currency_code}</div>
+                    </div>
+                  </div>
+                  <div className="text-left">
+                    <div className={`font-mono font-bold text-sm ${parseFloat(a.current_balance)<0?'text-red-600':parseFloat(a.current_balance)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0?'text-amber-600':'text-emerald-700'}`}>{fmt(a.current_balance,2)}</div>
+                    {parseFloat(a.current_balance||0)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0&&<div className="text-[10px] text-amber-500">⚠️ رصيد منخفض</div>}
+                  </div>
                 </div>
-              </div>
-              <div className={`font-mono font-bold ${parseFloat(a.current_balance)<0?'text-red-600':'text-emerald-700'}`}>{fmt(a.current_balance,3)}</div>
+              ))}
+            </div>
+          </>}
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 font-bold text-sm text-white flex items-center justify-between" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+          <span>📈 التدفقات النقدية — آخر 30 يوم</span>
+          <div className="flex gap-3 text-xs font-normal opacity-80">
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-emerald-400 inline-block"/>قبض</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-400 inline-block"/>صرف</span>
+          </div>
+        </div>
+        <div className="p-3">
+          {cash_flow_chart.length===0
+            ?<div className="text-center py-8 text-slate-400 text-sm">لا توجد حركات مرحّلة</div>
+            :<ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={cash_flow_chart} margin={{top:5,right:5,left:-20,bottom:0}}>
+                <defs>
+                  <linearGradient id="gRec" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="gPay" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                <XAxis dataKey="date" tick={{fontSize:9}} tickFormatter={v=>v?.slice(5)||''}/>
+                <YAxis tick={{fontSize:9}}/>
+                <Tooltip formatter={(v,n)=>[fmt(v,0)+' ر.س', n==='receipts'?'قبض':'صرف']}
+                         labelFormatter={l=>`تاريخ: ${l}`} contentStyle={{fontSize:11,direction:'rtl'}}/>
+                <Area type="monotone" dataKey="receipts" stroke="#10b981" fill="url(#gRec)" strokeWidth={2}/>
+                <Area type="monotone" dataKey="payments" stroke="#ef4444" fill="url(#gPay)" strokeWidth={2}/>
+              </AreaChart>
+            </ResponsiveContainer>}
+        </div>
+      </div>
+    </div>
+
+    {/* التنبيهات والمستندات المعلقة */}
+    <div className="grid grid-cols-2 gap-5">
+      {alerts.length>0&&<div className="bg-amber-50 rounded-2xl border-2 border-amber-200 p-4">
+        <div className="font-bold text-amber-800 text-sm mb-3">⚠️ تنبيهات الرصيد المنخفض</div>
+        <div className="space-y-2">
+          {alerts.map(a=>(
+            <div key={a.id} className="flex justify-between items-center bg-white rounded-xl px-3 py-2 border border-amber-100">
+              <div className="text-sm font-medium text-slate-700">{a.account_name}</div>
+              <div className="font-mono font-bold text-amber-700 text-sm">{fmt(a.current_balance,2)}</div>
             </div>
           ))}
         </div>
-      </div>
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 font-bold text-sm text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>📈 التدفقات النقدية</div>
-        <div className="p-4 space-y-2">
-          {cash_flow_chart.length===0?<div className="text-center py-6 text-slate-400 text-sm">لا توجد حركات</div>:
-          cash_flow_chart.slice(-10).map((d,i)=>{
-            const max=Math.max(...cash_flow_chart.map(x=>Math.max(x.receipts||0,x.payments||0)),1)
-            return <div key={i} className="text-xs">
-              <div className="flex justify-between text-slate-400 mb-0.5">
-                <span>{d.date}</span><span className="text-emerald-600">+{fmt(d.receipts,0)}</span><span className="text-red-500">-{fmt(d.payments,0)}</span>
-              </div>
-              <div className="flex gap-0.5 h-2.5">
-                <div className="bg-emerald-400 rounded" style={{width:`${(d.receipts||0)/max*100}%`}}/>
-                <div className="bg-red-400 rounded" style={{width:`${(d.payments||0)/max*100}%`}}/>
-              </div>
-            </div>
-          })}
+      </div>}
+      {(kpis.pending_vouchers>0||kpis.pending_bank_tx>0)&&<div className="bg-blue-50 rounded-2xl border-2 border-blue-200 p-4">
+        <div className="font-bold text-blue-800 text-sm mb-3">⏳ مستندات بانتظار الترحيل</div>
+        <div className="space-y-2">
+          {kpis.pending_vouchers>0&&<div className="flex justify-between items-center bg-white rounded-xl px-3 py-2 border border-blue-100">
+            <div className="text-sm text-slate-700">سندات نقدية</div>
+            <span className="font-bold text-blue-700">{kpis.pending_vouchers} سند</span>
+          </div>}
+          {kpis.pending_bank_tx>0&&<div className="flex justify-between items-center bg-white rounded-xl px-3 py-2 border border-blue-100">
+            <div className="text-sm text-slate-700">حركات بنكية</div>
+            <span className="font-bold text-blue-700">{kpis.pending_bank_tx} حركة</span>
+          </div>}
         </div>
-      </div>
+      </div>}
     </div>
   </div>
 }
