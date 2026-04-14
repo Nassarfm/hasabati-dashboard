@@ -752,13 +752,266 @@ export default function TreasuryPage() {
   </div>
 }
 
+// ══ BANK FEES TAB ════════════════════════════════════════
+const FEE_TYPES = {
+  account_fee:   '🏦 رسوم حساب',
+  transfer_fee:  '💸 عمولة تحويل',
+  card_fee:      '💳 رسوم بطاقة',
+  penalty:       '⚠️ غرامة',
+  other:         '📌 أخرى',
+}
+
+function BankFeesTab({showToast}) {
+  const [items,setItems]  = useState([])
+  const [accounts,setAccounts] = useState([])
+  const [loading,setLoading] = useState(true)
+  const [filters,setFilters] = useState({bank_account_id:'',date_from:'',date_to:''})
+  const sf=(k,v)=>setFilters(p=>({...p,[k]:v}))
+  const [showAdd,setShowAdd] = useState(false)
+  const [form,setForm] = useState({bank_account_id:'',fee_date:today(),fee_type:'account_fee',amount:'',description:''})
+  const sf2=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const [saving,setSaving] = useState(false)
+
+  const load = useCallback(()=>{
+    setLoading(true)
+    const p={}
+    if(filters.bank_account_id) p.bank_account_id=filters.bank_account_id
+    if(filters.date_from) p.date_from=filters.date_from
+    if(filters.date_to)   p.date_to=filters.date_to
+    api.treasury.listBankFees(p)
+      .then(d=>{setItems(d?.data?.items||[]);})
+      .catch(e=>showToast(e.message,'error'))
+      .finally(()=>setLoading(false))
+  },[filters])
+
+  useEffect(()=>{
+    api.treasury.listBankAccounts().then(d=>setAccounts(d?.data||[]))
+  },[])
+  useEffect(()=>{load()},[load])
+
+  const addFee=async()=>{
+    if(!form.bank_account_id){showToast('اختر الحساب','error');return}
+    if(!form.amount||parseFloat(form.amount)<=0){showToast('أدخل المبلغ','error');return}
+    setSaving(true)
+    try{
+      await api.treasury.createBankFee(form)
+      showToast('تم تسجيل الرسوم ✅')
+      setShowAdd(false)
+      setForm({bank_account_id:'',fee_date:today(),fee_type:'account_fee',amount:'',description:''})
+      load()
+    }catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+  }
+
+  const deleteFee=async(id)=>{
+    if(!confirm('تأكيد حذف هذه الرسوم؟')) return
+    try{await api.treasury.deleteBankFee(id);showToast('تم الحذف');load()}
+    catch(e){showToast(e.message,'error')}
+  }
+
+  const total=items.reduce((s,i)=>s+parseFloat(i.amount||0),0)
+  const thisMonth=items.filter(i=>i.fee_date&&i.fee_date.slice(0,7)===new Date().toISOString().slice(0,7))
+  const totalMonth=thisMonth.reduce((s,i)=>s+parseFloat(i.amount||0),0)
+
+  return <div className="space-y-4">
+    <KPIBar cards={[
+      {icon:'💸', label:'إجمالي الرسوم', value:`${fmt(total,2)} ر.س`, iconBg:'bg-red-100', color:'text-red-700', bg:'bg-red-50 border-red-200'},
+      {icon:'📅', label:'رسوم هذا الشهر', value:`${fmt(totalMonth,2)} ر.س`, iconBg:'bg-amber-100', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
+      {icon:'🔢', label:'عدد العمليات', value:items.length, iconBg:'bg-slate-100', color:'text-slate-800'},
+    ]}/>
+
+    {/* فلاتر + إضافة */}
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">الحساب</label>
+        <select className="border border-slate-200 rounded-xl px-3 py-2 text-sm" value={filters.bank_account_id} onChange={e=>sf('bank_account_id',e.target.value)}>
+          <option value="">كل الحسابات</option>
+          {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">من تاريخ</label>
+        <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-sm" value={filters.date_from} onChange={e=>sf('date_from',e.target.value)}/>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">إلى تاريخ</label>
+        <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-sm" value={filters.date_to} onChange={e=>sf('date_to',e.target.value)}/>
+      </div>
+      <button onClick={load} className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200">🔄 تحديث</button>
+      <div className="flex-1"/>
+      <button onClick={()=>setShowAdd(v=>!v)} className="px-5 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700">+ تسجيل رسوم</button>
+    </div>
+
+    {/* نموذج الإضافة */}
+    {showAdd&&<div className="bg-white rounded-2xl border-2 border-red-200 p-5 space-y-4">
+      <h3 className="font-bold text-slate-700 text-sm">تسجيل رسوم / عمولة بنكية</h3>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">الحساب البنكي <span className="text-red-500">*</span></label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.bank_account_id} onChange={e=>sf2('bank_account_id',e.target.value)}>
+            <option value="">— اختر —</option>
+            {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">نوع الرسوم</label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.fee_type} onChange={e=>sf2('fee_type',e.target.value)}>
+            {Object.entries(FEE_TYPES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">التاريخ</label>
+          <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.fee_date} onChange={e=>sf2('fee_date',e.target.value)}/>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">المبلغ <span className="text-red-500">*</span></label>
+          <input type="number" step="0.001" min="0" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono" value={form.amount} onChange={e=>sf2('amount',e.target.value)} placeholder="0.000"/>
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs text-slate-500 block mb-1">البيان</label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.description} onChange={e=>sf2('description',e.target.value)} placeholder="وصف مختصر للرسوم..."/>
+        </div>
+      </div>
+      <div className="flex gap-3">
+        <button onClick={()=>setShowAdd(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
+        <button onClick={addFee} disabled={saving} className="px-6 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50">
+          {saving?'جارٍ الحفظ...':'💾 حفظ'}
+        </button>
+      </div>
+    </div>}
+
+    {/* الجدول */}
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      {loading?<div className="py-10 text-center text-slate-400">...</div>:
+      items.length===0?<div className="py-10 text-center text-slate-400 text-sm">لا توجد رسوم مسجّلة</div>:
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 border-b border-slate-200">
+          <tr className="text-right">
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">التاريخ</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الحساب</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">النوع</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">البيان</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold text-left">المبلغ</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">بواسطة</th>
+            <th className="px-2 py-3"/>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {items.map(i=>(
+            <tr key={i.id} className="hover:bg-slate-50">
+              <td className="px-4 py-3 font-mono text-slate-500 text-xs">{fmtDate(i.fee_date)}</td>
+              <td className="px-4 py-3 text-slate-700 font-medium">{i.bank_account_name||'—'}</td>
+              <td className="px-4 py-3 text-slate-600">{FEE_TYPES[i.fee_type]||i.fee_type}</td>
+              <td className="px-4 py-3 text-slate-400 text-xs">{i.description||'—'}</td>
+              <td className="px-4 py-3 font-mono font-bold text-red-600 text-left">{fmt(i.amount,3)}</td>
+              <td className="px-4 py-3 text-slate-400 text-xs">{i.created_by||'—'}</td>
+              <td className="px-2 py-3">
+                <button onClick={()=>deleteFee(i.id)} className="text-xs text-red-400 hover:text-red-600 px-2 py-1 hover:bg-red-50 rounded-lg">🗑️</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-slate-50 border-t-2 border-slate-200">
+          <tr>
+            <td colSpan={4} className="px-4 py-3 text-xs font-bold text-slate-500">الإجمالي</td>
+            <td className="px-4 py-3 font-mono font-bold text-red-700 text-left">{fmt(total,3)} ر.س</td>
+            <td colSpan={2}/>
+          </tr>
+        </tfoot>
+      </table>}
+    </div>
+  </div>
+}
+
+// ══ ACTIVITY LOG TAB ══════════════════════════════════════
+function ActivityLogTab({showToast}) {
+  const [items,setItems] = useState([])
+  const [loading,setLoading] = useState(true)
+
+  useEffect(()=>{
+    api.treasury.activityLog()
+      .then(d=>setItems(d?.data?.items||[]))
+      .catch(e=>showToast(e.message,'error'))
+      .finally(()=>setLoading(false))
+  },[])
+
+  const SOURCE_LABEL={'cash':'💵 نقدي','bank':'🏦 بنكي','transfer':'🔄 تحويل'}
+  const TX_COLOR={RV:'bg-emerald-100 text-emerald-700',PV:'bg-red-100 text-red-700',BR:'bg-emerald-100 text-emerald-700',BP:'bg-red-100 text-red-700',BT:'bg-blue-100 text-blue-700',IT:'bg-purple-100 text-purple-700'}
+
+  const posted=items.filter(i=>i.status==='posted').length
+  const drafts=items.filter(i=>i.status==='draft').length
+
+  return <div className="space-y-4">
+    <KPIBar cards={[
+      {icon:'📋', label:'إجمالي العمليات', value:items.length, iconBg:'bg-slate-100', color:'text-slate-800'},
+      {icon:'✅', label:'مرحّلة', value:posted, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+      {icon:'📝', label:'مسودة', value:drafts, iconBg:'bg-amber-100', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
+    ]}/>
+
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      {loading?<div className="py-10 text-center text-slate-400">...</div>:
+      items.length===0?<div className="py-10 text-center text-slate-400 text-sm">لا توجد سجلات</div>:
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 border-b border-slate-200">
+          <tr className="text-right">
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">التاريخ والوقت</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">المصدر</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الرقم</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">النوع</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الحساب</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold text-left">المبلغ</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الحالة</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">بواسطة</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {items.map((i,idx)=>(
+            <tr key={idx} className="hover:bg-slate-50">
+              <td className="px-4 py-3 font-mono text-slate-400 text-xs whitespace-nowrap">
+                <div>{i.created_at?new Date(i.created_at).toLocaleDateString('ar-SA'):'—'}</div>
+                <div className="text-slate-300">{i.created_at?new Date(i.created_at).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'}):'—'}</div>
+              </td>
+              <td className="px-4 py-3 text-xs text-slate-500">{SOURCE_LABEL[i.source]||i.source}</td>
+              <td className="px-4 py-3 font-mono text-slate-700 text-xs">{i.serial||'—'}</td>
+              <td className="px-4 py-3">
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${TX_COLOR[i.tx_type]||'bg-slate-100 text-slate-600'}`}>{i.tx_type}</span>
+              </td>
+              <td className="px-4 py-3 text-slate-500 text-xs">{i.bank_account_name||'—'}</td>
+              <td className="px-4 py-3 font-mono font-semibold text-slate-800 text-left">{fmt(i.amount,2)}</td>
+              <td className="px-4 py-3">
+                {i.status==='posted'
+                  ?<span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">✅ مرحّل</span>
+                  :<span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">📝 مسودة</span>}
+              </td>
+              <td className="px-4 py-3 text-slate-400 text-xs">{i.created_by||'—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>}
+    </div>
+  </div>
+}
+
 // ══ SETTINGS SECTION ══════════════════════════════════════
 function SettingsSection({showToast,openView}) {
+  const [sub,setSub] = useState('accounts')
+  const SUBS = [
+    {id:'accounts', icon:'🏦', label:'الحسابات', desc:'بنوك وصناديق'},
+    {id:'fees',     icon:'💸', label:'الرسوم البنكية', desc:'عمولات وخصومات'},
+  ]
   return <div className="space-y-4">
-    <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3 text-sm text-blue-700 font-medium">
-      ⚙️ إعدادات الخزينة — الحسابات البنكية والصناديق
+    <div className="flex gap-2 bg-slate-50 rounded-2xl p-1.5 border border-slate-200">
+      {SUBS.map(s=>(
+        <button key={s.id} onClick={()=>setSub(s.id)}
+          className={`flex-1 flex flex-col items-center py-2.5 px-2 rounded-xl text-xs font-semibold transition-all
+            ${sub===s.id?'bg-white text-blue-700 shadow-sm border border-blue-100':'text-slate-500 hover:text-slate-700'}`}>
+          <span className="text-lg mb-0.5">{s.icon}</span>
+          <span>{s.label}</span>
+          <span className={`text-[10px] font-normal ${sub===s.id?'text-blue-400':'text-slate-400'}`}>{s.desc}</span>
+        </button>
+      ))}
     </div>
-    <BankAccountsTab showToast={showToast} openView={openView}/>
+    {sub==='accounts' && <BankAccountsTab showToast={showToast} openView={openView}/>}
+    {sub==='fees'     && <BankFeesTab showToast={showToast}/>}
   </div>
 }
 
@@ -770,6 +1023,7 @@ function OperationsSection({showToast,openView}) {
     {id:'bank',      icon:'🏛️', label:'بنكي',              desc:'الدفعات والقبض البنكي'},
     {id:'transfers', icon:'🔄', label:'تحويلات داخلية',    desc:'بين الحسابات'},
     {id:'checks',    icon:'📝', label:'الشيكات',           desc:'إدارة الشيكات'},
+    {id:'log',       icon:'📋', label:'سجل النشاط',        desc:'جميع العمليات'},
   ]
   return <div className="space-y-4">
     {/* Sub Navigation */}
@@ -789,6 +1043,7 @@ function OperationsSection({showToast,openView}) {
     {sub==='bank'      && <BankTxListTab showToast={showToast} openView={openView}/>}
     {sub==='transfers' && <TransfersListTab showToast={showToast} openView={openView}/>}
     {sub==='checks'    && <ChecksTab showToast={showToast}/>}
+    {sub==='log'       && <ActivityLogTab showToast={showToast}/>}
   </div>
 }
 

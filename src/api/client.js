@@ -293,6 +293,14 @@ export const api = {
     createCount: (fundId, actual, notes='') =>
       post(`/treasury/petty-cash/counts?fund_id=${fundId}&actual_balance=${actual}&notes=${encodeURIComponent(notes)}`, {}),
 
+    // رسوم بنكية
+    listBankFees:   (p={}) => get('/treasury/bank-fees', p),
+    createBankFee:  (b)    => post('/treasury/bank-fees', b),
+    deleteBankFee:  (id)   => del(`/treasury/bank-fees/${id}`),
+
+    // سجل النشاط
+    activityLog: (p={}) => get('/treasury/activity-log', p),
+
     // التقارير
     cashPositionReport: () => get('/treasury/reports/cash-position'),
     outstandingChecks:  () => get('/treasury/reports/outstanding-checks'),
