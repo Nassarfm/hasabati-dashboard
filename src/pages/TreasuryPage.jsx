@@ -879,7 +879,29 @@ function ReconciliationSection({showToast}) {
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
             <span className="font-bold text-sm text-slate-700">📄 أسطر كشف البنك</span>
-            <button onClick={()=>setShowAddLine(v=>!v)} className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50">+ إضافة سطر</button>
+            <div className="flex gap-1.5">
+              <label className="text-xs text-emerald-600 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-50 cursor-pointer">
+                📂 CSV
+                <input type="file" accept=".csv" className="hidden" onChange={async(e)=>{
+                  const file=e.target.files?.[0]; if(!file) return
+                  const text=await file.text()
+                  const lines_=text.trim().split('\n')
+                  const parsed=lines_.slice(1).map(l=>{
+                    const cols=l.split(',').map(c=>c.trim().replace(/^"|"$/g,''))
+                    return {date:cols[0]||'',description:cols[1]||'',reference:cols[2]||'',debit:parseFloat(cols[3]||0)||0,credit:parseFloat(cols[4]||0)||0,running_balance:cols[5]?parseFloat(cols[5]):undefined}
+                  }).filter(r=>r.date)
+                  if(!parsed.length){alert('لا توجد بيانات صالحة في الملف');return}
+                  if(!confirm(`استيراد ${parsed.length} سطر من الكشف؟`)) return
+                  try{
+                    await api.treasury.importStatementLines(selected.id, parsed)
+                    alert(`✅ تم استيراد ${parsed.length} سطر`)
+                    openSession(selected)
+                  }catch(err){alert('خطأ: '+err.message)}
+                  e.target.value=''
+                }}/>
+              </label>
+              <button onClick={()=>setShowAddLine(v=>!v)} className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50">+ إضافة</button>
+            </div>
           </div>
           {showAddLine&&<div className="p-3 bg-blue-50 border-b border-blue-100 space-y-2">
             <div className="grid grid-cols-2 gap-2">
@@ -1270,6 +1292,211 @@ function ActivityLogTab({showToast}) {
   </div>
 }
 
+// ══ RECURRING TRANSACTIONS ════════════════════════════════
+const FREQ_LABELS = {weekly:'أسبوعي',monthly:'شهري',quarterly:'ربعي',yearly:'سنوي'}
+const TX_TYPE_LABELS = {RV:'💰 قبض نقدي',PV:'💸 صرف نقدي',BR:'🏦 قبض بنكي',BP:'💸 دفعة بنكية'}
+
+function RecurringTab({showToast,openView}) {
+  const [items,setItems]   = useState([])
+  const [accounts,setAccounts] = useState([])
+  const [loading,setLoading] = useState(true)
+  const [showForm,setShowForm] = useState(false)
+  const [editItem,setEditItem] = useState(null)
+  const [executing,setExecuting] = useState(null)
+
+  const emptyForm = {name:'',source:'bank',tx_type:'BP',bank_account_id:'',counterpart_account:'',amount:'',currency_code:'SAR',description:'',frequency:'monthly',next_due_date:today(),is_active:true}
+  const [form,setForm] = useState(emptyForm)
+  const sf=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const [saving,setSaving] = useState(false)
+
+  const load = useCallback(()=>{
+    setLoading(true)
+    Promise.all([api.treasury.listRecurring(), api.treasury.listBankAccounts()])
+      .then(([r,a])=>{ setItems(r?.data||[]); setAccounts(a?.data||[]) })
+      .catch(e=>showToast(e.message,'error'))
+      .finally(()=>setLoading(false))
+  },[])
+  useEffect(()=>{load()},[load])
+
+  const openForm = (item=null) => {
+    setEditItem(item)
+    setForm(item ? {...emptyForm,...item} : emptyForm)
+    setShowForm(true)
+  }
+
+  const save = async()=>{
+    if(!form.name){showToast('اسم القالب مطلوب','error');return}
+    if(!form.amount||parseFloat(form.amount)<=0){showToast('المبلغ مطلوب','error');return}
+    setSaving(true)
+    try{
+      if(editItem) await api.treasury.updateRecurring(editItem.id, form)
+      else         await api.treasury.createRecurring(form)
+      showToast(editItem?'تم التعديل ✅':'تم الإنشاء ✅')
+      setShowForm(false)
+      load()
+    }catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+  }
+
+  const execute = async(item)=>{
+    if(!confirm(`تنفيذ "${item.name}" الآن؟ سيُنشأ سند مسودة بمبلغ ${fmt(item.amount,2)} ر.س`)) return
+    setExecuting(item.id)
+    try{
+      const r = await api.treasury.executeRecurring(item.id)
+      showToast(`✅ تم إنشاء ${r?.data?.serial||'السند'}`)
+      load()
+    }catch(e){showToast(e.message,'error')}finally{setExecuting(null)}
+  }
+
+  const remove = async(id)=>{
+    if(!confirm('حذف هذا القالب؟')) return
+    try{ await api.treasury.deleteRecurring(id); showToast('تم الحذف'); load() }
+    catch(e){showToast(e.message,'error')}
+  }
+
+  const today_date = new Date()
+  const dueSoon = items.filter(i=>i.next_due_date&&new Date(i.next_due_date)<=new Date(today_date.getTime()+7*24*60*60*1000)&&i.is_active)
+  const totalMonthly = items.filter(i=>i.is_active&&i.frequency==='monthly').reduce((s,i)=>s+parseFloat(i.amount||0),0)
+
+  return <div className="space-y-4">
+    <KPIBar cards={[
+      {icon:'🔄', label:'قوالب نشطة', value:items.filter(i=>i.is_active).length, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
+      {icon:'⏰', label:'مستحقة خلال 7 أيام', value:dueSoon.length, iconBg:'bg-amber-100', color:'text-amber-700', bg:dueSoon.length>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
+      {icon:'📅', label:'مدفوعات شهرية', value:`${fmt(totalMonthly,2)} ر.س`, sub:'القوالب الشهرية فقط', iconBg:'bg-red-100', color:'text-red-600'},
+    ]}/>
+
+    {dueSoon.length>0&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+      <div className="font-bold text-amber-800 text-sm mb-3">⏰ مستحقة قريباً — خلال 7 أيام</div>
+      <div className="grid grid-cols-2 gap-2">
+        {dueSoon.map(i=>(
+          <div key={i.id} className="bg-white rounded-xl border border-amber-200 px-4 py-3 flex justify-between items-center">
+            <div>
+              <div className="font-semibold text-slate-800 text-sm">{i.name}</div>
+              <div className="text-xs text-slate-400">{TX_TYPE_LABELS[i.tx_type]||i.tx_type} · {fmtDate(i.next_due_date)}</div>
+            </div>
+            <div className="text-left flex flex-col items-end gap-1">
+              <div className="font-mono font-bold text-slate-800">{fmt(i.amount,2)}</div>
+              <button onClick={()=>execute(i)} disabled={executing===i.id}
+                className="text-xs bg-blue-700 text-white px-3 py-1 rounded-lg font-semibold hover:bg-blue-800 disabled:opacity-50">
+                {executing===i.id?'⏳':'▶ تنفيذ'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>}
+
+    <div className="flex justify-end">
+      <button onClick={()=>openForm()} className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">+ قالب متكرر جديد</button>
+    </div>
+
+    {/* نموذج الإضافة/التعديل */}
+    {showForm&&<div className="bg-white rounded-2xl border-2 border-blue-200 p-5 space-y-4">
+      <h3 className="font-bold text-slate-700 text-sm">{editItem?'تعديل قالب':'إنشاء قالب متكرر'}</h3>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="col-span-2">
+          <label className="text-xs text-slate-500 block mb-1">اسم القالب <span className="text-red-500">*</span></label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.name} onChange={e=>sf('name',e.target.value)} placeholder="مثال: إيجار المكتب الشهري"/>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">المصدر</label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.source} onChange={e=>sf('source',e.target.value)}>
+            <option value="bank">🏦 بنكي</option>
+            <option value="cash">💵 نقدي</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">نوع المعاملة</label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.tx_type} onChange={e=>sf('tx_type',e.target.value)}>
+            {form.source==='bank'
+              ?<><option value="BP">💸 دفعة بنكية</option><option value="BR">🏦 قبض بنكي</option></>
+              :<><option value="PV">💸 صرف نقدي</option><option value="RV">💰 قبض نقدي</option></>}
+          </select>
+        </div>
+        {form.source==='bank'&&<div>
+          <label className="text-xs text-slate-500 block mb-1">الحساب البنكي</label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.bank_account_id} onChange={e=>sf('bank_account_id',e.target.value)}>
+            <option value="">— اختر —</option>
+            {accounts.filter(a=>a.account_type==='bank').map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}
+          </select>
+        </div>}
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">الحساب المقابل (COA)</label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono" value={form.counterpart_account} onChange={e=>sf('counterpart_account',e.target.value)} placeholder="مثال: 5110"/>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">المبلغ <span className="text-red-500">*</span></label>
+          <input type="number" step="0.001" min="0" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono" value={form.amount} onChange={e=>sf('amount',e.target.value)}/>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">التكرار</label>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.frequency} onChange={e=>sf('frequency',e.target.value)}>
+            <option value="weekly">أسبوعي</option>
+            <option value="monthly">شهري</option>
+            <option value="quarterly">ربع سنوي</option>
+            <option value="yearly">سنوي</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">تاريخ الاستحقاق القادم</label>
+          <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.next_due_date} onChange={e=>sf('next_due_date',e.target.value)}/>
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs text-slate-500 block mb-1">البيان</label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm" value={form.description} onChange={e=>sf('description',e.target.value)} placeholder="وصف المعاملة..."/>
+        </div>
+      </div>
+      <div className="flex gap-3">
+        <button onClick={()=>setShowForm(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
+        <button onClick={save} disabled={saving} className="px-6 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">{saving?'جارٍ الحفظ...':'💾 حفظ'}</button>
+      </div>
+    </div>}
+
+    {/* الجدول */}
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      {loading?<div className="py-10 text-center text-slate-400">...</div>:
+      items.length===0?<div className="py-10 text-center text-slate-400 text-sm">لا توجد قوالب متكررة — أضف أول قالب</div>:
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 border-b border-slate-200">
+          <tr className="text-right">
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الاسم</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">النوع</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الحساب</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold text-left">المبلغ</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">التكرار</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الاستحقاق القادم</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">الحالة</th>
+            <th className="px-4 py-3 text-xs text-slate-400 font-semibold">إجراء</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {items.map(i=>{
+            const isDue = i.next_due_date&&new Date(i.next_due_date)<=today_date
+            return <tr key={i.id} className={`hover:bg-slate-50 ${isDue?'bg-amber-50/40':''}`}>
+              <td className="px-4 py-3 font-semibold text-slate-800">{i.name}</td>
+              <td className="px-4 py-3"><span className={`text-xs font-bold px-2 py-0.5 rounded-full ${i.tx_type==='BP'||i.tx_type==='PV'?'bg-red-100 text-red-600':'bg-emerald-100 text-emerald-700'}`}>{i.tx_type}</span></td>
+              <td className="px-4 py-3 text-slate-500 text-xs">{i.bank_account_name||i.counterpart_account||'—'}</td>
+              <td className="px-4 py-3 font-mono font-bold text-slate-800 text-left">{fmt(i.amount,2)}</td>
+              <td className="px-4 py-3 text-slate-500 text-xs">{FREQ_LABELS[i.frequency]||i.frequency}</td>
+              <td className={`px-4 py-3 text-xs font-mono ${isDue?'text-red-600 font-bold':''}`}>{fmtDate(i.next_due_date)}{isDue?' ⚠️':''}</td>
+              <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${i.is_active?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-500'}`}>{i.is_active?'نشط':'موقوف'}</span></td>
+              <td className="px-4 py-3">
+                <div className="flex gap-1">
+                  <button onClick={()=>execute(i)} disabled={executing===i.id||!i.is_active}
+                    className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50 disabled:opacity-40">
+                    {executing===i.id?'⏳':'▶'}
+                  </button>
+                  <button onClick={()=>openForm(i)} className="text-xs text-slate-500 border border-slate-200 px-2 py-1 rounded-lg hover:bg-slate-50">✏️</button>
+                  <button onClick={()=>remove(i.id)} className="text-xs text-red-400 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50">🗑️</button>
+                </div>
+              </td>
+            </tr>
+          })}
+        </tbody>
+      </table>}
+    </div>
+  </div>
+}
+
 // ══ SETTINGS SECTION ══════════════════════════════════════
 function SettingsSection({showToast,openView}) {
   const [sub,setSub] = useState('accounts')
@@ -1300,8 +1527,9 @@ function OperationsSection({showToast,openView}) {
   const SUBS = [
     {id:'cash',      icon:'💵', label:'نقدي',              desc:'سندات القبض والصرف'},
     {id:'bank',      icon:'🏛️', label:'بنكي',              desc:'الدفعات والقبض البنكي'},
-    {id:'transfers', icon:'🔄', label:'تحويلات داخلية',    desc:'بين الحسابات'},
+    {id:'transfers', icon:'🔄', label:'تحويلات',           desc:'بين الحسابات'},
     {id:'checks',    icon:'📝', label:'الشيكات',           desc:'إدارة الشيكات'},
+    {id:'recurring', icon:'🔁', label:'متكررة',            desc:'دفعات دورية'},
     {id:'log',       icon:'📋', label:'سجل النشاط',        desc:'جميع العمليات'},
   ]
   return <div className="space-y-4">
@@ -1322,6 +1550,7 @@ function OperationsSection({showToast,openView}) {
     {sub==='bank'      && <BankTxListTab showToast={showToast} openView={openView}/>}
     {sub==='transfers' && <TransfersListTab showToast={showToast} openView={openView}/>}
     {sub==='checks'    && <ChecksTab showToast={showToast}/>}
+    {sub==='recurring' && <RecurringTab showToast={showToast} openView={openView}/>}
     {sub==='log'       && <ActivityLogTab showToast={showToast}/>}
   </div>
 }
@@ -2956,7 +3185,18 @@ function PettyCashTab({showToast}) {
   const doPost=async(id)=>{try{await api.treasury.postPettyCashExpense(id);load();showToast('تم الترحيل ✅')}catch(e){showToast(e.message,'error')}}
   const doReplenish=async(fundId)=>{if(!confirm('إنشاء طلب تعبئة؟'))return;try{await api.treasury.createReplenishment(fundId);load();showToast('تم إنشاء طلب التعبئة ✅')}catch(e){showToast(e.message,'error')}}
 
+  const totalFundBalance = funds.reduce((s,f)=>s+parseFloat(f.current_balance||0),0)
+  const needReplenish    = funds.filter(f=>f.needs_replenishment).length
+  const draftExpenses    = expenses.filter(e=>e.status==='draft').length
+  const totalExpenses    = expenses.reduce((s,e)=>s+parseFloat(e.total_amount||0),0)
+
   return <div className="space-y-4">
+    <KPIBar cards={[
+      {icon:'🗄️', label:'إجمالي صناديق العهدة', value:funds.length, sub:`رصيد: ${fmt(totalFundBalance,2)} ر.س`, iconBg:'bg-purple-100', color:'text-purple-700', bg:'bg-purple-50 border-purple-200'},
+      {icon:'⚠️', label:'تحتاج تعبئة', value:needReplenish, iconBg:'bg-amber-100', color:'text-amber-700', bg:needReplenish>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
+      {icon:'💸', label:'مصاريف مسودة', value:draftExpenses, sub:'في انتظار الترحيل', iconBg:'bg-red-100', color:'text-red-600'},
+      {icon:'📊', label:'إجمالي المصاريف', value:`${fmt(totalExpenses,2)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-800'},
+    ]}/>
     <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
       {[{id:'funds',l:'🗄️ الصناديق'},{id:'expenses',l:'💸 المصاريف النثرية'},{id:'replenishments',l:'🔄 إعادة التعبئة'}].map(t=>(
         <button key={t.id} onClick={()=>setSubTab(t.id)} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${subTab===t.id?'bg-white text-blue-700 shadow-sm':'text-slate-500'}`}>{t.l}</button>
@@ -2988,7 +3228,12 @@ function PettyCashTab({showToast}) {
     </div>}
 
     {subTab==='expenses'&&<div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
+        <button onClick={()=>exportXLS(
+          expenses.map(e=>[e.serial,fmtDate(e.expense_date),e.fund_name||'',parseFloat(e.total_amount||0),e.description||'',e.status==='posted'?'مُرحَّل':'مسودة',e.je_serial||'']),
+          ['الرقم','التاريخ','الصندوق','المبلغ','البيان','الحالة','رقم القيد'],
+          'مصاريف_العهدة'
+        )} className="px-4 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
         <button onClick={()=>setShowExpForm(true)} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700">💸 مصروف نثري جديد</button>
       </div>
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

@@ -295,6 +295,13 @@ export const api = {
     createCount: (fundId, actual, notes='') =>
       post(`/treasury/petty-cash/counts?fund_id=${fundId}&actual_balance=${actual}&notes=${encodeURIComponent(notes)}`, {}),
 
+    // معاملات متكررة
+    listRecurring:    (p={}) => get('/treasury/recurring-transactions', p),
+    createRecurring:  (b)    => post('/treasury/recurring-transactions', b),
+    updateRecurring:  (id,b) => put(`/treasury/recurring-transactions/${id}`, b),
+    deleteRecurring:  (id)   => del(`/treasury/recurring-transactions/${id}`),
+    executeRecurring: (id)   => post(`/treasury/recurring-transactions/${id}/execute`, {}),
+
     // رسوم بنكية
     listBankFees:   (p={}) => get('/treasury/bank-fees', p),
     createBankFee:  (b)    => post('/treasury/bank-fees', b),
