@@ -937,12 +937,16 @@ export default function TreasuryPage() {
 
 // ══ RECONCILIATION SECTION ════════════════════════════════
 function ReconciliationSection({showToast}) {
-  const [sessions,setSessions] = useState([])
-  const [accounts,setAccounts] = useState([])
-  const [loading,setLoading]   = useState(true)
-  const [selected,setSelected] = useState(null)      // جلسة مفتوحة
-  const [lines,setLines]       = useState([])        // أسطر كشف البنك
-  const [txns,setTxns]         = useState([])        // حركات النظام
+  const [sessions,setSessions]         = useState([])
+  const [accounts,setAccounts]         = useState([])
+  const [loading,setLoading]           = useState(true)
+  const [selected,setSelected]         = useState(null)
+  const [lines,setLines]               = useState([])
+  const [txns,setTxns]                 = useState([])        // bank transactions
+  const [arReceipts,setArReceipts]     = useState([])        // AR receipts
+  const [apPayments,setApPayments]     = useState([])        // AP payments
+  const [suggestions,setSuggestions]   = useState([])        // اقتراحات المطابقة التلقائية
+  const [autoMatching,setAutoMatching] = useState(false)
   const [loadingLines,setLoadingLines] = useState(false)
   const [showNewSession,setShowNewSession] = useState(false)
   const [newForm,setNewForm] = useState({bank_account_id:'',statement_date:today(),statement_balance:'',notes:''})
@@ -951,6 +955,7 @@ function ReconciliationSection({showToast}) {
   const [showAddLine,setShowAddLine] = useState(false)
   const [lineForm,setLineForm] = useState({date:today(),description:'',reference:'',debit:'',credit:''})
   const slf=(k,v)=>setLineForm(p=>({...p,[k]:v}))
+  const [sysTab,setSysTab] = useState('bank') // bank | ar | ap
 
   const loadSessions = useCallback(()=>{
     setLoading(true)
@@ -967,14 +972,19 @@ function ReconciliationSection({showToast}) {
 
   const openSession = async(sess)=>{
     setSelected(sess)
+    setSuggestions([])
     setLoadingLines(true)
     try{
-      const [linesRes, txRes] = await Promise.all([
+      const [linesRes, txRes, arRes, apRes] = await Promise.all([
         api.treasury.getSessionLines(sess.id),
-        api.treasury.listBankTransactions({bank_account_id:sess.bank_account_id, limit:200}),
+        api.treasury.listBankTransactions({bank_account_id:sess.bank_account_id, limit:300}),
+        api.ar?.listReceipts?.({bank_account_id:sess.bank_account_id, limit:300}).catch(()=>({data:{items:[]}})),
+        api.ap?.listPayments?.({bank_account_id:sess.bank_account_id, limit:300}).catch(()=>({data:{items:[]}})),
       ])
       setLines(linesRes?.data||[])
       setTxns(txRes?.data?.items||txRes?.data||[])
+      setArReceipts(arRes?.data?.items||arRes?.data||[])
+      setApPayments(apRes?.data?.items||apRes?.data||[])
     }catch(e){showToast(e.message,'error')}finally{setLoadingLines(false)}
   }
 
@@ -1012,11 +1022,28 @@ function ReconciliationSection({showToast}) {
     try{
       await api.treasury.matchReconciliation(selected.id, lineId, txId, txType)
       showToast('✅ تمت المطابقة')
+      // إزالة السطر من الاقتراحات إذا كان موجوداً
+      setSuggestions(prev=>prev.filter(s=>s.line_id!==lineId))
       openSession(selected)
     }catch(e){showToast(e.message,'error')}
   }
 
+  const runAutoMatch = async()=>{
+    setAutoMatching(true)
+    try{
+      const res = await api.treasury.autoMatch(selected.id)
+      const d   = res?.data || {}
+      showToast(res?.message || `✅ تمت المطابقة التلقائية`)
+      setSuggestions(d.suggestions||[])
+      openSession(selected)
+    }catch(e){showToast(e.message,'error')}finally{setAutoMatching(false)}
+  }
+
   const STATUS={open:{l:'مفتوحة',c:'bg-amber-100 text-amber-700'},closed:{l:'مغلقة',c:'bg-emerald-100 text-emerald-700'}}
+
+  // نقاط ثقة → لون
+  const scoreColor = s => s>=90?'bg-emerald-100 text-emerald-700':s>=70?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600'
+  const srcLabel   = t => t==='AR_RECEIPT'?'إيصال AR':t==='AP_PAYMENT'?'دفعة AP':t
 
   // ── عرض تفاصيل الجلسة ──
   if(selected) {
@@ -1026,30 +1053,96 @@ function ReconciliationSection({showToast}) {
     const bookBal   = parseFloat(selected.book_balance||0)
     const diff      = stmtBal - bookBal
 
+    // دالة مشتركة لإيجاد السطر المقابل لحركة ما
+    const findCandidateLine = (amount, direction) =>
+      lines.find(l=>l.match_status!=='matched'&&(
+        direction==='debit'
+          ? Math.abs(parseFloat(l.debit||0)-amount)<0.01
+          : Math.abs(parseFloat(l.credit||0)-amount)<0.01
+      ))
+
     return <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <button onClick={()=>setSelected(null)} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-sm">← الجلسات</button>
-        <div>
-          <h3 className="text-lg font-bold text-slate-800">🔗 جلسة تسوية: {selected.serial}</h3>
-          <p className="text-xs text-slate-400">{selected.bank_account_name} · {fmtDate(selected.statement_date)}</p>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <button onClick={()=>setSelected(null)} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-sm">← الجلسات</button>
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">🔗 جلسة تسوية: {selected.serial}</h3>
+            <p className="text-xs text-slate-400">{selected.bank_account_name} · {fmtDate(selected.statement_date)}</p>
+          </div>
         </div>
+        {/* زر المطابقة التلقائية */}
+        <button
+          onClick={runAutoMatch}
+          disabled={autoMatching||lines.filter(l=>l.match_status!=='matched').length===0}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition-all"
+          style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)'}}
+        >
+          {autoMatching
+            ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ المطابقة...</>
+            : <>✨ مطابقة تلقائية {unmatched>0&&`(${unmatched} سطر)`}</>}
+        </button>
       </div>
 
       <KPIBar cards={[
-        {icon:'📄', label:'رصيد الكشف', value:`${fmt(stmtBal,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
+        {icon:'📄', label:'رصيد الكشف',  value:`${fmt(stmtBal,2)} ر.س`, iconBg:'bg-blue-100',  color:'text-blue-700',  bg:'bg-blue-50 border-blue-200'},
         {icon:'📒', label:'رصيد الدفاتر', value:`${fmt(bookBal,2)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-800'},
-        {icon:'📊', label:'الفرق', value:`${diff>=0?'+':''}${fmt(diff,2)} ر.س`, iconBg:Math.abs(diff)<0.01?'bg-emerald-100':'bg-red-100', color:Math.abs(diff)<0.01?'text-emerald-700':'text-red-600', bg:Math.abs(diff)<0.01?'bg-emerald-50 border-emerald-200':'bg-red-50 border-red-200'},
-        {icon:'✅', label:'مطابق', value:matched, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
-        {icon:'❓', label:'غير مطابق', value:unmatched, iconBg:'bg-amber-100', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
+        {icon:'📊', label:'الفرق', value:`${diff>=0?'+':''}${fmt(diff,2)} ر.س`,
+          iconBg:Math.abs(diff)<0.01?'bg-emerald-100':'bg-red-100',
+          color:Math.abs(diff)<0.01?'text-emerald-700':'text-red-600',
+          bg:Math.abs(diff)<0.01?'bg-emerald-50 border-emerald-200':'bg-red-50 border-red-200'},
+        {icon:'✅', label:'مطابق',    value:matched,   iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+        {icon:'❓', label:'غير مطابق', value:unmatched, iconBg:'bg-amber-100',   color:'text-amber-700',  bg:'bg-amber-50 border-amber-200'},
       ]}/>
 
+      {/* ── اقتراحات المطابقة ── */}
+      {suggestions.length>0&&(
+        <div className="bg-white rounded-2xl border-2 border-purple-200 overflow-hidden">
+          <div className="px-4 py-3 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
+            <span className="font-bold text-sm text-purple-800">✨ اقتراحات تحتاج مراجعة ({suggestions.length})</span>
+            <button onClick={()=>setSuggestions([])} className="text-xs text-purple-400 hover:text-purple-600">إخفاء</button>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {suggestions.map((s,i)=>(
+              <div key={i} className="px-4 py-3 flex items-center gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${scoreColor(s.score)}`}>{s.score}%</span>
+                    <span className="text-xs font-mono text-slate-500">{s.line_date}</span>
+                    <span className={`text-xs font-bold font-mono ${s.direction==='credit'?'text-emerald-600':'text-red-500'}`}>
+                      {s.direction==='credit'?'+':'-'}{fmt(s.amount,2)}
+                    </span>
+                    {s.line_ref&&<span className="text-xs text-slate-400">#{s.line_ref}</span>}
+                  </div>
+                  <div className="text-xs text-slate-600 flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium">{srcLabel(s.candidate_type)}</span>
+                    <span className="font-mono text-slate-500">{s.candidate_serial}</span>
+                    <span className="text-slate-400">{s.candidate_date}</span>
+                    {s.candidate_party&&<span className="truncate">{s.candidate_party}</span>}
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={()=>matchLine(s.line_id, s.candidate_id, s.candidate_type)}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+                  >✅ قبول</button>
+                  <button
+                    onClick={()=>setSuggestions(prev=>prev.filter((_,j)=>j!==i))}
+                    className="text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  >تجاهل</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
-        {/* أسطر كشف البنك */}
+        {/* ── أسطر كشف البنك ── */}
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
             <span className="font-bold text-sm text-slate-700">📄 أسطر كشف البنك</span>
             <div className="flex gap-1.5">
-              {/* استيراد CSV */}
               <label title="استيراد CSV — الأعمدة: Date,Description,Reference,Debit,Credit,Balance" className="text-xs text-emerald-600 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-50 cursor-pointer">
                 📂 CSV
                 <input type="file" accept=".csv,.txt" className="hidden" onChange={async(e)=>{
@@ -1067,8 +1160,7 @@ function ReconciliationSection({showToast}) {
                   e.target.value=''
                 }}/>
               </label>
-              {/* استيراد Excel */}
-              <label title="استيراد Excel — نفس أعمدة CSV" className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50 cursor-pointer">
+              <label title="استيراد Excel" className="text-xs text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-50 cursor-pointer">
                 📊 Excel
                 <input type="file" accept=".xlsx,.xls" className="hidden" onChange={async(e)=>{
                   const file=e.target.files?.[0]; if(!file) return
@@ -1079,46 +1171,38 @@ function ReconciliationSection({showToast}) {
                     const rows=XLSX.utils.sheet_to_json(ws,{header:1})
                     const parsed=rows.slice(1).map(r=>({
                       date:r[0]?(r[0] instanceof Date?r[0].toISOString().slice(0,10):String(r[0]).trim()):'',
-                      description:String(r[1]||''),
-                      reference:String(r[2]||''),
-                      debit:parseFloat(r[3]||0)||0,
-                      credit:parseFloat(r[4]||0)||0,
+                      description:String(r[1]||''),reference:String(r[2]||''),
+                      debit:parseFloat(r[3]||0)||0,credit:parseFloat(r[4]||0)||0,
                       running_balance:r[5]?parseFloat(r[5]):undefined,
                     })).filter(r=>r.date)
-                    if(!parsed.length){showToast('لا توجد بيانات صالحة في ملف Excel','error');return}
-                    if(!window.confirm(`استيراد ${parsed.length} سطر من Excel؟`)) return
+                    if(!parsed.length){showToast('لا توجد بيانات صالحة','error');return}
+                    if(!window.confirm(`استيراد ${parsed.length} سطر؟`)) return
                     await api.treasury.importStatementLines(selected.id, parsed)
-                    showToast(`✅ تم استيراد ${parsed.length} سطر من Excel`)
-                    openSession(selected)
-                  }catch(err){showToast('خطأ في قراءة Excel: '+err.message,'error')}
+                    showToast(`✅ تم استيراد ${parsed.length} سطر`); openSession(selected)
+                  }catch(err){showToast('خطأ: '+err.message,'error')}
                   e.target.value=''
                 }}/>
               </label>
-              {/* استيراد MT940 */}
-              <label title="استيراد MT940 — تنسيق SWIFT البنكي" className="text-xs text-purple-600 border border-purple-200 px-2 py-1 rounded-lg hover:bg-purple-50 cursor-pointer">
+              <label title="استيراد MT940" className="text-xs text-purple-600 border border-purple-200 px-2 py-1 rounded-lg hover:bg-purple-50 cursor-pointer">
                 🏦 MT940
                 <input type="file" accept=".mt940,.txt,.sta" className="hidden" onChange={async(e)=>{
                   const file=e.target.files?.[0]; if(!file) return
                   try{
                     const text=await file.text()
-                    // MT940 parser: كل حركة تبدأ بـ :61:
                     const txBlocks=text.split(/(?=:61:)/g).filter(b=>b.includes(':61:'))
                     const parsed=txBlocks.map(block=>{
                       const m61=block.match(/:61:(\d{6})(\d{6})?(C|D)([A-Z]?)(\d+,\d{0,2})(.{0,16})?/)
                       if(!m61) return null
-                      const dateStr=m61[1]; const y='20'+dateStr.slice(0,2), mo=dateStr.slice(2,4), d=dateStr.slice(4,6)
-                      const isCredit=m61[3]==='C'
-                      const amtStr=(m61[5]||'0').replace(',','.')
-                      const amt=parseFloat(amtStr)||0
+                      const dateStr=m61[1]; const y='20'+dateStr.slice(0,2),mo=dateStr.slice(2,4),d=dateStr.slice(4,6)
+                      const isCredit=m61[3]==='C'; const amt=parseFloat((m61[5]||'0').replace(',','.'))||0
                       const ref86=block.match(/:86:([\s\S]*?)(?=:|$)/); const desc=(ref86?.[1]||'').replace(/\n/g,' ').trim().slice(0,100)
                       return {date:`${y}-${mo}-${d}`,description:desc,reference:m61[6]?.trim()||'',debit:isCredit?0:amt,credit:isCredit?amt:0}
                     }).filter(Boolean)
-                    if(!parsed.length){showToast('لم يتم تحليل أي حركات من ملف MT940','error');return}
-                    if(!window.confirm(`استيراد ${parsed.length} حركة من MT940؟`)) return
+                    if(!parsed.length){showToast('لم يتم تحليل أي حركات','error');return}
+                    if(!window.confirm(`استيراد ${parsed.length} حركة؟`)) return
                     await api.treasury.importStatementLines(selected.id, parsed)
-                    showToast(`✅ تم استيراد ${parsed.length} حركة من MT940`)
-                    openSession(selected)
-                  }catch(err){showToast('خطأ في ملف MT940: '+err.message,'error')}
+                    showToast(`✅ تم استيراد ${parsed.length} حركة`); openSession(selected)
+                  }catch(err){showToast('خطأ: '+err.message,'error')}
                   e.target.value=''
                 }}/>
               </label>
@@ -1129,8 +1213,8 @@ function ReconciliationSection({showToast}) {
             <div className="grid grid-cols-2 gap-2">
               <div><label className="text-[10px] text-slate-500 block">التاريخ</label><input type="date" className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value={lineForm.date} onChange={e=>slf('date',e.target.value)}/></div>
               <div><label className="text-[10px] text-slate-500 block">مرجع</label><input className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value={lineForm.reference} onChange={e=>slf('reference',e.target.value)}/></div>
-              <div><label className="text-[10px] text-slate-500 block">مدين (صرف)</label><input type="number" step="0.001" className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono" value={lineForm.debit} onChange={e=>slf('debit',e.target.value)}/></div>
-              <div><label className="text-[10px] text-slate-500 block">دائن (قبض)</label><input type="number" step="0.001" className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono" value={lineForm.credit} onChange={e=>slf('credit',e.target.value)}/></div>
+              <div><label className="text-[10px] text-slate-500 block">مدين</label><input type="number" step="0.001" className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono" value={lineForm.debit} onChange={e=>slf('debit',e.target.value)}/></div>
+              <div><label className="text-[10px] text-slate-500 block">دائن</label><input type="number" step="0.001" className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono" value={lineForm.credit} onChange={e=>slf('credit',e.target.value)}/></div>
               <div className="col-span-2"><label className="text-[10px] text-slate-500 block">البيان</label><input className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs" value={lineForm.description} onChange={e=>slf('description',e.target.value)}/></div>
             </div>
             <div className="flex gap-2">
@@ -1140,13 +1224,16 @@ function ReconciliationSection({showToast}) {
           </div>}
           {loadingLines?<div className="py-6 text-center text-slate-400 text-sm">...</div>:
           lines.length===0?<div className="py-8 text-center text-slate-400 text-sm">لا توجد أسطر — أضف أسطر الكشف</div>:
-          <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
             {lines.map(l=>(
               <div key={l.id} className={`px-3 py-2.5 ${l.match_status==='matched'?'bg-emerald-50/60':''}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-mono text-slate-500">{fmtDate(l.line_date)}{l.reference&&` · ${l.reference}`}</div>
                     <div className="text-xs text-slate-700 truncate">{l.description||'—'}</div>
+                    {l.match_status==='matched'&&l.matched_tx_type&&(
+                      <span className="text-[10px] px-1 rounded bg-emerald-100 text-emerald-700">{srcLabel(l.matched_tx_type)}</span>
+                    )}
                   </div>
                   <div className="text-left shrink-0">
                     {parseFloat(l.debit||0)>0&&<div className="text-xs font-mono font-bold text-red-600">-{fmt(l.debit,2)}</div>}
@@ -1161,40 +1248,94 @@ function ReconciliationSection({showToast}) {
           </div>}
         </div>
 
-        {/* حركات النظام */}
+        {/* ── حركات النظام: bank / AR / AP ── */}
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
-            <span className="font-bold text-sm text-slate-700">🏛️ حركات النظام (مرحّلة)</span>
+          <div className="border-b border-slate-200 bg-slate-50">
+            <div className="flex items-center gap-1 px-3 py-2">
+              {[['bank','🏦 بنك'],['ar','📥 AR'],['ap','📤 AP']].map(([id,lbl])=>(
+                <button key={id} onClick={()=>setSysTab(id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${sysTab===id?'bg-blue-700 text-white':'text-slate-600 hover:bg-slate-100'}`}>{lbl}</button>
+              ))}
+              <span className="text-xs text-slate-400 mr-auto pr-1">
+                {sysTab==='bank'?txns.filter(t=>t.status==='posted').length:
+                 sysTab==='ar'?arReceipts.filter(r=>r.status==='posted').length:
+                 apPayments.filter(p=>p.status==='posted').length} سجل
+              </span>
+            </div>
           </div>
-          {loadingLines?<div className="py-6 text-center text-slate-400 text-sm">...</div>:
-          txns.filter(t=>t.status==='posted').length===0?<div className="py-8 text-center text-slate-400 text-sm">لا توجد حركات مرحّلة</div>:
-          <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-            {txns.filter(t=>t.status==='posted').map(t=>{
-              const unmatched_line=lines.find(l=>l.match_status!=='matched'&&(
-                (t.tx_type==='BP'&&parseFloat(l.debit||0)===parseFloat(t.amount||0))||
-                (t.tx_type==='BR'&&parseFloat(l.credit||0)===parseFloat(t.amount||0))
-              ))
-              return <div key={t.id} className={`px-3 py-2.5 ${t.is_reconciled?'bg-emerald-50/60':''}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-mono text-slate-500">{t.serial} · {fmtDate(t.tx_date)}</div>
-                    <div className="text-xs text-slate-700 truncate">{t.description||t.counterpart_account||'—'}</div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${t.tx_type==='BP'?'bg-red-100 text-red-600':'bg-emerald-100 text-emerald-600'}`}>{t.tx_type}</span>
+
+          {loadingLines?<div className="py-6 text-center text-slate-400 text-sm">...</div>:(()=>{
+            // ── Bank transactions ──
+            if(sysTab==='bank'){
+              const posted=txns.filter(t=>t.status==='posted')
+              if(!posted.length) return <div className="py-8 text-center text-slate-400 text-sm">لا توجد حركات بنكية مرحّلة</div>
+              return <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                {posted.map(t=>{
+                  const cl=findCandidateLine(parseFloat(t.amount||0), t.tx_type==='BP'?'debit':'credit')
+                  return <div key={t.id} className={`px-3 py-2.5 ${t.is_reconciled?'bg-emerald-50/60':''}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-mono text-slate-500">{t.serial} · {fmtDate(t.tx_date)}</div>
+                        <div className="text-xs text-slate-700 truncate">{t.description||t.counterpart_account||'—'}</div>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${t.tx_type==='BP'?'bg-red-100 text-red-600':'bg-emerald-100 text-emerald-600'}`}>{t.tx_type}</span>
+                      </div>
+                      <div className={`text-xs font-mono font-bold shrink-0 ${t.tx_type==='BP'?'text-red-600':'text-emerald-600'}`}>{t.tx_type==='BP'?'-':'+'}{fmt(t.amount,2)}</div>
+                      {t.is_reconciled
+                        ?<span className="text-[10px] text-emerald-600 font-bold shrink-0">✅</span>
+                        :cl?<button onClick={()=>matchLine(cl.id,t.id,t.tx_type)} className="text-[10px] text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded font-semibold shrink-0 hover:bg-blue-50">مطابقة</button>
+                           :<span className="text-[10px] text-slate-300 shrink-0">—</span>}
                     </div>
                   </div>
-                  <div className="text-left shrink-0">
-                    <div className={`text-xs font-mono font-bold ${t.tx_type==='BP'?'text-red-600':'text-emerald-600'}`}>{t.tx_type==='BP'?'-':'+'}{fmt(t.amount,2)}</div>
-                  </div>
-                  {t.is_reconciled
-                    ?<span className="text-[10px] text-emerald-600 font-bold shrink-0">✅</span>
-                    :unmatched_line
-                      ?<button onClick={()=>matchLine(unmatched_line.id,t.id,t.tx_type)} className="text-[10px] text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded font-semibold shrink-0 hover:bg-blue-50">مطابقة</button>
-                      :<span className="text-[10px] text-slate-300 shrink-0">—</span>}
-                </div>
+                })}
               </div>
-            })}
-          </div>}
+            }
+            // ── AR receipts ──
+            if(sysTab==='ar'){
+              const posted=arReceipts.filter(r=>r.status==='posted')
+              if(!posted.length) return <div className="py-8 text-center text-slate-400 text-sm">لا توجد إيصالات AR مرحّلة لهذا الحساب</div>
+              return <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                {posted.map(r=>{
+                  const cl=findCandidateLine(parseFloat(r.amount_sar||r.amount||0),'credit')
+                  return <div key={r.id} className={`px-3 py-2.5 ${r.is_reconciled?'bg-emerald-50/60':''}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-mono text-slate-500">{r.serial} · {fmtDate(r.receipt_date)}</div>
+                        <div className="text-xs text-slate-700 truncate">{r.customer_name||r.description||'—'}</div>
+                        <span className="text-[10px] px-1 rounded bg-emerald-100 text-emerald-700 font-bold">AR إيصال</span>
+                      </div>
+                      <div className="text-xs font-mono font-bold text-emerald-600 shrink-0">+{fmt(r.amount_sar||r.amount,2)}</div>
+                      {r.is_reconciled
+                        ?<span className="text-[10px] text-emerald-600 font-bold shrink-0">✅</span>
+                        :cl?<button onClick={()=>matchLine(cl.id,r.id,'AR_RECEIPT')} className="text-[10px] text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded font-semibold shrink-0 hover:bg-blue-50">مطابقة</button>
+                           :<span className="text-[10px] text-slate-300 shrink-0">—</span>}
+                    </div>
+                  </div>
+                })}
+              </div>
+            }
+            // ── AP payments ──
+            const posted=apPayments.filter(p=>p.status==='posted')
+            if(!posted.length) return <div className="py-8 text-center text-slate-400 text-sm">لا توجد دفعات AP مرحّلة لهذا الحساب</div>
+            return <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+              {posted.map(p=>{
+                const cl=findCandidateLine(parseFloat(p.amount_sar||p.amount||0),'debit')
+                return <div key={p.id} className={`px-3 py-2.5 ${p.is_reconciled?'bg-emerald-50/60':''}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-mono text-slate-500">{p.serial} · {fmtDate(p.payment_date)}</div>
+                      <div className="text-xs text-slate-700 truncate">{p.vendor_name||p.description||'—'}</div>
+                      <span className="text-[10px] px-1 rounded bg-red-100 text-red-700 font-bold">AP دفعة</span>
+                    </div>
+                    <div className="text-xs font-mono font-bold text-red-600 shrink-0">-{fmt(p.amount_sar||p.amount,2)}</div>
+                    {p.is_reconciled
+                      ?<span className="text-[10px] text-emerald-600 font-bold shrink-0">✅</span>
+                      :cl?<button onClick={()=>matchLine(cl.id,p.id,'AP_PAYMENT')} className="text-[10px] text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded font-semibold shrink-0 hover:bg-blue-50">مطابقة</button>
+                         :<span className="text-[10px] text-slate-300 shrink-0">—</span>}
+                  </div>
+                </div>
+              })}
+            </div>
+          })()}
         </div>
       </div>
     </div>

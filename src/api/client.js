@@ -274,8 +274,10 @@ export const api = {
     importStatementLines:        (sessId, lines)  => post(`/treasury/reconciliation/sessions/${sessId}/import-lines`, lines),
     matchReconciliation: (sessId, lineId, txId, txType) =>
       post(`/treasury/reconciliation/sessions/${sessId}/match?statement_line_id=${lineId}&tx_id=${txId}&tx_type=${txType}`, {}),
-    matchTransaction:            (sessId, lineId, txId, txType) =>
+    matchTransaction: (sessId, lineId, txId, txType) =>
       post(`/treasury/reconciliation/sessions/${sessId}/match?statement_line_id=${lineId}&tx_id=${txId}&tx_type=${txType}`, {}),
+    autoMatch: (sessId) =>
+      post(`/treasury/reconciliation/sessions/${sessId}/auto-match`, {}),
 
     // صناديق العهدة
     listPettyCashFunds:    ()      => get('/treasury/petty-cash/funds'),
