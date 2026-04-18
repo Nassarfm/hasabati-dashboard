@@ -43,6 +43,7 @@ export default function JournalPage() {
   const [expClass,     setExpClass]     = useState([])
   const [allDimensions,setAllDimensions]= useState([]) // كل الأبعاد ديناميكية
   const [taxTypes,     setTaxTypes]     = useState([])  // أنواع الضريبة
+  const [currencies,   setCurrencies]   = useState([])  // العملات
   const [loading,      setLoading]      = useState(true)
   const [viewJE,       setViewJE]       = useState(null)
   const [currentUser,  setCurrentUser]  = useState(null)
@@ -131,7 +132,8 @@ export default function JournalPage() {
       api.settings.listProjects(),
       api.dimensions?.list?.() ?? Promise.resolve({ data:[] }),
       api.tax?.list?.({ active_only: true }) ?? Promise.resolve({ data:[] }),
-    ]).then(([coa,jt,br,cc,pr,dims,tx]) => {
+      api.currency?.list?.({ active_only: true }) ?? Promise.resolve({ data:[] }),
+    ]).then(([coa,jt,br,cc,pr,dims,tx,cur]) => {
       setAccounts((coa?.data||coa?.items||[]).filter(a => a.postable))
       setJeTypes(jt?.data||[])
       setBranches((br?.data||[]).filter(b => b.is_active))
@@ -141,6 +143,7 @@ export default function JournalPage() {
       setExpClass(expDim?.values||[])
       setAllDimensions((dims?.data||[]).filter(d=>d.is_visible!==false))
       setTaxTypes(tx?.data||tx?.items||[])
+      setCurrencies(cur?.data||[])
     }).catch(()=>{})
   }, [])
 
@@ -220,14 +223,14 @@ export default function JournalPage() {
   if (mode==='edit' && editJE) {
     return <NewJEPage accounts={accounts} jeTypes={jeTypes} branches={branches}
       costCenters={costCenters} projects={projects} expClass={expClass}
-      allDimensions={allDimensions} taxTypes={taxTypes} editJE={editJE}
+      allDimensions={allDimensions} taxTypes={taxTypes} currencies={currencies} editJE={editJE}
       onBack={() => { setMode('list'); setEditJE(null) }}
       onSaved={() => { setMode('list'); setEditJE(null); load(1,filters); loadStatusCounts() }}/>
   }
   if (mode==='new') {
     return <NewJEPage accounts={accounts} jeTypes={jeTypes} branches={branches}
       costCenters={costCenters} projects={projects} expClass={expClass}
-      allDimensions={allDimensions} taxTypes={taxTypes}
+      allDimensions={allDimensions} taxTypes={taxTypes} currencies={currencies}
       onBack={() => setMode('list')}
       onSaved={() => { setMode('list'); load(1,filters); loadStatusCounts() }}/>
   }
@@ -698,6 +701,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
                       <th className="px-3 py-3 text-right text-white w-28">الكود</th>
                       <th className="px-3 py-3 text-right text-white">اسم الحساب / البيان</th>
                       <th className="px-3 py-3 text-center text-white w-36">الأبعاد</th>
+                      <th className="px-3 py-3 text-center text-white w-24">العملة</th>
                       <th className="px-4 py-3 text-center w-44 text-base" style={{color:'#93c5fd'}}>مدين</th>
                       <th className="px-4 py-3 text-center w-44 text-base" style={{color:'#6ee7b7'}}>دائن</th>
                     </tr>
@@ -724,6 +728,17 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
                               </div>
                             ):<span className="text-slate-300">—</span>}
                           </td>
+                          <td className="px-3 py-3 text-center">
+                            {l.currency_code && l.currency_code !== 'SAR' ? (
+                              <div className="space-y-0.5">
+                                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold block">{l.currency_code}</span>
+                                {l.amount_foreign > 0 && <span className="text-xs text-slate-400 font-mono block">{fmt(l.amount_foreign,3)}</span>}
+                                {l.exchange_rate && l.exchange_rate !== 1 && <span className="text-xs text-slate-300 block">×{parseFloat(l.exchange_rate).toFixed(4)}</span>}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-300">SAR</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-center">
                             {ldr>0
                               ?<span className="font-mono font-bold text-blue-700 text-base bg-blue-50 px-3 py-1 rounded-lg">{fmt(ldr,3)}</span>
@@ -740,7 +755,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
                   </tbody>
                   <tfoot>
                     <tr style={{background:'#1e3a5f'}}>
-                      <td colSpan={4} className="px-3 py-3 text-white text-xs font-bold">الإجمالي ({(je.lines||[]).length} سطر)</td>
+                      <td colSpan={5} className="px-3 py-3 text-white text-xs font-bold">الإجمالي ({(je.lines||[]).length} سطر)</td>
                       <td className="px-4 py-3 text-center font-mono font-bold text-lg" style={{color:'#93c5fd'}}>{fmt(dr,3)}</td>
                       <td className="px-4 py-3 text-center font-mono font-bold text-lg" style={{color:'#6ee7b7'}}>{fmt(cr,3)}</td>
                     </tr>

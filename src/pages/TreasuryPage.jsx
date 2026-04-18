@@ -371,20 +371,28 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
 function useFiscalPeriod(date) {
   const [period,   setPeriod]   = useState(null)
   const [checking, setChecking] = useState(false)
+  const [status,   setStatus]   = useState('idle')
 
   useEffect(() => {
-    if (!date) { setPeriod(null); return }
-    setChecking(true)
+    if (!date) { setPeriod(null); setStatus('idle'); return }
+    setChecking(true); setStatus('checking')
     api.fiscal.getCurrentPeriod(date)
-      .then(r => setPeriod(r?.data || null))
-      .catch(() => setPeriod(null))
+      .then(r => {
+        const d = r?.data || null
+        setPeriod(d)
+        if (!d)                     setStatus('not_found')
+        else if (d.status!=='open') setStatus('closed')
+        else                        setStatus('open')
+      })
+      .catch(() => { setPeriod(null); setStatus('error') })
       .finally(() => setChecking(false))
   }, [date])
 
-  const isOpen   = period?.status === 'open'
-  const isClosed = !!period && !isOpen
+  const isOpen     = status === 'open'
+  const isClosed   = status === 'closed'
+  const periodName = period?.period_name || ''
 
-  return { period, checking, isOpen, isClosed }
+  return { period, checking, isOpen, isClosed, status, periodName }
 }
 
 /**
@@ -3477,7 +3485,10 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const {isOpen:periodOk, isClosed:periodClosed, checking:periodChecking} = useFiscalPeriod(form.tx_date)
+  const {isOpen:periodOk,isClosed:periodClosed,checking:periodChecking,status:periodStatus,periodName:periodName_} = useFiscalPeriod(form.tx_date)
+  const isFormOpen = periodOk
+  const isBlocked  = ['closed','not_found','error'].includes(periodStatus)
+  const isIdle     = periodStatus==='idle'
 
   useEffect(()=>{
     Promise.all([
@@ -3575,17 +3586,48 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
     </div>
 
     <div className="bg-white rounded-2xl border-2 border-slate-200 p-6 space-y-5">
-      {/* الصف الأول */}
-      <div className="grid grid-cols-3 gap-5">
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ <span className="text-red-500">*</span></label>
-          <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
-          <FiscalPeriodBadge date={form.tx_date}/>
+      {/* التاريخ — دائماً مرئي */}
+      <div className="max-w-xs">
+        <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ <span className="text-red-500">*</span></label>
+        <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+        <FiscalPeriodBadge date={form.tx_date}/>
+      </div>
+
+      {/* ── حارس الفترة المحاسبية ── */}
+      {(isIdle||isBlocked)&&(
+        <div className={`rounded-2xl border-2 p-12 text-center ${
+          periodStatus==='closed'    ?'bg-red-50/60 border-red-200':
+          periodStatus==='error'     ?'bg-orange-50/60 border-orange-200':
+          periodStatus==='not_found' ?'bg-amber-50/60 border-amber-200':
+                                      'bg-slate-50 border-dashed border-slate-200'}`}>
+          <div className="text-5xl mb-4">
+            {periodStatus==='closed'?'🔒':periodStatus==='error'?'⚠️':periodStatus==='not_found'?'📋':'📅'}
+          </div>
+          <div className={`text-xl font-bold mb-2 ${
+            periodStatus==='closed'?'text-red-700':periodStatus==='error'?'text-orange-700':
+            periodStatus==='not_found'?'text-amber-700':'text-slate-600'}`}>
+            {periodStatus==='closed'    ?`🔒 الفترة "${periodName_}" مغلقة`:
+             periodStatus==='not_found' ?'⚠️ لا توجد فترة مالية لهذا التاريخ':
+             periodStatus==='error'     ?'⚠️ تعذّر التحقق من الفترة':
+                                         '📅 اختر تاريخاً للبدء'}
+          </div>
+          <div className="text-sm text-slate-500">
+            {periodStatus==='closed'    ?'تواصل مع مدير النظام لفتح الفترة':
+             periodStatus==='not_found' ?'أنشئ السنة المالية من صفحة الفترات المالية':
+             periodStatus==='error'     ?'تحقق من الاتصال ثم أعد اختيار التاريخ':
+                                         'جميع حقول الإدخال ستظهر بعد تحديد تاريخ في فترة مفتوحة'}
+          </div>
         </div>
+      )}
+
+      {/* حقول النموذج — تظهر فقط عند فتح الفترة */}
+      {isFormOpen&&(<>
+      {/* الصف الأول */}
+      <div className="grid grid-cols-2 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">الصندوق <span className="text-red-500">*</span></label>
-          <select disabled={periodClosed||periodChecking} onChange={e=>{s('bank_account_id',e.target.value);setFieldErrors(p=>({...p,bank_account_id:false}))}}
-            className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50 ${fieldErrors.bank_account_id?'border-red-400 bg-red-50':'border-slate-200'}`}
+          <select onChange={e=>{s('bank_account_id',e.target.value);setFieldErrors(p=>({...p,bank_account_id:false}))}}
+            className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${fieldErrors.bank_account_id?'border-red-400 bg-red-50':'border-slate-200'}`}
             value={form.bank_account_id}>
             <option value="">— اختر الصندوق —</option>
             {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name} ({fmt(a.current_balance,2)} {a.currency_code})</option>)}
@@ -3594,8 +3636,8 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المبلغ <span className="text-red-500">*</span></label>
-          <input disabled={periodClosed||periodChecking} type="number" step="0.001" onChange={e=>{s('amount',e.target.value);setFieldErrors(p=>({...p,amount:false}))}}
-            className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500 text-center disabled:opacity-50 disabled:bg-slate-50 ${fieldErrors.amount?'border-red-400 bg-red-50':'border-slate-200'}`}
+          <input type="number" step="0.001" onChange={e=>{s('amount',e.target.value);setFieldErrors(p=>({...p,amount:false}))}}
+            className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500 text-center ${fieldErrors.amount?'border-red-400 bg-red-50':'border-slate-200'}`}
             value={form.amount} placeholder="0.000"/>
           {fieldErrors.amount&&<p className="text-xs text-red-500 mt-0.5">⚠️ مطلوب</p>}
         </div>
@@ -3729,15 +3771,15 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
           📒 اختر الصندوق والحساب المقابل وأدخل المبلغ لعرض التوجيه المحاسبي
         </div>}
       </div>
+      </>)}
 
-      {/* أزرار */}
+      {/* أزرار — دائماً مرئية */}
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
-        <button onClick={handlePrint} className="px-6 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold hover:bg-blue-50">🖨️ طباعة</button>
-        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk}
-          title={periodClosed?'الفترة مغلقة — لا يمكن الحفظ':!periodOk?'تحقق من الفترة المحاسبية أولاً':''}
-          className={`flex-1 py-3 rounded-xl text-white font-semibold disabled:opacity-50 text-sm ${isPV?'bg-red-600 hover:bg-red-700':'bg-emerald-600 hover:bg-emerald-700'}`}>
-          {saving?'⏳ جارٍ الحفظ...':periodClosed?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
+        {isFormOpen&&<button onClick={handlePrint} className="px-6 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold hover:bg-blue-50">🖨️ طباعة</button>}
+        <button onClick={save} disabled={saving||!isFormOpen}
+          className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${!isFormOpen?'bg-slate-100 text-slate-400 border-2 border-slate-200 cursor-not-allowed':isPV?'bg-red-600 hover:bg-red-700 text-white':'bg-emerald-600 hover:bg-emerald-700 text-white'}`}>
+          {saving?'⏳ جارٍ الحفظ...':!isFormOpen?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
       </div>
     </div>
@@ -3765,7 +3807,10 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const {isOpen:periodOk, isClosed:periodClosed, checking:periodChecking} = useFiscalPeriod(form.tx_date)
+  const {isOpen:periodOk,isClosed:periodClosed,checking:periodChecking,status:periodStatusBT,periodName:periodNameBT} = useFiscalPeriod(form.tx_date)
+  const isFormOpenBT = periodOk
+  const isBlockedBT  = ['closed','not_found','error'].includes(periodStatusBT)
+  const isIdleBT     = periodStatusBT==='idle'
 
   useEffect(()=>{
     Promise.all([
@@ -3837,22 +3882,53 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       <div><h2 className="text-2xl font-bold text-slate-800">{labels[type]}</h2></div>
     </div>
     <div className="bg-white rounded-2xl border-2 border-slate-200 p-6 space-y-5">
-      <div className="grid grid-cols-3 gap-5">
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ *</label>
-          <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
-          <FiscalPeriodBadge date={form.tx_date}/>
+      {/* التاريخ — دائماً مرئي */}
+      <div className="max-w-xs">
+        <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ *</label>
+        <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+        <FiscalPeriodBadge date={form.tx_date}/>
+      </div>
+
+      {/* ── حارس الفترة المحاسبية ── */}
+      {(isIdleBT||isBlockedBT)&&(
+        <div className={`rounded-2xl border-2 p-12 text-center ${
+          periodStatusBT==='closed'    ?'bg-red-50/60 border-red-200':
+          periodStatusBT==='error'     ?'bg-orange-50/60 border-orange-200':
+          periodStatusBT==='not_found' ?'bg-amber-50/60 border-amber-200':
+                                        'bg-slate-50 border-dashed border-slate-200'}`}>
+          <div className="text-5xl mb-4">
+            {periodStatusBT==='closed'?'🔒':periodStatusBT==='error'?'⚠️':periodStatusBT==='not_found'?'📋':'📅'}
+          </div>
+          <div className={`text-xl font-bold mb-2 ${
+            periodStatusBT==='closed'?'text-red-700':periodStatusBT==='error'?'text-orange-700':
+            periodStatusBT==='not_found'?'text-amber-700':'text-slate-600'}`}>
+            {periodStatusBT==='closed'    ?`🔒 الفترة "${periodNameBT}" مغلقة`:
+             periodStatusBT==='not_found' ?'⚠️ لا توجد فترة مالية لهذا التاريخ':
+             periodStatusBT==='error'     ?'⚠️ تعذّر التحقق من الفترة':
+                                           '📅 اختر تاريخاً للبدء'}
+          </div>
+          <div className="text-sm text-slate-500">
+            {periodStatusBT==='closed'    ?'تواصل مع مدير النظام لفتح الفترة':
+             periodStatusBT==='not_found' ?'أنشئ السنة المالية من صفحة الفترات المالية':
+             periodStatusBT==='error'     ?'تحقق من الاتصال ثم أعد اختيار التاريخ':
+                                           'جميع حقول الإدخال ستظهر بعد تحديد تاريخ في فترة مفتوحة'}
+          </div>
         </div>
+      )}
+
+      {/* حقول النموذج — تظهر فقط عند فتح الفترة */}
+      {isFormOpenBT&&(<>
+      <div className="grid grid-cols-2 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">الحساب البنكي *</label>
-          <select disabled={periodClosed||periodChecking} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}>
+          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}>
             <option value="">— اختر البنك —</option>
             {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name} ({fmt(a.current_balance,2)})</option>)}
           </select>
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المبلغ *</label>
-          <input disabled={periodClosed||periodChecking} type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono text-center focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50" value={form.amount} onChange={e=>s('amount',e.target.value)} placeholder="0.000"/>
+          <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono text-center focus:outline-none focus:border-blue-500" value={form.amount} onChange={e=>s('amount',e.target.value)} placeholder="0.000"/>
         </div>
       </div>
 
@@ -3985,13 +4061,14 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       </div>}
 
       <AccountingTable lines={je_lines} vatSummary={vatSummaryBT}/>
+      </>)}
 
+      {/* أزرار — دائماً مرئية */}
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
-        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk}
-          title={periodClosed?'الفترة مغلقة':''}
-          className="flex-1 py-3 rounded-xl bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50 text-sm">
-          {saving?'⏳ جارٍ الحفظ...':periodClosed?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
+        <button onClick={save} disabled={saving||!isFormOpenBT}
+          className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${!isFormOpenBT?'bg-slate-100 text-slate-400 border-2 border-slate-200 cursor-not-allowed':'bg-blue-700 text-white hover:bg-blue-800'}`}>
+          {saving?'⏳ جارٍ الحفظ...':!isFormOpenBT?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
       </div>
     </div>
@@ -4004,7 +4081,10 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
   const [form,setForm]=useState({tx_date:today(),from_account_id:'',to_account_id:'',amount:'',description:'',reference:'',cost_center:'',project_code:'',notes:''})
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const {isOpen:periodOk, isClosed:periodClosed, checking:periodChecking} = useFiscalPeriod(form.tx_date)
+  const {isOpen:periodOk,isClosed:periodClosed,checking:periodChecking,status:periodStatusIT,periodName:periodNameIT} = useFiscalPeriod(form.tx_date)
+  const isFormOpenIT = periodOk
+  const isBlockedIT  = ['closed','not_found','error'].includes(periodStatusIT)
+  const isIdleIT     = periodStatusIT==='idle'
   useEffect(()=>{api.treasury.listBankAccounts().then(r=>setAccounts(r?.data||[]))},[])
 
   const fromAcc=accounts.find(a=>a.id===form.from_account_id)
@@ -4029,12 +4109,43 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
       <h2 className="text-2xl font-bold text-slate-800">🔄 تحويل داخلي بين الحسابات</h2>
     </div>
     <div className="bg-white rounded-2xl border-2 border-slate-200 p-6 space-y-5">
-      <div className="grid grid-cols-3 gap-5">
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ *</label>
-          <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
-          <FiscalPeriodBadge date={form.tx_date}/>
+      {/* التاريخ — دائماً مرئي */}
+      <div className="max-w-xs">
+        <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ *</label>
+        <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+        <FiscalPeriodBadge date={form.tx_date}/>
+      </div>
+
+      {/* ── حارس الفترة المحاسبية ── */}
+      {(isIdleIT||isBlockedIT)&&(
+        <div className={`rounded-2xl border-2 p-12 text-center ${
+          periodStatusIT==='closed'    ?'bg-red-50/60 border-red-200':
+          periodStatusIT==='error'     ?'bg-orange-50/60 border-orange-200':
+          periodStatusIT==='not_found' ?'bg-amber-50/60 border-amber-200':
+                                        'bg-slate-50 border-dashed border-slate-200'}`}>
+          <div className="text-5xl mb-4">
+            {periodStatusIT==='closed'?'🔒':periodStatusIT==='error'?'⚠️':periodStatusIT==='not_found'?'📋':'📅'}
+          </div>
+          <div className={`text-xl font-bold mb-2 ${
+            periodStatusIT==='closed'?'text-red-700':periodStatusIT==='error'?'text-orange-700':
+            periodStatusIT==='not_found'?'text-amber-700':'text-slate-600'}`}>
+            {periodStatusIT==='closed'    ?`🔒 الفترة "${periodNameIT}" مغلقة`:
+             periodStatusIT==='not_found' ?'⚠️ لا توجد فترة مالية لهذا التاريخ':
+             periodStatusIT==='error'     ?'⚠️ تعذّر التحقق من الفترة':
+                                           '📅 اختر تاريخاً للبدء'}
+          </div>
+          <div className="text-sm text-slate-500">
+            {periodStatusIT==='closed'    ?'تواصل مع مدير النظام لفتح الفترة':
+             periodStatusIT==='not_found' ?'أنشئ السنة المالية من صفحة الفترات المالية':
+             periodStatusIT==='error'     ?'تحقق من الاتصال ثم أعد اختيار التاريخ':
+                                           'جميع حقول الإدخال ستظهر بعد تحديد تاريخ في فترة مفتوحة'}
+          </div>
         </div>
+      )}
+
+      {/* حقول النموذج — تظهر فقط عند فتح الفترة */}
+      {isFormOpenIT&&(<>
+      <div className="grid grid-cols-2 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">من حساب *</label>
           <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.from_account_id} onChange={e=>s('from_account_id',e.target.value)}>
@@ -4067,12 +4178,14 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
         <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)}/>
       </div>
       <AccountingTable lines={je_lines}/>
+      </>)}
+
+      {/* أزرار — دائماً مرئية */}
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
-        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk}
-          title={periodClosed?'الفترة مغلقة':''}
-          className="flex-1 py-3 rounded-xl bg-purple-700 text-white font-semibold hover:bg-purple-800 disabled:opacity-50 text-sm">
-          {saving?'⏳ جارٍ الحفظ...':periodClosed?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
+        <button onClick={save} disabled={saving||!isFormOpenIT}
+          className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${!isFormOpenIT?'bg-slate-100 text-slate-400 border-2 border-slate-200 cursor-not-allowed':'bg-purple-700 text-white hover:bg-purple-800'}`}>
+          {saving?'⏳ جارٍ الحفظ...':!isFormOpenIT?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
       </div>
     </div>

@@ -2,26 +2,39 @@ import { supabase } from '../AuthContext'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'https://hasabati-erp-production.up.railway.app/api/v1'
 
-async function request(method, path, body = null) {
+async function request(method, path, body = null, timeoutMs = 40000) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
   if (!token) console.warn('API: No auth token:', method, path)
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : null,
-  })
-  if (res.status === 204) return null
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    const msg = data?.error?.message || data?.detail || data?.message || `خطأ ${res.status}`
-    throw new Error(msg)
+
+  const controller = new AbortController()
+  const timeoutId  = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : null,
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    if (res.status === 204) return null
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const msg = data?.error?.message || data?.detail || data?.message || `خطأ ${res.status}`
+      throw new Error(msg)
+    }
+    return data
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (e.name === 'AbortError')
+      throw new Error('انتهت مهلة الاتصال بالخادم (40 ثانية) — تحقق من الاتصال وحاول مجدداً')
+    throw e
   }
-  return data
 }
 
 const get   = (p, params) => request('GET',    p + (params && Object.keys(params).length ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!==''))) : ''))
