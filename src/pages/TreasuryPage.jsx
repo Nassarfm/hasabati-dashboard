@@ -349,6 +349,52 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
 }
 
 // ── KPIBar — شريط مؤشرات الأداء ─────────────────────────
+// ══ حارس الفترة المحاسبية ════════════════════════════════
+/**
+ * useFiscalPeriod — يتحقق من حالة الفترة المحاسبية لتاريخ معين
+ * يعيد: { period, checking, isOpen, isClosed, badge }
+ */
+function useFiscalPeriod(date) {
+  const [period,   setPeriod]   = useState(null)
+  const [checking, setChecking] = useState(false)
+
+  useEffect(() => {
+    if (!date) { setPeriod(null); return }
+    setChecking(true)
+    api.fiscal.getCurrentPeriod(date)
+      .then(r => setPeriod(r?.data || null))
+      .catch(() => setPeriod(null))
+      .finally(() => setChecking(false))
+  }, [date])
+
+  const isOpen   = period?.status === 'open'
+  const isClosed = !!period && !isOpen
+
+  return { period, checking, isOpen, isClosed }
+}
+
+/**
+ * FiscalPeriodBadge — شارة حالة الفترة تُعرض أسفل حقل التاريخ
+ */
+function FiscalPeriodBadge({ date }) {
+  const { period, checking } = useFiscalPeriod(date)
+  if (!date) return null
+  if (checking) return (
+    <div className="flex items-center gap-1 mt-1 text-xs text-slate-400">
+      <span className="w-3 h-3 border border-slate-300 border-t-slate-500 rounded-full animate-spin"/>
+      جارٍ التحقق من الفترة...
+    </div>
+  )
+  if (!period) return (
+    <div className="mt-1 text-xs text-red-500 font-medium">
+      ⚠️ لا توجد فترة مالية لهذا التاريخ — تحقق من إعدادات الفترات
+    </div>
+  )
+  return period.status === 'open'
+    ? <div className="mt-1 text-xs text-emerald-600 font-medium">✅ {period.period_name} — مفتوحة</div>
+    : <div className="mt-1 text-xs text-red-500 font-bold">🔒 {period.period_name} — مغلقة · تواصل مع مدير النظام</div>
+}
+
 function KPIBar({cards}) {
   return (
     <div className="grid gap-3" style={{gridTemplateColumns:`repeat(${cards.length},1fr)`}}>
@@ -3328,8 +3374,8 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const [costCenters,setCostCenters]=useState([])
   const [projects,setProjects]=useState([])
   const [expClass,setExpClass]=useState([])
-  const [dimDefs,setDimDefs]=useState([])       // تعريفات الأبعاد لمعرفة الإلزامي
-  const [payType,setPayType]=useState('expense') // expense | vendor  (PV فقط)
+  const [dimDefs,setDimDefs]=useState([])
+  const [payType,setPayType]=useState('expense')
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
@@ -3339,6 +3385,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const {isOpen:periodOk, isClosed:periodClosed, checking:periodChecking} = useFiscalPeriod(form.tx_date)
 
   useEffect(()=>{
     Promise.all([
@@ -3425,18 +3472,19 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       <div className="grid grid-cols-3 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ <span className="text-red-500">*</span></label>
-          <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+          <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+          <FiscalPeriodBadge date={form.tx_date}/>
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">الصندوق <span className="text-red-500">*</span></label>
-          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}>
+          <select disabled={periodClosed||periodChecking} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}>
             <option value="">— اختر الصندوق —</option>
             {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name} ({fmt(a.current_balance,2)} {a.currency_code})</option>)}
           </select>
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المبلغ <span className="text-red-500">*</span></label>
-          <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500 text-center" value={form.amount} onChange={e=>s('amount',e.target.value)} placeholder="0.000"/>
+          <input disabled={periodClosed||periodChecking} type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500 text-center disabled:opacity-50 disabled:bg-slate-50" value={form.amount} onChange={e=>s('amount',e.target.value)} placeholder="0.000"/>
         </div>
       </div>
 
@@ -3540,8 +3588,10 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
         <button onClick={handlePrint} className="px-6 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold hover:bg-blue-50">🖨️ طباعة</button>
-        <button onClick={save} disabled={saving} className={`flex-1 py-3 rounded-xl text-white font-semibold disabled:opacity-50 text-sm ${isPV?'bg-red-600 hover:bg-red-700':'bg-emerald-600 hover:bg-emerald-700'}`}>
-          {saving?'⏳ جارٍ الحفظ...':'💾 حفظ كمسودة'}
+        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk}
+          title={periodClosed?'الفترة مغلقة — لا يمكن الحفظ':!periodOk?'تحقق من الفترة المحاسبية أولاً':''}
+          className={`flex-1 py-3 rounded-xl text-white font-semibold disabled:opacity-50 text-sm ${isPV?'bg-red-600 hover:bg-red-700':'bg-emerald-600 hover:bg-emerald-700'}`}>
+          {saving?'⏳ جارٍ الحفظ...':periodClosed?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
       </div>
     </div>
@@ -3568,6 +3618,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const {isOpen:periodOk, isClosed:periodClosed, checking:periodChecking} = useFiscalPeriod(form.tx_date)
 
   useEffect(()=>{
     Promise.all([
@@ -3631,18 +3682,19 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       <div className="grid grid-cols-3 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ *</label>
-          <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+          <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+          <FiscalPeriodBadge date={form.tx_date}/>
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">الحساب البنكي *</label>
-          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}>
+          <select disabled={periodClosed||periodChecking} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}>
             <option value="">— اختر البنك —</option>
             {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name} ({fmt(a.current_balance,2)})</option>)}
           </select>
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المبلغ *</label>
-          <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono text-center focus:outline-none focus:border-blue-500" value={form.amount} onChange={e=>s('amount',e.target.value)} placeholder="0.000"/>
+          <input disabled={periodClosed||periodChecking} type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono text-center focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50" value={form.amount} onChange={e=>s('amount',e.target.value)} placeholder="0.000"/>
         </div>
       </div>
 
@@ -3742,8 +3794,10 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
 
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
-        <button onClick={save} disabled={saving} className="flex-1 py-3 rounded-xl bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50 text-sm">
-          {saving?'⏳ جارٍ الحفظ...':'💾 حفظ كمسودة'}
+        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk}
+          title={periodClosed?'الفترة مغلقة':''}
+          className="flex-1 py-3 rounded-xl bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50 text-sm">
+          {saving?'⏳ جارٍ الحفظ...':periodClosed?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
       </div>
     </div>
@@ -3756,6 +3810,7 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
   const [form,setForm]=useState({tx_date:today(),from_account_id:'',to_account_id:'',amount:'',description:'',reference:'',cost_center:'',project_code:'',notes:''})
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const {isOpen:periodOk, isClosed:periodClosed, checking:periodChecking} = useFiscalPeriod(form.tx_date)
   useEffect(()=>{api.treasury.listBankAccounts().then(r=>setAccounts(r?.data||[]))},[])
 
   const fromAcc=accounts.find(a=>a.id===form.from_account_id)
@@ -3783,7 +3838,8 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
       <div className="grid grid-cols-3 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ *</label>
-          <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+          <input type="date" className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.tx_date} onChange={e=>s('tx_date',e.target.value)}/>
+          <FiscalPeriodBadge date={form.tx_date}/>
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">من حساب *</label>
@@ -3819,8 +3875,10 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
       <AccountingTable lines={je_lines}/>
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
-        <button onClick={save} disabled={saving} className="flex-1 py-3 rounded-xl bg-purple-700 text-white font-semibold hover:bg-purple-800 disabled:opacity-50 text-sm">
-          {saving?'⏳ جارٍ الحفظ...':'💾 حفظ كمسودة'}
+        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk}
+          title={periodClosed?'الفترة مغلقة':''}
+          className="flex-1 py-3 rounded-xl bg-purple-700 text-white font-semibold hover:bg-purple-800 disabled:opacity-50 text-sm">
+          {saving?'⏳ جارٍ الحفظ...':periodClosed?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
       </div>
     </div>
@@ -3919,8 +3977,13 @@ function ChecksTab({showToast}) {
 function CheckModal({accounts,onClose,onSaved,showToast}) {
   const [form,setForm]=useState({check_number:'',check_type:'outgoing',check_date:today(),due_date:'',bank_account_id:'',amount:'',payee_name:'',description:'',notes:''})
   const [saving,setSaving]=useState(false)
+  const {isOpen:periodOk,isClosed:periodClosed,checking:periodChecking}=useFiscalPeriod(form.check_date)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const save=async()=>{if(!form.check_number||!form.amount){showToast('رقم الشيك والمبلغ مطلوبان','error');return};setSaving(true);try{await api.treasury.createCheck(form);onSaved()}catch(e){showToast(e.message,'error')}finally{setSaving(false)}}
+  const save=async()=>{
+    if(periodClosed){showToast('الفترة المحاسبية مغلقة — لا يمكن الحفظ','error');return}
+    if(!form.check_number||!form.amount){showToast('رقم الشيك والمبلغ مطلوبان','error');return}
+    setSaving(true);try{await api.treasury.createCheck(form);onSaved()}catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+  }
   return <div className="fixed inset-0 z-[100] flex items-center justify-center" dir="rtl">
     <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}/>
     <div className="relative bg-white rounded-2xl shadow-2xl w-[560px] max-h-[90vh] overflow-y-auto p-6">
@@ -3928,24 +3991,27 @@ function CheckModal({accounts,onClose,onSaved,showToast}) {
       <div className="grid grid-cols-2 gap-4 space-y-0">
         {[{k:'check_number',l:'رقم الشيك *'},{k:'payee_name',l:'الجهة المستفيدة'}].map(f=>(
           <div key={f.k}><label className="text-xs font-semibold text-slate-600 block mb-1">{f.l}</label>
-          <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form[f.k]} onChange={e=>s(f.k,e.target.value)}/></div>
+          <input disabled={periodClosed} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-50 disabled:text-slate-400" value={form[f.k]} onChange={e=>s(f.k,e.target.value)}/></div>
         ))}
         <div><label className="text-xs font-semibold text-slate-600 block mb-1">النوع</label>
-          <select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.check_type} onChange={e=>s('check_type',e.target.value)}><option value="outgoing">📤 صادر</option><option value="incoming">📥 وارد</option></select></div>
+          <select disabled={periodClosed} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-50" value={form.check_type} onChange={e=>s('check_type',e.target.value)}><option value="outgoing">📤 صادر</option><option value="incoming">📥 وارد</option></select></div>
         <div><label className="text-xs font-semibold text-slate-600 block mb-1">البنك</label>
-          <select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}><option value="">—</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
-        <div><label className="text-xs font-semibold text-slate-600 block mb-1">تاريخ الشيك</label>
-          <input type="date" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.check_date} onChange={e=>s('check_date',e.target.value)}/></div>
+          <select disabled={periodClosed} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-50" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}><option value="">—</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
+        <div>
+          <label className="text-xs font-semibold text-slate-600 block mb-1">تاريخ الشيك</label>
+          <input type="date" className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${periodClosed?'border-red-400 bg-red-50 text-red-700':'border-slate-200'}`} value={form.check_date} onChange={e=>s('check_date',e.target.value)}/>
+          <FiscalPeriodBadge date={form.check_date}/>
+        </div>
         <div><label className="text-xs font-semibold text-slate-600 block mb-1">تاريخ الاستحقاق</label>
           <input type="date" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.due_date} onChange={e=>s('due_date',e.target.value)}/></div>
         <div><label className="text-xs font-semibold text-slate-600 block mb-1">المبلغ *</label>
-          <input type="number" step="0.001" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.amount} onChange={e=>s('amount',e.target.value)}/></div>
+          <input type="number" step="0.001" disabled={periodClosed} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-50 disabled:text-slate-400" value={form.amount} onChange={e=>s('amount',e.target.value)}/></div>
         <div className="col-span-2"><label className="text-xs font-semibold text-slate-600 block mb-1">البيان</label>
-          <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.description} onChange={e=>s('description',e.target.value)}/></div>
+          <input disabled={periodClosed} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-slate-50 disabled:text-slate-400" value={form.description} onChange={e=>s('description',e.target.value)}/></div>
       </div>
       <div className="flex gap-3 mt-5">
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
-        <button onClick={save} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':'💾 حفظ'}</button>
+        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk} title={periodClosed?'الفترة المحاسبية مغلقة':''} className="flex-1 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':periodClosed?'🔒 مغلقة':'💾 حفظ'}</button>
       </div>
     </div>
   </div>
@@ -4120,6 +4186,7 @@ function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
   const [lines,setLines]=useState([{id:1,expense_account:'',expense_account_name:'',description:'',amount:'',vat_amount:'',vendor_name:''}])
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const {isOpen:periodOk, isClosed:periodClosed, checking:periodChecking} = useFiscalPeriod(form.expense_date)
   const sl=(i,k,v)=>setLines(ls=>ls.map((l,idx)=>idx===i?{...l,[k]:v}:l))
   const addLine=()=>setLines(ls=>[...ls,{id:Date.now(),expense_account:'',expense_account_name:'',description:'',amount:'',vat_amount:'',vendor_name:''}])
   const rmLine=(i)=>{if(lines.length>1)setLines(ls=>ls.filter((_,idx)=>idx!==i))}
@@ -4140,7 +4207,7 @@ function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
       <div className="flex justify-between mb-5"><h3 className="font-bold text-xl">💸 مصروف نثري جديد</h3><button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">✕</button></div>
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div><label className="text-xs font-semibold text-slate-600 block mb-1">الصندوق *</label><select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.fund_id} onChange={e=>s('fund_id',e.target.value)}><option value="">— اختر —</option>{funds.map(f=><option key={f.id} value={f.id}>{f.fund_name}</option>)}</select></div>
-        <div><label className="text-xs font-semibold text-slate-600 block mb-1">التاريخ *</label><input type="date" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.expense_date} onChange={e=>s('expense_date',e.target.value)}/></div>
+        <div><label className="text-xs font-semibold text-slate-600 block mb-1">التاريخ *</label><input type="date" className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.expense_date} onChange={e=>s('expense_date',e.target.value)}/><FiscalPeriodBadge date={form.expense_date}/></div>
         <div><label className="text-xs font-semibold text-slate-600 block mb-1">المرجع</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.reference} onChange={e=>s('reference',e.target.value)}/></div>
         <div className="col-span-3"><label className="text-xs font-semibold text-slate-600 block mb-1">البيان *</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.description} onChange={e=>s('description',e.target.value)}/></div>
       </div>
@@ -4167,7 +4234,7 @@ function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
       <AccountingTable lines={je_lines}/>
       <div className="flex gap-3 mt-4">
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
-        <button onClick={save} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':'💾 حفظ'}</button>
+        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk} title={periodClosed?'الفترة مغلقة':''} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':periodClosed?'🔒 مغلقة':'💾 حفظ'}</button>
       </div>
     </div>
   </div>
