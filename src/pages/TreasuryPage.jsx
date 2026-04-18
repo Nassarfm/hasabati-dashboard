@@ -3702,7 +3702,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
     beneficiary_name:'', beneficiary_iban:'', beneficiary_bank:'',
-    description:'', reference:'', payment_method:'wire',
+    description:'', reference:'', payment_method:'wire', check_number:'',
     branch_code:'', cost_center:'', project_code:'', expense_classification_code:'',
     vat_rate:'0', vat_account_code:'', notes:''
   })
@@ -3812,6 +3812,18 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
         </div>
       </div>
 
+      {/* مرجع بنكي ورقم شيك */}
+      <div className="grid grid-cols-2 gap-5">
+        <div>
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">المرجع البنكي / رقم العملية</label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.reference} onChange={e=>s('reference',e.target.value)} placeholder="مثال: TRF-2026-001234"/>
+        </div>
+        {form.payment_method==='check'&&<div>
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">رقم الشيك</label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.check_number} onChange={e=>s('check_number',e.target.value)} placeholder="رقم الشيك"/>
+        </div>}
+      </div>
+
       {/* نوع الدفعة BP */}
       {type==='BP'&&<div>
         <label className="text-sm font-semibold text-slate-600 block mb-2">نوع الدفعة</label>
@@ -3884,11 +3896,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-5">
-        <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">المرجع</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.reference} onChange={e=>s('reference',e.target.value)}/>
-        </div>
+      <div className="grid grid-cols-3 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">الفرع</label>
           <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.branch_code} onChange={e=>s('branch_code',e.target.value)}>
@@ -3896,8 +3904,6 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
             {branches.map(b=><option key={b.code} value={b.code}>{b.code} — {b.name_ar}</option>)}
           </select>
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-5">
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">مركز التكلفة</label>
           <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.cost_center} onChange={e=>s('cost_center',e.target.value)}>
