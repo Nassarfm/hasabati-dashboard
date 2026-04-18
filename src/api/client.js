@@ -339,6 +339,7 @@ export const api = {
     outstandingChecks:     () => get('/treasury/reports/outstanding-checks'),
     pettyCashStatement:    (p={}) => get('/treasury/reports/petty-cash-statement', p),
     monthlyCashFlow:       (p={}) => get('/treasury/reports/monthly-cash-flow', p),
+    glBalanceCheck:        () => get('/treasury/reports/gl-balance-check'),
   },
 
   // ══════════════════════════════════════════════════════

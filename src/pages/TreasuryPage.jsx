@@ -2716,6 +2716,13 @@ function BankAccountsTab({showToast,openView}) {
     }catch(e){showToast(e.message,'error')}
   }
   const historyMap=Object.fromEntries(balHistory.map(h=>[h.id,h.history||[]]))
+  const [glCheck,setGlCheck]=useState(null)
+  const [glChecking,setGlChecking]=useState(false)
+  const doGlCheck=async()=>{
+    setGlChecking(true)
+    try{const r=await api.treasury.glBalanceCheck();setGlCheck(r?.data||null)}
+    catch(e){showToast(e.message,'error')}finally{setGlChecking(false)}
+  }
 
   const banks  = accounts.filter(a=>a.account_type==='bank')
   const funds  = accounts.filter(a=>a.account_type==='cash_fund')
@@ -2732,6 +2739,43 @@ function BankAccountsTab({showToast,openView}) {
       {icon:'💰', label:'إجمالي الأرصدة', value:`${fmt(totalBank+totalFund,2)}`, sub:'ر.س', iconBg:'bg-slate-100', color:'text-slate-800'},
       {icon:'⚠️', label:'تنبيهات الرصيد', value:alerts.length, sub:alerts.length>0?'رصيد منخفض':'جميع الأرصدة سليمة', iconBg:'bg-amber-100', color:alerts.length>0?'text-amber-600':'text-emerald-600', bg:alerts.length>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
     ]}/>
+
+    {/* GL Balance Check Widget */}
+    <div className={`rounded-2xl border-2 p-4 ${!glCheck?'border-slate-200 bg-white':glCheck.all_matched?'border-emerald-200 bg-emerald-50':'border-red-200 bg-red-50'}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">⚖️</span>
+          <div>
+            <div className="font-bold text-slate-800 text-sm">التحقق من توافق رصيد الخزينة مع الأستاذ العام</div>
+            {glCheck&&<div className={`text-xs mt-0.5 ${glCheck.all_matched?'text-emerald-700':'text-red-700 font-semibold'}`}>
+              {glCheck.all_matched?`✅ جميع الأرصدة متطابقة (${glCheck.total_accounts} حساب)`
+                :`⚠️ ${glCheck.mismatches} حساب غير متطابق — فرق إجمالي: ${fmt(glCheck.total_diff,3)} ر.س`}
+            </div>}
+            {!glCheck&&<div className="text-xs text-slate-400 mt-0.5">اضغط للتحقق من التطابق بين رصيد الخزينة والأستاذ العام</div>}
+          </div>
+        </div>
+        <button onClick={doGlCheck} disabled={glChecking}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50
+            ${glCheck?.all_matched?'bg-emerald-600 hover:bg-emerald-700 text-white':glCheck?.mismatches>0?'bg-red-600 hover:bg-red-700 text-white':'bg-slate-700 hover:bg-slate-800 text-white'}`}>
+          {glChecking?'⏳ جارٍ التحقق...':'🔍 فحص الأرصدة'}
+        </button>
+      </div>
+      {glCheck&&!glCheck.all_matched&&<div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto">
+        {glCheck.accounts.filter(a=>a.status==='mismatch').map(a=>(
+          <div key={a.id} className="flex items-center justify-between bg-white rounded-xl border border-red-200 px-3 py-2 text-xs">
+            <div>
+              <span className="font-bold text-slate-800">{a.account_name}</span>
+              <span className="text-slate-400 mr-2 font-mono">{a.gl_account_code}</span>
+            </div>
+            <div className="flex gap-4 text-left shrink-0">
+              <div><div className="text-slate-400">خزينة</div><div className="font-mono font-bold text-blue-700">{fmt(a.treasury_balance,3)}</div></div>
+              <div><div className="text-slate-400">أستاذ عام</div><div className="font-mono font-bold text-slate-700">{fmt(a.gl_balance,3)}</div></div>
+              <div><div className="text-slate-400">الفرق</div><div className="font-mono font-bold text-red-600">{fmt(a.diff,3)}</div></div>
+            </div>
+          </div>
+        ))}
+      </div>}
+    </div>
 
     {/* تنبيهات الرصيد المنخفض */}
     {alerts.length>0&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
@@ -3456,6 +3500,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
     })
   },[])
 
+  const [fieldErrors,setFieldErrors]=useState({})
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
 
@@ -3499,10 +3544,13 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   }
 
   const save=async()=>{
-    if(!form.bank_account_id){showToast('اختر الصندوق','error');return}
-    if(!form.amount||parseFloat(form.amount)<=0){showToast('أدخل المبلغ','error');return}
-    if(!form.counterpart_account){showToast('اختر الحساب المقابل','error');return}
-    if(!form.description.trim()){showToast('أدخل البيان','error');return}
+    const errs={}
+    if(!form.bank_account_id)                        errs.bank_account_id=true
+    if(!form.amount||parseFloat(form.amount)<=0)     errs.amount=true
+    if(!form.counterpart_account)                    errs.counterpart_account=true
+    if(!form.description?.trim())                    errs.description=true
+    setFieldErrors(errs)
+    if(Object.keys(errs).length>0){showToast('يرجى تعبئة الحقول المطلوبة','error');return}
     if(!validateDims()) return
     setSaving(true)
     try{await api.treasury.createCashTransaction(form);onSaved(`تم إنشاء ${typeLabel} ✅`)}
@@ -3536,14 +3584,20 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">الصندوق <span className="text-red-500">*</span></label>
-          <select disabled={periodClosed||periodChecking} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}>
+          <select disabled={periodClosed||periodChecking} onChange={e=>{s('bank_account_id',e.target.value);setFieldErrors(p=>({...p,bank_account_id:false}))}}
+            className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:bg-slate-50 ${fieldErrors.bank_account_id?'border-red-400 bg-red-50':'border-slate-200'}`}
+            value={form.bank_account_id}>
             <option value="">— اختر الصندوق —</option>
             {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name} ({fmt(a.current_balance,2)} {a.currency_code})</option>)}
           </select>
+          {fieldErrors.bank_account_id&&<p className="text-xs text-red-500 mt-0.5">⚠️ مطلوب</p>}
         </div>
         <div>
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">المبلغ <span className="text-red-500">*</span></label>
-          <input disabled={periodClosed||periodChecking} type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500 text-center disabled:opacity-50 disabled:bg-slate-50" value={form.amount} onChange={e=>s('amount',e.target.value)} placeholder="0.000"/>
+          <input disabled={periodClosed||periodChecking} type="number" step="0.001" onChange={e=>{s('amount',e.target.value);setFieldErrors(p=>({...p,amount:false}))}}
+            className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500 text-center disabled:opacity-50 disabled:bg-slate-50 ${fieldErrors.amount?'border-red-400 bg-red-50':'border-slate-200'}`}
+            value={form.amount} placeholder="0.000"/>
+          {fieldErrors.amount&&<p className="text-xs text-red-500 mt-0.5">⚠️ مطلوب</p>}
         </div>
       </div>
 
@@ -3594,7 +3648,10 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       {/* البيان */}
       <div>
         <label className="text-sm font-semibold text-slate-600 block mb-1.5">البيان <span className="text-red-500">*</span></label>
-        <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)} placeholder="وصف العملية..."/>
+        <input onChange={e=>{s('description',e.target.value);setFieldErrors(p=>({...p,description:false}))}}
+          className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${fieldErrors.description?'border-red-400 bg-red-50':'border-slate-200'}`}
+          value={form.description} placeholder="وصف العملية..."/>
+        {fieldErrors.description&&<p className="text-xs text-red-500 mt-0.5">⚠️ البيان مطلوب</p>}
       </div>
 
       {/* ضريبة القيمة المضافة */}
