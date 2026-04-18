@@ -239,10 +239,11 @@ export const api = {
     dashboard: () => get('/treasury/dashboard'),
 
     // الحسابات البنكية والصناديق
-    listBankAccounts:   (p={})      => get('/treasury/bank-accounts', p),
-    createBankAccount:  (b)         => post('/treasury/bank-accounts', b),
-    updateBankAccount:  (id, b)     => put(`/treasury/bank-accounts/${id}`, b),
-    deleteBankAccount:  (id)        => del(`/treasury/bank-accounts/${id}`),
+    listBankAccounts:     (p={})    => get('/treasury/bank-accounts', p),
+    createBankAccount:    (b)       => post('/treasury/bank-accounts', b),
+    updateBankAccount:    (id, b)   => put(`/treasury/bank-accounts/${id}`, b),
+    deleteBankAccount:    (id)      => del(`/treasury/bank-accounts/${id}`),
+    toggleBankAccount:    (id)      => patch(`/treasury/bank-accounts/${id}/toggle-active`, {}),
 
     // سندات القبض والصرف النقدية (RV / PV)
     listCashTransactions:   (p={})  => get('/treasury/cash-transactions', p),

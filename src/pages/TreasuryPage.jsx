@@ -1650,13 +1650,16 @@ function BankFeesTab({showToast}) {
 function ActivityLogTab({showToast}) {
   const [items,setItems] = useState([])
   const [loading,setLoading] = useState(true)
+  const [error,setError] = useState(null)
 
-  useEffect(()=>{
+  const load=useCallback(()=>{
+    setLoading(true); setError(null)
     api.treasury.activityLog()
       .then(d=>setItems(d?.data?.items||[]))
-      .catch(e=>showToast(e.message,'error'))
+      .catch(e=>{setError(e.message);showToast(e.message,'error')})
       .finally(()=>setLoading(false))
   },[])
+  useEffect(()=>{load()},[load])
 
   const SOURCE_LABEL={'cash':'💵 نقدي','bank':'🏦 بنكي','transfer':'🔄 تحويل'}
   const TX_COLOR={RV:'bg-emerald-100 text-emerald-700',PV:'bg-red-100 text-red-700',BR:'bg-emerald-100 text-emerald-700',BP:'bg-red-100 text-red-700',BT:'bg-blue-100 text-blue-700',IT:'bg-purple-100 text-purple-700'}
@@ -1671,6 +1674,12 @@ function ActivityLogTab({showToast}) {
       {icon:'📝', label:'مسودة', value:drafts, iconBg:'bg-amber-100', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
     ]}/>
 
+    <div className="flex justify-end"><button onClick={load} className="text-xs px-3 py-1.5 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50">🔄 تحديث</button></div>
+    {error&&<div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex items-center gap-3">
+      <span className="text-xl">⚠️</span>
+      <div><strong>خطأ في تحميل سجل النشاط:</strong><br/>{error}</div>
+      <button onClick={load} className="mr-auto px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold">إعادة المحاولة</button>
+    </div>}
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       {loading?<div className="py-10 text-center text-slate-400">...</div>:
       items.length===0?<div className="py-10 text-center text-slate-400 text-sm">لا توجد سجلات</div>:
@@ -2687,6 +2696,7 @@ function BankAccountsTab({showToast,openView}) {
   const [accounts,setAccounts]=useState([])
   const [balHistory,setBalHistory]=useState([])
   const [loading,setLoading]=useState(true)
+  const [showInactive,setShowInactive]=useState(false)
   const load=useCallback(()=>{
     setLoading(true)
     Promise.all([
@@ -2697,6 +2707,14 @@ function BankAccountsTab({showToast,openView}) {
       .catch(e=>showToast(e.message,'error')).finally(()=>setLoading(false))
   },[])
   useEffect(()=>{load()},[load])
+
+  const doToggle=async(a)=>{
+    try{
+      const r=await api.treasury.toggleBankAccount(a.id)
+      showToast(r?.message||'تم تغيير الحالة ✅')
+      load()
+    }catch(e){showToast(e.message,'error')}
+  }
   const historyMap=Object.fromEntries(balHistory.map(h=>[h.id,h.history||[]]))
 
   const banks  = accounts.filter(a=>a.account_type==='bank')
@@ -2746,24 +2764,33 @@ function BankAccountsTab({showToast,openView}) {
         })}
       </div>
     </div>}
-    <div className="flex justify-end">
+    <div className="flex justify-between items-center">
+      <button onClick={()=>setShowInactive(p=>!p)}
+        className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all
+          ${showInactive?'bg-slate-600 text-white border-slate-600':'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+        {showInactive?'👁️ إخفاء الموقوفة':'👁️ عرض الموقوفة'}
+      </button>
       <button onClick={()=>openView('new-bank-account')} className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">+ إضافة حساب بنكي / صندوق</button>
     </div>
     <div className="grid grid-cols-2 gap-4">
-      {['bank','cash_fund'].map(type=>(
+      {['bank','cash_fund'].map(type=>{
+        const filtered=accounts.filter(a=>a.account_type===type&&(showInactive||a.is_active!==false))
+        return(
         <div key={type} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 font-bold text-sm text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
-            {type==='bank'?'🏦 الحسابات البنكية':'💵 الصناديق النقدية'}
+          <div className="px-4 py-3 font-bold text-sm text-white flex justify-between items-center" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+            <span>{type==='bank'?'🏦 الحسابات البنكية':'💵 الصناديق النقدية'}</span>
+            <span className="text-xs opacity-70">{filtered.length} حساب</span>
           </div>
           {loading?<div className="py-6 text-center text-slate-400">...</div>:
-          accounts.filter(a=>a.account_type===type).length===0?
+          filtered.length===0?
           <div className="py-8 text-center text-slate-400 text-sm">لا توجد حسابات</div>:
-          accounts.filter(a=>a.account_type===type).map(a=>(
-            <div key={a.id} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 hover:bg-blue-50/30">
+          filtered.map(a=>(
+            <div key={a.id} className={`flex items-center justify-between px-4 py-3 border-b border-slate-100 hover:bg-blue-50/30 ${a.is_active===false?'opacity-50 bg-slate-50':''}`}>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-slate-800 flex items-center gap-2">
                   {a.account_name}
                   {a.account_sub_type&&<span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">{SUB_LABELS[a.account_sub_type]||a.account_sub_type}</span>}
+                  {a.is_active===false&&<span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-500">موقوف</span>}
                 </div>
                 <div className="text-xs font-mono text-slate-400 mt-0.5">{a.account_code}</div>
                 {a.bank_name&&<div className="text-xs text-slate-400">{a.bank_name}{a.bank_branch&&` · ${a.bank_branch}`}</div>}
@@ -2776,12 +2803,19 @@ function BankAccountsTab({showToast,openView}) {
                 <div className={`font-mono font-bold text-lg ${parseFloat(a.current_balance)<0?'text-red-600':parseFloat(a.current_balance)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0?'text-amber-600':'text-emerald-700'}`}>{fmt(a.current_balance,3)}</div>
                 <div className="text-xs text-slate-400">{a.currency_code}</div>
                 {parseFloat(a.current_balance||0)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0&&<span className="text-[10px] text-amber-600 font-semibold">⚠️ رصيد منخفض</span>}
-                <button onClick={()=>openView('new-bank-account',a)} className="text-xs text-blue-500 hover:underline px-2 py-1 border border-blue-200 rounded-lg">✏️ تعديل</button>
+                <div className="flex gap-1.5">
+                  <button onClick={()=>openView('new-bank-account',a)} className="text-xs text-blue-500 hover:underline px-2 py-1 border border-blue-200 rounded-lg">✏️</button>
+                  <button onClick={()=>doToggle(a)} title={a.is_active===false?'تفعيل الحساب':'إيقاف الحساب'}
+                    className={`text-xs px-2 py-1 rounded-lg border transition-all font-medium
+                      ${a.is_active===false?'border-emerald-200 text-emerald-600 hover:bg-emerald-50':'border-slate-200 text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200'}`}>
+                    {a.is_active===false?'✅':'⏸'}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
-      ))}
+      )})}
     </div>
   </div>
 }
