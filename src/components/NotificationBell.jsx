@@ -7,6 +7,8 @@ const TYPE_ICON = {
   approved:       '✅',
   rejected:       '❌',
   posted:         '🚀',
+  treasury_low:   '⚠️',
+  treasury_diff:  '⚖️',
   default:        '🔔',
 }
 
@@ -15,6 +17,8 @@ const TYPE_COLOR = {
   approved:       'border-r-emerald-400 bg-emerald-50',
   rejected:       'border-r-red-400 bg-red-50',
   posted:         'border-r-blue-400 bg-blue-50',
+  treasury_low:   'border-r-orange-400 bg-orange-50',
+  treasury_diff:  'border-r-red-400 bg-red-50',
   default:        'border-r-slate-300 bg-slate-50',
 }
 
@@ -26,17 +30,39 @@ export default function NotificationBell({ onNavigate }) {
   const [loading,       setLoading]       = useState(false)
   const ref = useRef(null)
 
+  const [treasuryAlerts, setTreasuryAlerts] = useState([])
+
   const loadCount = async () => {
     try {
       const d = await api.notifications.unreadCount()
-      setUnread(d?.data?.count || 0)
+      const sysCount = d?.data?.count || 0
+      setUnread(sysCount)
+    } catch {}
+  }
+
+  const loadTreasuryAlerts = async () => {
+    try {
+      // تنبيهات الرصيد المنخفض
+      const r = await api.treasury?.lowBalanceAlerts?.()
+      const alerts = r?.data || []
+      setTreasuryAlerts(alerts.map(a=>({
+        id: `treasury_low_${a.id}`,
+        type: 'treasury_low',
+        title: `⚠️ رصيد منخفض — ${a.account_name}`,
+        body: `الرصيد الحالي: ${parseFloat(a.current_balance).toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س (حد التنبيه: ${parseFloat(a.low_balance_alert).toLocaleString('ar-SA',{minimumFractionDigits:2})})`,
+        created_at: new Date().toISOString(),
+        is_read: false,
+      })))
     } catch {}
   }
 
   const loadAll = async () => {
     setLoading(true)
     try {
-      const d = await api.notifications.list()
+      const [d] = await Promise.all([
+        api.notifications.list(),
+        loadTreasuryAlerts(),
+      ])
       setNotifications(d?.data || [])
     } catch {}
     finally { setLoading(false) }
@@ -47,7 +73,10 @@ export default function NotificationBell({ onNavigate }) {
     if (!user) return
 
     loadCount()
-    const interval = setInterval(loadCount, 30000) // كل 30 ثانية
+    const interval = setInterval(() => {
+      loadCount()
+      loadTreasuryAlerts()
+    }, 60000) // كل دقيقة
     return () => clearInterval(interval)
   }, [user]) // ← يعيد التشغيل عند تغيّر حالة المستخدم
 
@@ -91,7 +120,7 @@ export default function NotificationBell({ onNavigate }) {
         onClick={() => setOpen(!open)}
         className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-colors">
         <span className="text-lg">🔔</span>
-        {unread > 0 && (
+        {(unread + treasuryAlerts.length) > 0 && (
           <span className="absolute -top-0.5 -left-0.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
             {unread > 9 ? '9+' : unread}
           </span>
@@ -129,7 +158,19 @@ export default function NotificationBell({ onNavigate }) {
                 <div className="text-3xl mb-2">🔕</div>
                 <div className="text-slate-400 text-sm">لا توجد إشعارات</div>
               </div>
-            ) : notifications.map(n => (
+            ) : <>
+              {/* تنبيهات الخزينة أولاً */}
+              {treasuryAlerts.map(a=>(
+                <div key={a.id}
+                  className="flex gap-3 px-3 py-2.5 border-r-4 border-r-orange-400 bg-orange-50 text-right cursor-default">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-800">{a.title}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{a.body}</div>
+                  </div>
+                </div>
+            </>
+              ))}
+              {notifications.map(n => (
               <div key={n.id}
                 onClick={() => { handleMarkRead(n.id); if (n.je_serial && onNavigate) onNavigate(n.je_serial) }}
                 className={`flex gap-3 px-4 py-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition-colors border-r-4 ${!n.is_read ? TYPE_COLOR[n.type] || TYPE_COLOR.default : 'border-r-transparent'}`}>
