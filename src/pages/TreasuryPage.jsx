@@ -489,49 +489,6 @@ function FiscalPeriodBadge({ date }) {
     : <div className="mt-1 text-xs text-red-500 font-bold">🔒 {period.period_name} — مغلقة · تواصل مع مدير النظام</div>
 }
 
-/**
- * useVatAccount — يجلب حساب الضريبة تلقائياً بناءً على المعدل ونوع العملية
- * isPV = true → مدخلات (PV/BP) | false → مخرجات (RV/BR)
- */
-function useVatAccount(vatRate, isPV) {
-  const [vatAccountCode, setVatAccountCode] = useState('')
-  const [vatAccountName, setVatAccountName] = useState('')
-
-  useEffect(()=>{
-    const rate = parseFloat(vatRate)||0
-    if(rate <= 0){ setVatAccountCode(''); setVatAccountName(''); return }
-
-    // أولاً: جرب جلب من tax_types
-    api.tax.list().then(r=>{
-      const taxes = Array.isArray(r) ? r
-                  : Array.isArray(r?.data) ? r.data
-                  : []
-      const match = taxes.find(t=>parseFloat(t.rate||t.tax_rate||0)===rate)
-      if(match){
-        // PV/BP (صرف/دفع) → ضريبة مدخلات | RV/BR (قبض) → ضريبة مخرجات
-        const code = isPV
-          ? (match.input_account_code  || match.deductible_account || match.gl_account_code || '')
-          : (match.output_account_code || match.payable_account    || match.gl_account_code || '')
-        if(code){ setVatAccountCode(code); setVatAccountName(match.tax_name||match.name||''); return }
-      }
-      // fallback: الحسابات الافتراضية
-      const defaults = isPV
-        ? {15:'240201', 5:'240201', 0:''}  // ضريبة مدخلات
-        : {15:'240101', 5:'240101', 0:''}  // ضريبة مخرجات
-      setVatAccountCode(defaults[rate]||'')
-      setVatAccountName(isPV?'ضريبة المدخلات':'ضريبة المخرجات')
-    }).catch(()=>{
-      const defaults = isPV
-        ? {15:'240201', 5:'240201'}
-        : {15:'240101', 5:'240101'}
-      setVatAccountCode(defaults[rate]||'')
-      setVatAccountName(isPV?'ضريبة المدخلات':'ضريبة المخرجات')
-    })
-  },[vatRate, isPV])
-
-  return { vatAccountCode, vatAccountName }
-}
-
 function KPIBar({cards}) {
   return (
     <div className="grid gap-3" style={{gridTemplateColumns:`repeat(${cards.length},1fr)`}}>
@@ -1058,64 +1015,116 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
 }
 
 // ══════════════════════════════════════════════════════════
-// MAIN PAGE
 // ══════════════════════════════════════════════════════════
+// MAIN PAGE — الهيكل الجديد
+// ══════════════════════════════════════════════════════════
+
+// ── KPI Strip — شريط الأرقام الرئيسية (يظهر في كل الصفحات) ──
+function TreasuryKPIStrip() {
+  const [kpi,setKpi] = useState(null)
+  useEffect(()=>{
+    api.treasury.dashboard()
+      .then(r=>setKpi(r?.data?.kpis||null))
+      .catch(()=>{})
+  },[])
+  if(!kpi) return (
+    <div className="grid grid-cols-6 gap-3">
+      {[...Array(6)].map((_,i)=>(
+        <div key={i} className="bg-slate-100 rounded-2xl h-16 animate-pulse"/>
+      ))}
+    </div>
+  )
+  const items = [
+    {label:'إجمالي الأرصدة', value:`${fmt(kpi.total_balance,2)} ر.س`,    icon:'💰', color:'text-blue-700',    bg:'bg-blue-50 border-blue-200'},
+    {label:'قبض اليوم',       value:`${fmt(kpi.today_receipts,2)} ر.س`,   icon:'📥', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+    {label:'صرف اليوم',       value:`${fmt(kpi.today_payments,2)} ر.س`,   icon:'📤', color:'text-red-600',     bg:'bg-red-50 border-red-200'},
+    {label:'مسودات معلقة',    value:(kpi.pending_vouchers||0)+(kpi.pending_bank_tx||0), icon:'⏳', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
+    {label:'عهدة تحتاج تعبئة',value:kpi.need_replenish||0,               icon:'👜', color:'text-purple-700',  bg:kpi.need_replenish>0?'bg-purple-50 border-purple-200':'bg-white border-slate-200'},
+    {label:'شيكات مستحقة',    value:kpi.due_checks_count||0,              icon:'📝', color:'text-slate-700',   bg:'bg-white border-slate-200'},
+  ]
+  return (
+    <div className="grid grid-cols-6 gap-3">
+      {items.map((k,i)=>(
+        <div key={i} className={`rounded-2xl border ${k.bg} px-4 py-3 flex items-center gap-3`}>
+          <span className="text-xl shrink-0">{k.icon}</span>
+          <div className="min-w-0">
+            <div className="text-[11px] text-slate-400 truncate">{k.label}</div>
+            <div className={`text-base font-bold font-mono truncate ${k.color}`}>{k.value}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function TreasuryPage() {
-  const [view,setView]     = useState('main')
+  const [view,setView]         = useState('main')
   const [viewData,setViewData] = useState(null)
-  const [toast,setToast]   = useState(null)
-  const [section,setSection] = useState('dashboard') // dashboard | settings | operations | petty | reconciliation | reports
+  const [toast,setToast]       = useState(null)
+  const [section,setSection]   = useState('dashboard')
   const showToast = (msg,type='success') => setToast({msg,type})
 
   const openView  = (v,data=null) => { setView(v); setViewData(data); window.scrollTo(0,0) }
   const closeView = () => { setView('main'); setViewData(null) }
   const onSaved   = (msg) => { closeView(); showToast(msg||'تم الحفظ ✅') }
 
-  if(view==='new-cash')         return <CashVoucherPage type={viewData||'PV'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
-  if(view==='new-bank-tx')      return <BankTxPage type={viewData||'BP'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
-  if(view==='new-transfer')     return <InternalTransferPage onBack={closeView} onSaved={onSaved} showToast={showToast}/>
-  if(view==='new-bank-account') return <BankAccountPage account={viewData} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+  // صفحات الإدخال الكاملة — لا تعرض شريط التنقل
+  if(view==='new-cash')
+    return <CashVoucherPage type={viewData||'PV'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+  if(view==='new-bank-tx')
+    return <BankTxPage type={viewData||'BP'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+  if(view==='new-transfer')
+    return <InternalTransferPage onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+  if(view==='new-bank-account')
+    return <BankAccountPage account={viewData} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
 
   const SECTIONS = [
-    { id:'dashboard',      icon:'🏠',  label:'لوحة التحكم' },
-    { id:'settings',       icon:'⚙️',  label:'الإعدادات' },
-    { id:'operations',     icon:'💼',  label:'العمليات' },
-    { id:'petty',          icon:'👜',  label:'العهدة النثرية' },
-    { id:'reconciliation', icon:'🔗',  label:'التسويات' },
-    { id:'reports',        icon:'📊',  label:'التقارير' },
+    { id:'dashboard',      icon:'🏠',  label:'لوحة التحكم',   sub:null },
+    { id:'operations',     icon:'💼',  label:'العمليات',       sub:'cash' },
+    { id:'settings',       icon:'⚙️',  label:'الإعدادات',      sub:null },
+    { id:'petty',          icon:'👜',  label:'العهدة النثرية', sub:null },
+    { id:'reconciliation', icon:'🔗',  label:'التسويات',       sub:null },
+    { id:'reports',        icon:'📊',  label:'التقارير',       sub:null },
   ]
 
-  return <div className="space-y-5" dir="rtl">
-    {toast&&<Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
+  return (
+    <div className="space-y-4" dir="rtl">
+      {toast&&<Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
 
-    {/* Header */}
-    <div>
-      <h1 className="text-2xl font-bold text-slate-800">🏦 الخزينة والبنوك</h1>
-      <p className="text-sm text-slate-400 mt-0.5">Treasury & Banking Module</p>
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">🏦 الخزينة والبنوك</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Treasury & Banking Module</p>
+        </div>
+      </div>
+
+      {/* ── شريط KPI — دائماً في الأعلى ── */}
+      <TreasuryKPIStrip/>
+
+      {/* ── شريط التنقل الرئيسي — slim tabs ── */}
+      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1.5 overflow-x-auto">
+        {SECTIONS.map(s=>(
+          <button key={s.id} onClick={()=>setSection(s.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all
+              ${section===s.id
+                ? 'bg-white text-blue-700 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}>
+            <span>{s.icon}</span>
+            <span>{s.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── المحتوى ── */}
+      {section==='dashboard'      && <DashboardTab showToast={showToast} openView={openView}/>}
+      {section==='operations'     && <OperationsSection showToast={showToast} openView={openView}/>}
+      {section==='settings'       && <SettingsSection showToast={showToast} openView={openView}/>}
+      {section==='petty'          && <PettyCashTab showToast={showToast}/>}
+      {section==='reconciliation' && <ReconciliationSection showToast={showToast}/>}
+      {section==='reports'        && <ReportsSection showToast={showToast}/>}
     </div>
-
-    {/* Main Navigation — بطاقات */}
-    <div className="grid grid-cols-6 gap-3">
-      {SECTIONS.map(s=>(
-        <button key={s.id} onClick={()=>setSection(s.id)}
-          className={`flex flex-col items-center gap-2 py-4 px-3 rounded-2xl border-2 font-semibold text-sm transition-all
-            ${section===s.id
-              ? 'bg-blue-700 border-blue-700 text-white shadow-lg shadow-blue-200'
-              : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700'}`}>
-          <span className="text-2xl">{s.icon}</span>
-          <span className="text-xs">{s.label}</span>
-        </button>
-      ))}
-    </div>
-
-    {/* Content */}
-    {section==='dashboard'      && <DashboardTab showToast={showToast} openView={openView}/>}
-    {section==='settings'       && <SettingsSection showToast={showToast} openView={openView}/>}
-    {section==='operations'     && <OperationsSection showToast={showToast} openView={openView}/>}
-    {section==='petty'          && <PettyCashTab showToast={showToast}/>}
-    {section==='reconciliation' && <ReconciliationSection showToast={showToast}/>}
-    {section==='reports'        && <ReportsSection showToast={showToast}/>}
-  </div>
+  )
 }
 
 // ══ RECONCILIATION SECTION ════════════════════════════════
@@ -2485,7 +2494,7 @@ function ReportsSection({showToast}) {
 }
 
 // ══ DASHBOARD ═════════════════════════════════════════════
-function DashboardTab({showToast,setTab,openView}) {
+function DashboardTab({showToast,openView}) {
   const [data,setData]=useState(null)
   const [forecast,setForecast]=useState(null)
   const [loading,setLoading]=useState(true)
@@ -2522,22 +2531,7 @@ function DashboardTab({showToast,setTab,openView}) {
 
   const {kpis,accounts=[],alerts=[],due_checks={},cash_flow_chart=[]}=data
   return <div className="space-y-5">
-    <div className="grid grid-cols-4 gap-4">
-      {[
-        {l:'إجمالي الأرصدة',v:`${fmt(kpis.total_balance,2)} ر.س`,i:'💰',c:'bg-blue-50 border-blue-200',t:'text-blue-700',s:`بنوك: ${fmt(kpis.bank_balance,2)} | صناديق: ${fmt(kpis.cash_balance,2)}`},
-        {l:'قبض اليوم',v:`${fmt(kpis.today_receipts,2)} ر.س`,i:'📥',c:'bg-emerald-50 border-emerald-200',t:'text-emerald-700'},
-        {l:'صرف اليوم',v:`${fmt(kpis.today_payments,2)} ر.س`,i:'📤',c:'bg-red-50 border-red-200',t:'text-red-700'},
-        {l:'مستندات معلقة',v:(kpis.pending_vouchers||0)+(kpis.pending_bank_tx||0),i:'⏳',c:'bg-amber-50 border-amber-200',t:'text-amber-700'},
-      ].map((k,i)=>(
-        <div key={i} className={`rounded-2xl border ${k.c} p-4`}>
-          <div className="flex justify-between mb-2"><span className="text-xs text-slate-400">{k.l}</span><span className="text-xl">{k.i}</span></div>
-          <div className={`text-xl font-bold font-mono ${k.t}`}>{k.v}</div>
-          {k.s&&<div className="text-xs text-slate-400 mt-1">{k.s}</div>}
-        </div>
-      ))}
-    </div>
-
-    {/* أزرار سريعة */}
+    {/* أزرار سريعة — KPIs تظهر أعلى الصفحة دائماً */}
     <div className="bg-white rounded-2xl border border-slate-200 p-4">
       <div className="text-sm font-bold text-slate-600 mb-3">⚡ إجراء سريع</div>
       <div className="flex gap-2 flex-wrap">
@@ -3627,32 +3621,13 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   },[])
 
   const [fieldErrors,setFieldErrors]=useState({})
-  const [vendorInvoices,setVendorInvoices]=useState([])
-  const [loadingInvoices,setLoadingInvoices]=useState(false)
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
 
-  // جلب حساب الضريبة تلقائياً
-  const { vatAccountCode: autoVatCode, vatAccountName: autoVatName } = useVatAccount(form.vat_rate, isPV)
-
-  // مزامنة حساب الضريبة التلقائي مع الفورم
-  useEffect(()=>{
-    if(autoVatCode) s('vat_account_code', autoVatCode)
-  },[autoVatCode])
-
-  const selectVendor=async(v)=>{
+  const selectVendor=(v)=>{
     s('party_name',v.vendor_name)
     s('counterpart_account',v.gl_account_code||'210101')
     s('counterpart_name',v.vendor_name)
-    // جلب الفواتير المفتوحة للمورد
-    if(!v.id) return
-    setLoadingInvoices(true)
-    try{
-      const r = await api.ap?.listInvoices({vendor_id:v.id,status:'posted',limit:20})
-      const all = r?.data?.items||[]
-      setVendorInvoices(all.filter(i=>parseFloat(i.balance_due||0)>0))
-    }catch{ setVendorInvoices([]) }
-    finally{ setLoadingInvoices(false) }
   }
 
   // التوجيه المحاسبي مع دعم الضريبة
@@ -3805,36 +3780,13 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
             </button>
           ))}
         </div>
-        {payType==='vendor'&&vendors.length>0&&<div className="mt-3 space-y-3">
+        {payType==='vendor'&&vendors.length>0&&<div className="mt-3">
           <label className="text-sm font-semibold text-slate-600 block mb-1.5">اختر المورد</label>
           <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
             onChange={e=>{const v=vendors.find(x=>x.id===e.target.value);if(v)selectVendor(v)}}>
             <option value="">— اختر المورد —</option>
             {vendors.map(v=><option key={v.id} value={v.id}>{v.vendor_name}</option>)}
           </select>
-          {/* فواتير المورد المفتوحة */}
-          {loadingInvoices&&<div className="text-xs text-slate-400 py-2">⏳ جارٍ تحميل الفواتير...</div>}
-          {!loadingInvoices&&vendorInvoices.length>0&&<div className="border-2 border-blue-200 rounded-2xl overflow-hidden">
-            <div className="px-3 py-2 bg-blue-700 text-white text-xs font-bold">📋 فواتير مفتوحة — اختر للتطبيق</div>
-            <table className="w-full text-xs">
-              <thead><tr className="bg-blue-50 border-b"><th className="px-3 py-2 text-right">الرقم</th><th className="px-3 py-2 text-right">التاريخ</th><th className="px-3 py-2 text-right">الإجمالي</th><th className="px-3 py-2 text-right font-bold text-red-600">المتبقي</th><th className="px-3 py-2 text-center">تطبيق</th></tr></thead>
-              <tbody>
-                {vendorInvoices.map(inv=>(
-                  <tr key={inv.id} className="border-b hover:bg-blue-50/50">
-                    <td className="px-3 py-2 font-mono text-blue-700 font-bold">{inv.serial}</td>
-                    <td className="px-3 py-2 text-slate-500">{fmtDate(inv.invoice_date)}</td>
-                    <td className="px-3 py-2 font-mono">{fmt(inv.total_amount,2)}</td>
-                    <td className="px-3 py-2 font-mono font-bold text-red-600">{fmt(inv.balance_due,2)}</td>
-                    <td className="px-3 py-2 text-center">
-                      <button onClick={()=>{s('amount',inv.balance_due);s('description',`سداد فاتورة ${inv.serial}`);s('apply_to_invoice',inv.id)}}
-                        className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded-lg font-medium">تطبيق</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>}
-          {!loadingInvoices&&vendorInvoices.length===0&&form.counterpart_account&&<div className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">✅ لا توجد فواتير مفتوحة لهذا المورد</div>}
         </div>}
       </div>}
 
@@ -3875,19 +3827,12 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
             </div>
           </div>
           {vatRate>0&&<div>
-            <label className="text-xs font-semibold text-amber-700 block mb-1">حساب الضريبة</label>
+            <label className="text-xs font-semibold text-amber-700 block mb-1">حساب الضريبة <span className="text-red-500">*</span></label>
             <div className="flex gap-2 items-center">
-              <div className={`flex-1 border-2 rounded-xl px-3 py-2 text-sm font-mono flex items-center justify-between
-                ${form.vat_account_code?'border-emerald-300 bg-emerald-50':'border-amber-200 bg-amber-50'}`}>
-                {form.vat_account_code
-                  ? <><span className="text-emerald-700 font-bold">{form.vat_account_code}</span>
-                      <span className="text-emerald-600 text-xs mr-2">{autoVatName}</span>
-                      <span className="text-emerald-500 text-xs bg-emerald-100 px-1.5 py-0.5 rounded-full">تلقائي ✅</span></>
-                  : <span className="text-amber-500 text-xs">⏳ جارٍ التحميل...</span>}
-              </div>
-              <button onClick={()=>s('vat_account_code','')} className="text-xs text-slate-400 hover:text-slate-600 px-2" title="تغيير يدوي">✏️</button>
+              <input className="flex-1 border-2 border-amber-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-400 bg-white" placeholder="كود حساب الضريبة" value={form.vat_account_code} onChange={e=>s('vat_account_code',e.target.value)}/>
+              {!form.vat_account_code&&<span className="text-xs text-amber-600">⚠️ مطلوب</span>}
             </div>
-            {!form.vat_account_code&&vatRate>0&&<input className="mt-1 w-full border border-amber-300 rounded-xl px-3 py-1.5 text-xs font-mono" placeholder="أو أدخل الكود يدوياً" onChange={e=>s('vat_account_code',e.target.value)}/>}
+            <p className="text-[10px] text-amber-600 mt-1">مثال: ضريبة مدخلات 1510101 · ضريبة مخرجات 2110101</p>
           </div>}
         </div>
       </div>
@@ -4001,12 +3946,6 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
 
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
-
-  // جلب حساب الضريبة تلقائياً
-  const isBP = type==='BP'
-  const { vatAccountCode: autoVatCodeBT, vatAccountName: autoVatNameBT } = useVatAccount(form.vat_rate, isBP)
-  useEffect(()=>{ if(autoVatCodeBT) s('vat_account_code', autoVatCodeBT) },[autoVatCodeBT])
-
   const vatRate = parseFloat(form.vat_rate)||0
   const vatAmt  = parseFloat((amt * vatRate / 100).toFixed(3))
   const totalAmt = parseFloat((amt + vatAmt).toFixed(3))
@@ -4193,16 +4132,12 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
             </div>
           </div>
           {vatRate>0&&<div>
-            <label className="text-xs font-semibold text-amber-700 block mb-1">حساب الضريبة</label>
-            <div className={`border-2 rounded-xl px-3 py-2 text-sm font-mono flex items-center justify-between
-              ${form.vat_account_code?'border-emerald-300 bg-emerald-50':'border-amber-200 bg-amber-50'}`}>
-              {form.vat_account_code
-                ? <><span className="text-emerald-700 font-bold">{form.vat_account_code}</span>
-                    <span className="text-emerald-600 text-xs mr-2">{autoVatNameBT}</span>
-                    <span className="text-emerald-500 text-xs bg-emerald-100 px-1.5 py-0.5 rounded-full">تلقائي ✅</span></>
-                : <span className="text-amber-500 text-xs">⏳ جارٍ التحميل...</span>}
+            <label className="text-xs font-semibold text-amber-700 block mb-1">حساب الضريبة <span className="text-red-500">*</span></label>
+            <div className="flex gap-2 items-center">
+              <input className="flex-1 border-2 border-amber-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-400 bg-white" placeholder="كود حساب الضريبة" value={form.vat_account_code} onChange={e=>s('vat_account_code',e.target.value)}/>
+              {!form.vat_account_code&&<span className="text-xs text-amber-600">⚠️ مطلوب</span>}
             </div>
-            {!form.vat_account_code&&vatRate>0&&<input className="mt-1 w-full border border-amber-300 rounded-xl px-3 py-1.5 text-xs font-mono" placeholder="أو أدخل الكود يدوياً" onChange={e=>s('vat_account_code',e.target.value)}/>}
+            <p className="text-[10px] text-amber-600 mt-1">مثال: ضريبة مدخلات 1510101 · ضريبة مخرجات 2110101</p>
           </div>}
         </div>
       </div>
@@ -4285,9 +4220,6 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
     <div className="flex items-center gap-3 mb-6">
       <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-sm">← رجوع</button>
       <h2 className="text-2xl font-bold text-slate-800">🔄 تحويل داخلي بين الحسابات</h2>
-      <div className="mr-auto">
-        <button onClick={()=>{if(!form.amount||!form.from_account_id)return;printVoucher({...form,serial:'مسودة',tx_type:'IT'},je_lines,fromAcc?.account_name||'—')}} className="px-4 py-2 rounded-xl border-2 border-blue-200 text-blue-700 hover:bg-blue-50 text-sm font-semibold">🖨️ طباعة</button>
-      </div>
     </div>
     <div className="bg-white rounded-2xl border-2 border-slate-200 p-6 space-y-5">
       {/* التاريخ — دائماً مرئي */}
