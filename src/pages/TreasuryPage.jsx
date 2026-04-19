@@ -3367,7 +3367,16 @@ function BankAccountsTab({showToast,openView}) {
           ${showInactive?'bg-slate-600 text-white border-slate-600':'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
         {showInactive?'👁️ إخفاء الموقوفة':'👁️ عرض الموقوفة'}
       </button>
-      <button onClick={()=>openView('new-bank-account')} className="px-5 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">+ إضافة حساب بنكي / صندوق</button>
+      <div className="flex gap-2">
+        <button onClick={()=>openView('new-bank-account',{account_type:'bank'})}
+          className="px-4 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 flex items-center gap-1.5">
+          🏦 إضافة حساب بنكي
+        </button>
+        <button onClick={()=>openView('new-bank-account',{account_type:'cash_fund'})}
+          className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 flex items-center gap-1.5">
+          💵 إضافة صندوق نقدي
+        </button>
+      </div>
     </div>
     <div className="grid grid-cols-2 gap-4">
       {['bank','cash_fund'].map(type=>{
@@ -3815,201 +3824,272 @@ function Tip({text}) {
   )
 }
 
-function BankAccountPage({account,onBack,onSaved,showToast}) {
-  const isEdit=!!account
+function BankAccountPage({account, onBack, onSaved, showToast}) {
+  const isEdit    = !!account
+  const initType  = account?.account_type || 'bank'
+  const [fundType, setFundType] = useState(account?.account_sub_type||'main')
+  const [isCashFund, setIsCashFund] = useState(initType === 'cash_fund')
+  const DAILY_TYPES = ['sales','cashier']
+
   const [form,setForm]=useState({
-    account_code:         account?.account_code||'',
-    account_name:         account?.account_name||'',
-    account_type:         account?.account_type||'bank',
-    account_sub_type:     account?.account_sub_type||'',
-    bank_name:            account?.bank_name||'',
-    bank_branch:          account?.bank_branch||'',
-    account_number:       account?.account_number||'',
-    iban:                 account?.iban||'',
-    swift_code:           account?.swift_code||'',
-    currency_code:        account?.currency_code||'SAR',
-    gl_account_code:      account?.gl_account_code||'',
-    opening_balance:      account?.opening_balance||'0',
-    low_balance_alert:    account?.low_balance_alert||'0',
-    opening_date:         account?.opening_date||'',
-    contact_person:       account?.contact_person||'',
-    contact_phone:        account?.contact_phone||'',
-    notes:                account?.notes||'',
+    account_code:        account?.account_code||'',
+    account_name:        account?.account_name||'',
+    account_type:        initType,
+    account_sub_type:    account?.account_sub_type||'main',
+    bank_name:           account?.bank_name||'',
+    bank_branch:         account?.bank_branch||'',
+    account_number:      account?.account_number||'',
+    iban:                account?.iban||'',
+    swift_code:          account?.swift_code||'',
+    currency_code:       account?.currency_code||'SAR',
+    gl_account_code:     account?.gl_account_code||'',
+    opening_balance:     account?.opening_balance||'0',
+    low_balance_alert:   account?.low_balance_alert||'0',
+    opening_date:        account?.opening_date||'',
+    contact_person:      account?.contact_person||'',
+    contact_phone:       account?.contact_phone||'',
+    notes:               account?.notes||'',
+    require_daily_close: account?.require_daily_close||false,
+    is_active:           account?.is_active!==false,
   })
   const [saving,setSaving]=useState(false)
+  const [deactivateModal,setDeactivateModal]=useState(false)
+  const [deactivateReason,setDeactivateReason]=useState('')
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
 
+  const FUND_TYPES_LIST = [
+    {value:'main',      label:'🏛️ رئيسي',     desc:'الصندوق الرئيسي للمنشأة'},
+    {value:'sub',       label:'📂 فرعي',       desc:'صندوق تابع لصندوق رئيسي'},
+    {value:'sales',     label:'🛒 مبيعات',     desc:'يتطلب إغلاق يومي'},
+    {value:'cashier',   label:'💳 كاشير',      desc:'نقاط البيع — يتطلب إغلاق يومي'},
+    {value:'custodian', label:'👤 أمين',       desc:'صندوق شخصي لموظف محدد'},
+  ]
+
+  const onTypeChange=(val)=>{
+    s('account_type',val)
+    setIsCashFund(val==='cash_fund')
+  }
+  const onFundTypeChange=(val)=>{
+    s('account_sub_type',val)
+    setFundType(val)
+    if(DAILY_TYPES.includes(val)) s('require_daily_close',true)
+    else s('require_daily_close',false)
+  }
+  const needsDailyClose = DAILY_TYPES.includes(form.account_sub_type) && isCashFund
+
   const save=async()=>{
-    if(!form.account_code.trim()){showToast('كود الحساب مطلوب','error');return}
-    if(!form.account_name.trim()){showToast('اسم الحساب مطلوب','error');return}
-    if(!form.gl_account_code){showToast('حساب الأستاذ العام مطلوب','error');return}
+    if(!form.account_code||!form.account_name||!form.gl_account_code){
+      showToast('الكود والاسم وحساب الأستاذ مطلوبة','error'); return
+    }
     setSaving(true)
     try{
       if(isEdit) await api.treasury.updateBankAccount(account.id,form)
-      else await api.treasury.createBankAccount(form)
-      onSaved(`تم ${isEdit?'تعديل':'إنشاء'} الحساب ✅`)
-    }catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+      else       await api.treasury.createBankAccount(form)
+      onSaved('تم الحفظ ✅')
+    }catch(e){showToast(e.message,'error')}
+    finally{setSaving(false)}
   }
 
-  const iBank=form.account_type==='bank'
+  function TT({text}){
+    const [show,setShow]=useState(false)
+    return(
+      <span className="relative inline-flex items-center mr-1 cursor-help"
+        onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)}>
+        <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold inline-flex items-center justify-center">?</span>
+        {show&&<span className="absolute bottom-full right-0 mb-1 w-56 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 z-[500] leading-relaxed shadow-xl">{text}</span>}
+      </span>
+    )
+  }
 
-  return <div className="max-w-4xl" dir="rtl">
-    <div className="flex items-center gap-3 mb-6">
-      <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-sm">← رجوع</button>
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800">{isEdit?'✏️ تعديل حساب':'🏦 إضافة حساب بنكي / صندوق'}</h2>
-        <p className="text-slate-400 text-sm mt-0.5">بيانات الحساب والربط بدليل الحسابات</p>
+  return(
+    <div className="max-w-3xl mx-auto" dir="rtl">
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">← رجوع</button>
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">{isEdit?`تعديل ${isCashFund?'صندوق':'حساب بنكي'}`:(isCashFund?'💵 صندوق نقدي جديد':'🏦 حساب بنكي جديد')}</h2>
+          <p className="text-xs text-slate-400">بيانات الحساب والربط بدليل الحسابات</p>
+        </div>
+        {isEdit&&<button onClick={()=>setDeactivateModal(true)}
+          className={`mr-auto px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border
+            ${form.is_active?'bg-red-50 text-red-600 border-red-200':'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+          <span className={`w-2 h-2 rounded-full ${form.is_active?'bg-emerald-500':'bg-red-500'}`}/>
+          {form.is_active?'نشط — إيقاف':'موقوف — تفعيل'}
+        </button>}
       </div>
-    </div>
+      <div className="space-y-5">
 
-    <div className="bg-white rounded-2xl border-2 border-slate-200 p-6 space-y-6">
-
-      {/* ── القسم 1: التعريف الأساسي */}
-      <div>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">التعريف الأساسي</h3>
-        <div className="grid grid-cols-3 gap-5">
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              النوع <Tip text="حساب بنكي: مرتبط بمصرف. صندوق نقدي: نقد في الشركة."/>
-            </label>
-            <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.account_type} onChange={e=>s('account_type',e.target.value)}>
-              <option value="bank">🏦 حساب بنكي</option>
-              <option value="cash_fund">💵 صندوق نقدي</option>
-            </select>
+        {/* القسم 1: الأساسي */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div className="text-xs font-bold text-slate-400 uppercase">📋 التعريف الأساسي</div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">النوع<TT text="بنكي: مرتبط ببنك خارجي | صندوق: احتفاظ بنقد داخلي"/></label>
+              <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.account_type} onChange={e=>onTypeChange(e.target.value)}>
+                <option value="bank">🏦 حساب بنكي</option>
+                <option value="cash_fund">💵 صندوق نقدي</option>
+              </select>
+            </div>
+            <div>
+              <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">كود الحساب <span className="text-red-500">*</span><TT text="كود فريد. مثال: BANK1 أو CASH1"/></label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_code} onChange={e=>s('account_code',e.target.value)} placeholder="BANK1"/>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">العملة</label>
+              <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.currency_code} onChange={e=>s('currency_code',e.target.value)}>
+                <option value="SAR">🇸🇦 SAR</option><option value="USD">🇺🇸 USD</option><option value="EUR">🇪🇺 EUR</option>
+              </select>
+            </div>
           </div>
           <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              كود الحساب <span className="text-red-500">*</span>
-              <Tip text="معرّف فريد للحساب — يُستخدم في التقارير. مثال: BANK1 أو CASH-HO"/>
-            </label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_code} onChange={e=>s('account_code',e.target.value)} placeholder="BANK1"/>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              العملة <Tip text="عملة الحساب. تُستخدم في القيود متعددة العملات."/>
-            </label>
-            <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.currency_code} onChange={e=>s('currency_code',e.target.value)}>
-              {['SAR','USD','EUR','GBP','AED','KWD'].map(c=><option key={c}>{c}</option>)}
-            </select>
+            <label className="text-xs font-semibold text-slate-600 block mb-1.5">اسم الحساب <span className="text-red-500">*</span></label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.account_name} onChange={e=>s('account_name',e.target.value)} placeholder={isCashFund?'مثال: الصندوق الرئيسي':'مثال: مصرف الراجحي'}/>
           </div>
         </div>
 
-        <div className="mt-5">
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم الحساب <span className="text-red-500">*</span></label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.account_name} onChange={e=>s('account_name',e.target.value)} placeholder="مثال: مصرف الراجحي — الحساب الجاري"/>
+        {/* القسم 2: تصنيف الصندوق — فقط للصناديق */}
+        {isCashFund&&<div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="text-xs font-bold text-slate-400 uppercase">🏷️ تصنيف الصندوق</div>
+            <TT text="نوع الصندوق يحدد سلوكه. مبيعات/كاشير تتطلب إغلاق يومي."/>
+          </div>
+          <div className="grid grid-cols-5 gap-2 mb-3">
+            {FUND_TYPES_LIST.map(ft=>(
+              <button key={ft.value} type="button" onClick={()=>onFundTypeChange(ft.value)} title={ft.desc}
+                className={`py-2.5 px-1 rounded-xl text-xs font-semibold border-2 transition-all text-center
+                  ${form.account_sub_type===ft.value?DAILY_TYPES.includes(ft.value)?'bg-orange-500 border-orange-500 text-white':'bg-blue-600 border-blue-600 text-white':'border-slate-200 text-slate-600 hover:border-blue-300'}`}>
+                {ft.label}
+              </button>
+            ))}
+          </div>
+          <div className="text-xs text-slate-400 mb-3">ℹ️ {FUND_TYPES_LIST.find(t=>t.value===form.account_sub_type)?.desc}</div>
+          {needsDailyClose&&<div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🔒</span>
+                <div>
+                  <div className="font-bold text-orange-800 text-sm">الإغلاق اليومي</div>
+                  <div className="text-xs text-orange-600">مطلوب لهذا النوع</div>
+                </div>
+              </div>
+              <button type="button" onClick={()=>s('require_daily_close',!form.require_daily_close)}
+                className={`relative w-12 h-6 rounded-full transition-colors ${form.require_daily_close?'bg-orange-500':'bg-slate-300'}`}>
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.require_daily_close?'translate-x-7':'translate-x-1'}`}/>
+              </button>
+            </div>
+            {form.require_daily_close&&<div className="mt-2 text-xs text-orange-700 bg-white rounded-xl p-2 border border-orange-200 space-y-0.5">
+              <div>✅ يجب إغلاق الصندوق يومياً</div>
+              <div>📋 يُنشئ قيد إغلاق تلقائي</div>
+              <div>📄 يصدر تقرير إغلاق يومي</div>
+            </div>}
+          </div>}
+        </div>}
+
+        {/* القسم 3: بيانات البنك — فقط للبنوك */}
+        {!isCashFund&&<div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div className="text-xs font-bold text-slate-400 uppercase">🏦 بيانات البنك</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="text-xs font-semibold text-slate-600 block mb-1.5">اسم البنك</label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.bank_name} onChange={e=>s('bank_name',e.target.value)} placeholder="مصرف الراجحي"/></div>
+            <div><label className="text-xs font-semibold text-slate-600 block mb-1.5">الفرع</label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.bank_branch} onChange={e=>s('bank_branch',e.target.value)} placeholder="الدمام"/></div>
+            <div><label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">رقم الحساب<TT text="رقم الحساب كما يظهر في كشف الحساب"/></label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_number} onChange={e=>s('account_number',e.target.value)} dir="ltr"/></div>
+            <div><label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">IBAN<TT text="رقم الآيبان الدولي — 24 خانة يبدأ بـ SA"/></label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.iban} onChange={e=>s('iban',e.target.value)} dir="ltr" placeholder="SA00 0000 0000 0000 0000 0000"/></div>
+            <div><label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">Swift Code<TT text="يُستخدم في التحويلات الدولية"/></label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.swift_code} onChange={e=>s('swift_code',e.target.value)} dir="ltr"/></div>
+            <div><label className="text-xs font-semibold text-slate-600 block mb-1.5">تاريخ الفتح</label>
+              <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.opening_date} onChange={e=>s('opening_date',e.target.value)}/></div>
+          </div>
+        </div>}
+
+        {/* القسم 4: مسؤول التواصل */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="text-xs font-bold text-slate-400 uppercase mb-4">👤 مسؤول التواصل</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">شخص التواصل<TT text={isCashFund?"أمين الصندوق المسؤول":"مسؤول العلاقة مع البنك"}/></label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.contact_person} onChange={e=>s('contact_person',e.target.value)} placeholder="أحمد العمري"/></div>
+            <div><label className="text-xs font-semibold text-slate-600 block mb-1.5">رقم التواصل</label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.contact_phone} onChange={e=>s('contact_phone',e.target.value)} placeholder="05xxxxxxxx" dir="ltr"/></div>
+          </div>
+        </div>
+
+        {/* القسم 5: الربط المحاسبي */}
+        <div className="bg-blue-50 rounded-2xl border border-blue-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="text-xs font-bold text-blue-700 uppercase">🔗 الربط المحاسبي</div>
+            <TT text="يجب أن يكون حساباً مستقلاً لهذا الحساب فقط. يُستخدم في كل القيود."/>
+          </div>
+          <AccountPicker label="حساب الأستاذ العام" required value={form.gl_account_code} onChange={(code)=>s('gl_account_code',code)}/>
+        </div>
+
+        {/* القسم 6: الأرصدة */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="text-xs font-bold text-slate-400 uppercase mb-4">💰 الأرصدة والتنبيهات</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">الرصيد الافتتاحي<TT text="رصيد البداية عند إنشاء الحساب"/></label>
+              <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.opening_balance} onChange={e=>s('opening_balance',e.target.value)}/></div>
+            <div><label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">حد تنبيه الرصيد المنخفض<TT text="عند الانخفاض لهذا الحد يصدر تنبيه في الجرس ولوحة التحكم"/></label>
+              <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.low_balance_alert} onChange={e=>s('low_balance_alert',e.target.value)}/></div>
+          </div>
+        </div>
+
+        {/* ملاحظات */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <label className="text-xs font-semibold text-slate-600 block mb-1.5">ملاحظات</label>
+          <textarea rows={2} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none" value={form.notes} onChange={e=>s('notes',e.target.value)} placeholder="أي معلومات إضافية..."/>
+        </div>
+
+        {/* أزرار */}
+        <div className="flex gap-3 pb-6">
+          <button onClick={onBack} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
+          <button onClick={save} disabled={saving}
+            className={`flex-1 py-3 rounded-xl text-white font-semibold disabled:opacity-50 flex items-center justify-center gap-2 ${isCashFund?'bg-emerald-600 hover:bg-emerald-700':'bg-blue-700 hover:bg-blue-800'}`}>
+            {saving?<><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ الحفظ...</>:'💾 حفظ'}
+          </button>
         </div>
       </div>
 
-      {/* ── القسم 2: بيانات البنك */}
-      {iBank&&<div>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">بيانات البنك</h3>
-        <div className="grid grid-cols-2 gap-5">
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم البنك</label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_name} onChange={e=>s('bank_name',e.target.value)} placeholder="مصرف الراجحي"/>
+      {/* Modal تغيير الحالة */}
+      {deactivateModal&&<div className="fixed inset-0 z-[200] flex items-center justify-center" dir="rtl">
+        <div className="absolute inset-0 bg-slate-900/50" onClick={()=>setDeactivateModal(false)}/>
+        <div className="relative bg-white rounded-2xl shadow-2xl w-[440px] p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl">{form.is_active?'🔴':'🟢'}</span>
+            <div>
+              <h4 className="font-bold text-lg">{form.is_active?'إيقاف الحساب':'تفعيل الحساب'}</h4>
+              <p className="text-sm text-slate-500">{form.account_name}</p>
+            </div>
           </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              النوع الفرعي <Tip text="جاري: للتشغيل اليومي. توفير: للإيداع. ائتمان: بطاقة ائتمانية. آجل: وديعة."/>
-            </label>
-            <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.account_sub_type} onChange={e=>s('account_sub_type',e.target.value)}>
-              <option value="">— اختر —</option>
-              <option value="checking">🔄 حساب جاري</option>
-              <option value="savings">💹 حساب توفير</option>
-              <option value="credit">💳 بطاقة ائتمان</option>
-              <option value="term">🔒 وديعة آجلة</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">الفرع</label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.bank_branch} onChange={e=>s('bank_branch',e.target.value)}/>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              تاريخ الفتح <Tip text="تاريخ فتح الحساب لدى البنك"/>
-            </label>
-            <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.opening_date} onChange={e=>s('opening_date',e.target.value)}/>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">رقم الحساب</label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_number} onChange={e=>s('account_number',e.target.value)}/>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              IBAN <Tip text="رقم الآيبان الدولي — يبدأ بـ SA للسعودية"/>
-            </label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono uppercase focus:outline-none focus:border-blue-500" value={form.iban} onChange={e=>s('iban',e.target.value.toUpperCase())} placeholder="SA03 8000 0000..."/>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              Swift Code <Tip text="رمز التحويل الدولي SWIFT/BIC"/>
-            </label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono uppercase focus:outline-none focus:border-blue-500" value={form.swift_code} onChange={e=>s('swift_code',e.target.value.toUpperCase())}/>
+          {form.is_active&&<div className="mb-4">
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">سبب الإيقاف <span className="text-red-500">*</span></label>
+            <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400"
+              placeholder="مثال: إغلاق الحساب بقرار إداري..."
+              value={deactivateReason} onChange={e=>setDeactivateReason(e.target.value)}/>
+          </div>}
+          {!form.is_active&&account?.deactivated_at&&<div className="mb-4 bg-slate-50 rounded-xl p-3 text-sm space-y-1">
+            <div className="text-slate-500">أُوقف بتاريخ: <span className="font-semibold">{fmtDate(account.deactivated_at)}</span></div>
+            {account.deactivation_reason&&<div className="text-slate-500">السبب: <span className="font-semibold">{account.deactivation_reason}</span></div>}
+          </div>}
+          <div className="flex gap-3">
+            <button onClick={()=>setDeactivateModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
+            <button onClick={async()=>{
+              try{
+                await api.treasury.toggleBankAccount(account.id,{reason:form.is_active?deactivateReason:null})
+                showToast(form.is_active?'🔴 تم الإيقاف':'🟢 تم التفعيل')
+                setDeactivateModal(false)
+                onSaved()
+              }catch(e){showToast(e.message,'error')}
+            }} className={`flex-1 py-2.5 rounded-xl text-white text-sm font-semibold ${form.is_active?'bg-red-600 hover:bg-red-700':'bg-emerald-600 hover:bg-emerald-700'}`}>
+              {form.is_active?'🔴 إيقاف':'🟢 تفعيل'}
+            </button>
           </div>
         </div>
       </div>}
-
-      {/* ── القسم 3: مسؤول التواصل */}
-      <div>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">مسؤول التواصل</h3>
-        <div className="grid grid-cols-2 gap-5">
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              شخص التواصل <Tip text="اسم الموظف المسؤول عن هذا الحساب داخل الشركة أو لدى البنك"/>
-            </label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.contact_person} onChange={e=>s('contact_person',e.target.value)} placeholder="مثال: أحمد العمري"/>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">رقم التواصل</label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.contact_phone} onChange={e=>s('contact_phone',e.target.value)} placeholder="05xxxxxxxx" dir="ltr"/>
-          </div>
-        </div>
-      </div>
-
-      {/* ── القسم 4: حساب الأستاذ */}
-      <div className="bg-blue-50 rounded-2xl p-4 border-2 border-blue-200">
-        <AccountPicker label="حساب الأستاذ العام" required value={form.gl_account_code}
-          onChange={(code,name)=>s('gl_account_code',code)}/>
-        <p className="text-xs text-blue-600 mt-2">⚠️ هذا الحساب يُستخدم في القيود المحاسبية عند كل حركة</p>
-      </div>
-
-      {/* ── القسم 5: الأرصدة والتنبيهات */}
-      <div>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">الأرصدة والتنبيهات</h3>
-        <div className="grid grid-cols-2 gap-5">
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              الرصيد الافتتاحي <Tip text="الرصيد عند إنشاء الحساب في النظام — لا يتغير بالحركات اللاحقة"/>
-            </label>
-            <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.opening_balance} onChange={e=>s('opening_balance',e.target.value)}/>
-          </div>
-          <div>
-            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-              حد تنبيه الرصيد المنخفض <Tip text="عند وصول الرصيد لهذا الحد أو أقل يظهر تنبيه في لوحة الخزينة"/>
-            </label>
-            <input type="number" step="0.001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.low_balance_alert} onChange={e=>s('low_balance_alert',e.target.value)}/>
-          </div>
-        </div>
-      </div>
-
-      {/* ── القسم 6: ملاحظات */}
-      <div>
-        <label className="text-sm font-semibold text-slate-600 block mb-1.5">ملاحظات</label>
-        <textarea rows={3} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none" value={form.notes} onChange={e=>s('notes',e.target.value)} placeholder="أي معلومات إضافية عن الحساب..."/>
-      </div>
-
-      {/* أزرار */}
-      <div className="flex gap-3 pt-2">
-        <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
-        <button onClick={save} disabled={saving} className="flex-1 py-3 rounded-xl bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50 text-sm">
-          {saving?'⏳ جارٍ الحفظ...':'💾 حفظ الحساب'}
-        </button>
-      </div>
     </div>
-  </div>
+  )
 }
 
-// ── صفحة سند قبض / صرف نقدي ─────────────────────────────
 function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const isPV=type==='PV'
   const typeLabel=isPV?'سند صرف نقدي':'سند قبض نقدي'
