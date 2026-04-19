@@ -57,31 +57,16 @@ const NAV_ITEMS = [
     color: 'emerald',
     sections: [
       {
-        title: 'التعريفات والإعدادات',
+        title: 'الخزينة والبنوك',
         items: [
-          { id:'treasury', icon:'📊', label:'لوحة تحكم الخزينة',    sub:'Treasury Dashboard' },
-          { id:'treasury', icon:'🏦', label:'الحسابات البنكية والصناديق', sub:'Bank Accounts & Cash Funds' },
-          { id:'treasury', icon:'🏷️', label:'رسوم البنوك',           sub:'Bank Fees' },
-        ]
-      },
-      {
-        title: 'العمليات',
-        items: [
-          { id:'treasury', icon:'💵', label:'سندات القبض والصرف',   sub:'Cash Transactions PV/RV' },
-          { id:'treasury', icon:'🏛️', label:'حركات البنوك',          sub:'Bank Transactions BP/BR/BT' },
-          { id:'treasury', icon:'🔄', label:'التحويلات الداخلية',    sub:'Internal Transfers IT' },
-          { id:'treasury', icon:'📝', label:'إدارة الشيكات',         sub:'Cheque Management' },
-          { id:'treasury', icon:'👜', label:'العهدة النثرية',         sub:'Petty Cash Management' },
-          { id:'treasury', icon:'🔁', label:'المعاملات المتكررة',    sub:'Recurring Transactions' },
-        ]
-      },
-      {
-        title: 'التقارير والتسويات',
-        items: [
-          { id:'treasury', icon:'⚖️', label:'التسوية البنكية',       sub:'Bank Reconciliation' },
-          { id:'treasury', icon:'📈', label:'التدفق النقدي الشهري',  sub:'Monthly Cash Flow' },
-          { id:'treasury', icon:'📋', label:'سجل النشاط',            sub:'Activity Log' },
-          { id:'treasury', icon:'📊', label:'تقارير الخزينة',        sub:'Treasury Reports' },
+          { id:'treasury',              icon:'📊', label:'لوحة تحكم الخزينة',    sub:'Treasury Dashboard' },
+          { id:'treasury_accounts',    icon:'🏦', label:'الحسابات البنكية',      sub:'Bank Accounts & Cash Funds' },
+          { id:'treasury_cash',        icon:'💵', label:'سندات القبض والصرف',   sub:'Cash Transactions PV/RV' },
+          { id:'treasury_bank',        icon:'🏛️', label:'حركات البنوك',          sub:'Bank Transactions BP/BR/BT' },
+          { id:'treasury_transfers',   icon:'🔄', label:'التحويلات الداخلية',    sub:'Internal Transfers IT' },
+          { id:'treasury_checks',      icon:'📝', label:'إدارة الشيكات',         sub:'Cheque Management' },
+          { id:'treasury_reconcile',   icon:'⚖️', label:'التسوية البنكية',       sub:'Bank Reconciliation' },
+          { id:'treasury_petty',       icon:'👜', label:'العهدة النثرية',         sub:'Petty Cash Management' },
         ]
       },
     ]
@@ -261,7 +246,7 @@ export default function TopNav({ activePage, onNavigate }) {
 
   // تحديد الوحدة النشطة
   const getActiveModule = () => {
-    if (activePage === 'treasury') return 'treasury'
+    if (activePage === 'treasury' || activePage?.startsWith('treasury_')) return 'treasury'
     if (['sales'].includes(activePage)) return 'sales'
     if (['purchases'].includes(activePage)) return 'purchases'
     if (['inventory'].includes(activePage)) return 'inventory'

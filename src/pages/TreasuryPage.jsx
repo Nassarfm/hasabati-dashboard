@@ -1019,18 +1019,13 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
 // MAIN PAGE — الهيكل الجديد
 // ══════════════════════════════════════════════════════════
 
-// ── KPI Strip — شريط الأرقام الرئيسية (يظهر في كل الصفحات) ──
-function TreasuryKPIStrip() {
-  const [kpi,setKpi] = useState(null)
-  useEffect(()=>{
-    api.treasury.dashboard()
-      .then(r=>setKpi(r?.data?.kpis||null))
-      .catch(()=>{})
-  },[])
+// ── KPI Strip — شريط الأرقام الرئيسية (فقط في لوحة التحكم) ──
+function TreasuryKPIStrip({kpis}) {
+  const kpi = kpis
   if(!kpi) return (
     <div className="grid grid-cols-6 gap-3">
       {[...Array(6)].map((_,i)=>(
-        <div key={i} className="bg-slate-100 rounded-2xl h-16 animate-pulse"/>
+        <div key={i} className="bg-slate-100 rounded-2xl h-14 animate-pulse"/>
       ))}
     </div>
   )
@@ -1057,11 +1052,12 @@ function TreasuryKPIStrip() {
   )
 }
 
-export default function TreasuryPage() {
+export default function TreasuryPage({ section: initSection='dashboard', sub: initSub=null }) {
   const [view,setView]         = useState('main')
   const [viewData,setViewData] = useState(null)
   const [toast,setToast]       = useState(null)
-  const [section,setSection]   = useState('dashboard')
+  const [section,setSection]   = useState(initSection)
+  const [initSubTab]           = useState(initSub)  // sub-tab مبدئي من TopNav
   const showToast = (msg,type='success') => setToast({msg,type})
 
   const openView  = (v,data=null) => { setView(v); setViewData(data); window.scrollTo(0,0) }
@@ -1099,9 +1095,6 @@ export default function TreasuryPage() {
         </div>
       </div>
 
-      {/* ── شريط KPI — دائماً في الأعلى ── */}
-      <TreasuryKPIStrip/>
-
       {/* ── شريط التنقل الرئيسي — slim tabs ── */}
       <div className="flex gap-1 bg-slate-100 rounded-2xl p-1.5 overflow-x-auto">
         {SECTIONS.map(s=>(
@@ -1118,7 +1111,7 @@ export default function TreasuryPage() {
 
       {/* ── المحتوى ── */}
       {section==='dashboard'      && <DashboardTab showToast={showToast} openView={openView}/>}
-      {section==='operations'     && <OperationsSection showToast={showToast} openView={openView}/>}
+      {section==='operations'     && <OperationsSection showToast={showToast} openView={openView} initSub={initSubTab}/>}
       {section==='settings'       && <SettingsSection showToast={showToast} openView={openView}/>}
       {section==='petty'          && <PettyCashTab showToast={showToast}/>}
       {section==='reconciliation' && <ReconciliationSection showToast={showToast}/>}
@@ -2086,8 +2079,8 @@ function SettingsSection({showToast,openView}) {
 }
 
 // ══ OPERATIONS SECTION ════════════════════════════════════
-function OperationsSection({showToast,openView}) {
-  const [sub,setSub] = useState('cash')
+function OperationsSection({showToast,openView,initSub=null}) {
+  const [sub,setSub] = useState(initSub||'cash')
   const SUBS = [
     {id:'cash',      icon:'💵', label:'نقدي',              desc:'سندات القبض والصرف'},
     {id:'bank',      icon:'🏛️', label:'بنكي',              desc:'الدفعات والقبض البنكي'},
@@ -2503,7 +2496,7 @@ function DashboardTab({showToast,openView}) {
   useEffect(()=>{
     Promise.all([
       api.treasury.dashboard().catch(()=>null),
-      api.treasury.cashForecast({days:30}).catch(()=>null),
+      (api.treasury.cashForecast ? api.treasury.cashForecast({days:30}) : Promise.resolve(null)).catch(()=>null),
     ]).then(([d,f])=>{setData(d?.data); setForecast(f?.data)}).finally(()=>setLoading(false))
   },[])
 
@@ -2527,11 +2520,32 @@ function DashboardTab({showToast,openView}) {
     return ()=>clearInterval(t)
   },[showToast])
   if(loading) return <div className="py-20 text-center"><div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/><p className="text-slate-400 mt-3 text-sm">جارٍ التحميل...</p></div>
-  if(!data) return <div className="py-20 text-center text-red-500 bg-red-50 rounded-2xl p-6">⚠️ تعذّر تحميل البيانات — تحقق من Railway logs</div>
+  if(!data) return (
+    <div className="space-y-4">
+      <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 text-center">
+        <div className="text-2xl mb-2">⚠️</div>
+        <div className="font-bold text-amber-800">تعذّر تحميل بيانات لوحة التحكم</div>
+        <div className="text-sm text-amber-600 mt-1">تحقق من تشغيل migration في Supabase وأن السيرفر يعمل</div>
+        <button onClick={()=>window.location.reload()} className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600">🔄 إعادة المحاولة</button>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        {[{l:'💰 سند قبض',c:'bg-emerald-600',v:'new-cash',d:'RV'},
+          {l:'💸 سند صرف',c:'bg-red-600',v:'new-cash',d:'PV'},
+          {l:'🏦 دفعة بنكية',c:'bg-blue-600',v:'new-bank-tx',d:'BP'},
+          {l:'🔄 تحويل داخلي',c:'bg-purple-600',v:'new-transfer',d:null},
+        ].map((b,i)=>(
+          <button key={i} onClick={()=>openView(b.v,b.d)} className={`px-4 py-2 rounded-xl text-white text-sm font-semibold ${b.c} hover:opacity-90`}>{b.l}</button>
+        ))}
+      </div>
+    </div>
+  )
 
   const {kpis,accounts=[],alerts=[],due_checks={},cash_flow_chart=[]}=data
   return <div className="space-y-5">
-    {/* أزرار سريعة — KPIs تظهر أعلى الصفحة دائماً */}
+    {/* KPI Strip — فقط في لوحة التحكم */}
+    <TreasuryKPIStrip kpis={kpis}/>
+
+    {/* أزرار سريعة */}
     <div className="bg-white rounded-2xl border border-slate-200 p-4">
       <div className="text-sm font-bold text-slate-600 mb-3">⚡ إجراء سريع</div>
       <div className="flex gap-2 flex-wrap">
