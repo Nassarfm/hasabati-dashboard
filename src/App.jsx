@@ -62,11 +62,71 @@ const PAGE_LABELS = {
   currency_settings:  'العملات وأسعار الصرف',
   localization:       'الإقليمية والتوطين',
   treasury:           'الخزينة والبنوك',
+  // ── المبيعات ──
   sales:              'المبيعات',
+  customers:          'العملاء',
+  sales_reps:         'مندوبو المبيعات',
+  quotations:         'عروض الأسعار',
+  sales_invoices:     'فواتير المبيعات',
+  credit_notes:       'الإشعارات الدائنة',
+  sales_receipts:     'المقبوضات',
+  sales_aging:        'أعمار ديون العملاء',
+  sales_report:       'تقارير المبيعات',
+  vat_sales:          'تقرير ضريبة المبيعات',
+  // ── المشتريات ──
   purchases:          'المشتريات',
+  vendors:            'الموردون',
+  purchase_requests:  'طلبات الشراء',
+  purchase_orders:    'أوامر الشراء',
+  grn:                'إشعارات الاستلام',
+  ap_invoices:        'فواتير الموردين',
+  ap_payments:        'دفعات الموردين',
+  ap_aging:           'أعمار ديون الموردين',
+  pending_del:        'توريد معلق',
+  vendor_perf:        'أداء الموردين',
+  // ── المخزون ──
   inventory:          'المخزون',
+  inv_items:          'بطاقات الأصناف',
+  warehouses:         'المستودعات',
+  inv_transactions:   'الحركات المخزنية',
+  inv_count:          'الجرد الفعلي',
+  inv_inquiry:        'استعلام المخزون',
+  inv_balance:        'رصيد المخزون',
+  inv_valuation:      'تقييم المخزون',
+  inv_aging:          'تقادم المخزون',
+  // ── أخرى ──
   hr:                 'الموارد البشرية',
   assets:             'الأصول الثابتة',
+}
+
+// صفحة "قيد التطوير" — بدلاً من إظهار لوحة الحسابات العامة عند الضغط على صفحات غير مكتملة
+function ComingSoonPage({ pageKey }) {
+  const label = PAGE_LABELS[pageKey] || pageKey
+  const salesIds    = new Set(['customers','sales_reps','quotations','sales_invoices','credit_notes','sales_receipts','sales_aging','sales_report','vat_sales','sales'])
+  const purchaseIds = new Set(['vendors','purchase_requests','purchase_orders','grn','ap_invoices','ap_payments','ap_aging','pending_del','vendor_perf','purchases'])
+  const inventoryIds= new Set(['inv_items','warehouses','inv_transactions','inv_count','inv_inquiry','inv_balance','inv_valuation','inv_aging','inventory'])
+  const icon  = salesIds.has(pageKey)?'🧾':purchaseIds.has(pageKey)?'🛒':inventoryIds.has(pageKey)?'📦':'🚧'
+  const color = salesIds.has(pageKey)?'blue':purchaseIds.has(pageKey)?'emerald':inventoryIds.has(pageKey)?'amber':'slate'
+  const colorMap = {
+    blue:    'bg-blue-50 border-blue-200 text-blue-700',
+    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    amber:   'bg-amber-50 border-amber-200 text-amber-800',
+    slate:   'bg-slate-50 border-slate-200 text-slate-600',
+  }
+  return (
+    <div className="flex items-center justify-center min-h-[65vh]" dir="rtl">
+      <div className="text-center max-w-lg">
+        <div className="text-7xl mb-6">{icon}</div>
+        <h2 className="text-2xl font-bold text-slate-700 mb-2">{label}</h2>
+        <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+          هذه الصفحة قيد التطوير وستكون متاحة في الإصدار القادم من نظام حساباتي ERP
+        </p>
+        <div className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl border-2 text-sm font-semibold ${colorMap[color]}`}>
+          🚧 &nbsp;قيد التطوير — Coming Soon
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function AppContent() {
