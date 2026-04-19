@@ -131,6 +131,8 @@ function AppContent() {
       case 'treasury_checks':      return <TreasuryPage section="operations" sub="checks"/>
       case 'treasury_reconcile':   return <TreasuryPage section="reconciliation"/>
       case 'treasury_petty':       return <TreasuryPage section="petty"/>
+      case 'treasury_reports':     return <TreasuryPage section="reports"/>
+      case 'treasury_recurring':   return <TreasuryPage section="operations" sub="recurring"/>
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>

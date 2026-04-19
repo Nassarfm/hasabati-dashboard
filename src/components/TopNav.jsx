@@ -67,6 +67,8 @@ const NAV_ITEMS = [
           { id:'treasury_checks',      icon:'📝', label:'إدارة الشيكات',         sub:'Cheque Management' },
           { id:'treasury_reconcile',   icon:'⚖️', label:'التسوية البنكية',       sub:'Bank Reconciliation' },
           { id:'treasury_petty',       icon:'👜', label:'العهدة النثرية',         sub:'Petty Cash Management' },
+          { id:'treasury_reports',     icon:'📈', label:'تقارير الخزينة',         sub:'Treasury Reports' },
+          { id:'treasury_recurring',   icon:'🔁', label:'المعاملات المتكررة',     sub:'Recurring Transactions' },
         ]
       },
     ]
