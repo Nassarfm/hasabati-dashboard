@@ -2,39 +2,26 @@ import { supabase } from '../AuthContext'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'https://hasabati-erp-production.up.railway.app/api/v1'
 
-async function request(method, path, body = null, timeoutMs = 40000) {
+async function request(method, path, body = null) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
   if (!token) console.warn('API: No auth token:', method, path)
-
-  const controller = new AbortController()
-  const timeoutId  = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: body ? JSON.stringify(body) : null,
-      signal: controller.signal,
-    })
-    clearTimeout(timeoutId)
-    if (res.status === 204) return null
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const msg = data?.error?.message || data?.detail || data?.message || `خطأ ${res.status}`
-      throw new Error(msg)
-    }
-    return data
-  } catch (e) {
-    clearTimeout(timeoutId)
-    if (e.name === 'AbortError')
-      throw new Error('انتهت مهلة الاتصال بالخادم (40 ثانية) — تحقق من الاتصال وحاول مجدداً')
-    throw e
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : null,
+  })
+  if (res.status === 204) return null
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.detail || data?.message || `خطأ ${res.status}`
+    throw new Error(msg)
   }
+  return data
 }
 
 const get   = (p, params) => request('GET',    p + (params && Object.keys(params).length ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!==''))) : ''))
@@ -252,16 +239,14 @@ export const api = {
     dashboard: () => get('/treasury/dashboard'),
 
     // الحسابات البنكية والصناديق
-    listBankAccounts:     (p={})    => get('/treasury/bank-accounts', p),
-    createBankAccount:    (b)       => post('/treasury/bank-accounts', b),
-    updateBankAccount:    (id, b)   => put(`/treasury/bank-accounts/${id}`, b),
-    deleteBankAccount:    (id)      => del(`/treasury/bank-accounts/${id}`),
-    toggleBankAccount:    (id)      => patch(`/treasury/bank-accounts/${id}/toggle-active`, {}),
+    listBankAccounts:   (p={})      => get('/treasury/bank-accounts', p),
+    createBankAccount:  (b)         => post('/treasury/bank-accounts', b),
+    updateBankAccount:  (id, b)     => put(`/treasury/bank-accounts/${id}`, b),
+    deleteBankAccount:  (id)        => del(`/treasury/bank-accounts/${id}`),
 
     // سندات القبض والصرف النقدية (RV / PV)
     listCashTransactions:   (p={})  => get('/treasury/cash-transactions', p),
     createCashTransaction:  (b)     => post('/treasury/cash-transactions', b),
-    updateCashTransaction:  (id, b) => put(`/treasury/cash-transactions/${id}`, b),
     postCashTransaction:    (id)    => post(`/treasury/cash-transactions/${id}/post`, {}),
     cancelCashTransaction:  (id)    => del(`/treasury/cash-transactions/${id}`),
 
@@ -286,12 +271,8 @@ export const api = {
     createReconciliationSession: (b)              => post('/treasury/reconciliation/sessions', b),
     getSessionLines:             (sessId)         => get(`/treasury/reconciliation/sessions/${sessId}/lines`),
     importStatementLines:        (sessId, lines)  => post(`/treasury/reconciliation/sessions/${sessId}/import-lines`, lines),
-    matchReconciliation: (sessId, lineId, txId, txType) =>
+    matchTransaction:            (sessId, lineId, txId, txType) =>
       post(`/treasury/reconciliation/sessions/${sessId}/match?statement_line_id=${lineId}&tx_id=${txId}&tx_type=${txType}`, {}),
-    matchTransaction: (sessId, lineId, txId, txType) =>
-      post(`/treasury/reconciliation/sessions/${sessId}/match?statement_line_id=${lineId}&tx_id=${txId}&tx_type=${txType}`, {}),
-    autoMatch: (sessId) =>
-      post(`/treasury/reconciliation/sessions/${sessId}/auto-match`, {}),
 
     // صناديق العهدة
     listPettyCashFunds:    ()      => get('/treasury/petty-cash/funds'),
@@ -311,48 +292,46 @@ export const api = {
     createCount: (fundId, actual, notes='') =>
       post(`/treasury/petty-cash/counts?fund_id=${fundId}&actual_balance=${actual}&notes=${encodeURIComponent(notes)}`, {}),
 
-    // معاملات متكررة
-    listRecurring:    (p={}) => get('/treasury/recurring-transactions', p),
-    createRecurring:  (b)    => post('/treasury/recurring-transactions', b),
-    updateRecurring:  (id,b) => put(`/treasury/recurring-transactions/${id}`, b),
-    deleteRecurring:  (id)   => del(`/treasury/recurring-transactions/${id}`),
-    executeRecurring: (id)   => post(`/treasury/recurring-transactions/${id}/execute`, {}),
+    // إضافة حقوق API الجديدة
+    toggleBankAccount:   (id)    => patch(`/treasury/bank-accounts/${id}/toggle-active`, {}),
+    submitCashTx:        (id)    => post(`/treasury/cash-transactions/${id}/submit`, {}),
+    approveCashTx:       (id)    => post(`/treasury/cash-transactions/${id}/approve`, {}),
+    rejectCashTx:        (id, note='') => post(`/treasury/cash-transactions/${id}/reject`, {note}),
+    reverseCashTx:       (id, note='') => post(`/treasury/cash-transactions/${id}/reverse`, {note}),
+    bulkPostCash:        (ids)   => post('/treasury/cash-transactions/bulk-post', {ids}),
+    submitBankTx:        (id)    => post(`/treasury/bank-transactions/${id}/submit`, {}),
+    approveBankTx:       (id)    => post(`/treasury/bank-transactions/${id}/approve`, {}),
+    rejectBankTx:        (id, note='') => post(`/treasury/bank-transactions/${id}/reject`, {note}),
+    reverseBankTx:       (id, note='') => post(`/treasury/bank-transactions/${id}/reverse`, {note}),
+    bulkPostBank:        (ids)   => post('/treasury/bank-transactions/bulk-post', {ids}),
+    autoMatch:           (sessId) => post(`/treasury/reconciliation/sessions/${sessId}/auto-match`, {}),
 
-    // رسوم بنكية
-    listBankFees:   (p={}) => get('/treasury/bank-fees', p),
-    createBankFee:  (b)    => post('/treasury/bank-fees', b),
-    deleteBankFee:  (id)   => del(`/treasury/bank-fees/${id}`),
+    // المعاملات المتكررة
+    listRecurring:      (p={})   => get('/treasury/recurring-transactions', p),
+    createRecurring:    (b)      => post('/treasury/recurring-transactions', b),
+    updateRecurring:    (id, b)  => put(`/treasury/recurring-transactions/${id}`, b),
+    deleteRecurring:    (id)     => del(`/treasury/recurring-transactions/${id}`),
+    executeRecurring:   (id)     => post(`/treasury/recurring-transactions/${id}/execute`, {}),
+
+    // الرسوم البنكية
+    listBankFees:       (p={})   => get('/treasury/bank-fees', p),
+    createBankFee:      (b)      => post('/treasury/bank-fees', b),
+    deleteBankFee:      (id)     => del(`/treasury/bank-fees/${id}`),
 
     // سجل النشاط
-    activityLog: (p={}) => get('/treasury/activity-log', p),
-
-    // ترحيل جماعي
-    bulkPostCash: (ids) => post('/treasury/cash-transactions/bulk-post', { ids }),
-    bulkPostBank: (ids) => post('/treasury/bank-transactions/bulk-post', { ids }),
-
-    // عكس القيد
-    reverseCashTransaction: (id, b={}) => post(`/treasury/cash-transactions/${id}/reverse`, b),
-    reverseBankTransaction: (id, b={}) => post(`/treasury/bank-transactions/${id}/reverse`, b),
-
-    // سير العمل
-    submitCashTransaction:  (id) => post(`/treasury/cash-transactions/${id}/submit`, {}),
-    approveCashTransaction: (id) => post(`/treasury/cash-transactions/${id}/approve`, {}),
-    rejectCashTransaction:  (id, note='') => post(`/treasury/cash-transactions/${id}/reject`, { note }),
-    submitBankTransaction:  (id) => post(`/treasury/bank-transactions/${id}/submit`, {}),
-    approveBankTransaction: (id) => post(`/treasury/bank-transactions/${id}/approve`, {}),
-    rejectBankTransaction:  (id, note='') => post(`/treasury/bank-transactions/${id}/reject`, { note }),
+    activityLog:        (p={})   => get('/treasury/activity-log', p),
 
     // التقارير
-    balanceHistory:        (p={}) => get('/treasury/reports/balance-history', p),
-    cashForecast:          (p={}) => get('/treasury/reports/cash-forecast', p),
-    accountStatement:      (p={}) => get('/treasury/reports/account-statement', p),
-    checkAging:            ()    => get('/treasury/reports/check-aging'),
-    lowBalanceAlerts:      ()    => get('/treasury/reports/low-balance-alerts'),
-    cashPositionReport:    () => get('/treasury/reports/cash-position'),
-    outstandingChecks:     () => get('/treasury/reports/outstanding-checks'),
-    pettyCashStatement:    (p={}) => get('/treasury/reports/petty-cash-statement', p),
-    monthlyCashFlow:       (p={}) => get('/treasury/reports/monthly-cash-flow', p),
-    glBalanceCheck:        () => get('/treasury/reports/gl-balance-check'),
+    cashPositionReport: ()       => get('/treasury/reports/cash-position'),
+    outstandingChecks:  ()       => get('/treasury/reports/outstanding-checks'),
+    pettyCashStatement: (p={})   => get('/treasury/reports/petty-cash-statement', p),
+    accountStatement:   (p={})   => get('/treasury/reports/account-statement', p),
+    monthlyCashFlow:    (p={})   => get('/treasury/reports/monthly-cash-flow', p),
+    cashForecast:       (p={})   => get('/treasury/reports/cash-forecast', p),
+    checkAging:         ()       => get('/treasury/reports/check-aging'),
+    balanceHistory:     (p={})   => get('/treasury/reports/balance-history', p),
+    lowBalanceAlerts:   ()       => get('/treasury/reports/low-balance-alerts'),
+    glBalanceCheck:     ()       => get('/treasury/reports/gl-balance-check'),
   },
 
   // ══════════════════════════════════════════════════════

@@ -1016,55 +1016,42 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
 
 // ══════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════
-// MAIN PAGE — الهيكل الجديد
+// MAIN PAGE
+// كل رابط من TopNav يفتح صفحة مركّزة مستقلة
+// section = القسم الرئيسي | sub = الصفحة الفرعية
 // ══════════════════════════════════════════════════════════
 
-// ── KPI Strip — شريط الأرقام الرئيسية (فقط في لوحة التحكم) ──
-function TreasuryKPIStrip({kpis}) {
-  const kpi = kpis
-  if(!kpi) return (
-    <div className="grid grid-cols-6 gap-3">
-      {[...Array(6)].map((_,i)=>(
-        <div key={i} className="bg-slate-100 rounded-2xl h-14 animate-pulse"/>
-      ))}
-    </div>
-  )
-  const items = [
-    {label:'إجمالي الأرصدة', value:`${fmt(kpi.total_balance,2)} ر.س`,    icon:'💰', color:'text-blue-700',    bg:'bg-blue-50 border-blue-200'},
-    {label:'قبض اليوم',       value:`${fmt(kpi.today_receipts,2)} ر.س`,   icon:'📥', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
-    {label:'صرف اليوم',       value:`${fmt(kpi.today_payments,2)} ر.س`,   icon:'📤', color:'text-red-600',     bg:'bg-red-50 border-red-200'},
-    {label:'مسودات معلقة',    value:(kpi.pending_vouchers||0)+(kpi.pending_bank_tx||0), icon:'⏳', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
-    {label:'عهدة تحتاج تعبئة',value:kpi.need_replenish||0,               icon:'👜', color:'text-purple-700',  bg:kpi.need_replenish>0?'bg-purple-50 border-purple-200':'bg-white border-slate-200'},
-    {label:'شيكات مستحقة',    value:kpi.due_checks_count||0,              icon:'📝', color:'text-slate-700',   bg:'bg-white border-slate-200'},
-  ]
-  return (
-    <div className="grid grid-cols-6 gap-3">
-      {items.map((k,i)=>(
-        <div key={i} className={`rounded-2xl border ${k.bg} px-4 py-3 flex items-center gap-3`}>
-          <span className="text-xl shrink-0">{k.icon}</span>
-          <div className="min-w-0">
-            <div className="text-[11px] text-slate-400 truncate">{k.label}</div>
-            <div className={`text-base font-bold font-mono truncate ${k.color}`}>{k.value}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
+// خريطة القسم → العنوان والأيقونة
+const SECTION_META = {
+  dashboard:      { icon:'🏠', title:'لوحة تحكم الخزينة' },
+  cash:           { icon:'💵', title:'سندات القبض والصرف النقدي' },
+  bank:           { icon:'🏛️', title:'حركات البنوك' },
+  transfers:      { icon:'🔄', title:'التحويلات الداخلية' },
+  checks:         { icon:'📝', title:'إدارة الشيكات' },
+  accounts:       { icon:'🏦', title:'الحسابات البنكية والصناديق' },
+  petty:          { icon:'👜', title:'العهدة النثرية' },
+  reconciliation: { icon:'⚖️', title:'التسوية البنكية' },
+  reports:        { icon:'📊', title:'تقارير الخزينة' },
+  fees:           { icon:'💸', title:'الرسوم البنكية' },
+  recurring:      { icon:'🔁', title:'المعاملات المتكررة' },
+  activity:       { icon:'📋', title:'سجل النشاط' },
 }
 
 export default function TreasuryPage({ section: initSection='dashboard', sub: initSub=null }) {
   const [view,setView]         = useState('main')
   const [viewData,setViewData] = useState(null)
   const [toast,setToast]       = useState(null)
-  const [section,setSection]   = useState(initSection)
-  const [initSubTab]           = useState(initSub)  // sub-tab مبدئي من TopNav
   const showToast = (msg,type='success') => setToast({msg,type})
+
+  // تحديد الصفحة من props
+  // section=operations + sub=cash → cash
+  const activePage = initSub || initSection
 
   const openView  = (v,data=null) => { setView(v); setViewData(data); window.scrollTo(0,0) }
   const closeView = () => { setView('main'); setViewData(null) }
   const onSaved   = (msg) => { closeView(); showToast(msg||'تم الحفظ ✅') }
 
-  // صفحات الإدخال الكاملة — لا تعرض شريط التنقل
+  // صفحات الإدخال الكاملة
   if(view==='new-cash')
     return <CashVoucherPage type={viewData||'PV'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
   if(view==='new-bank-tx')
@@ -1074,48 +1061,342 @@ export default function TreasuryPage({ section: initSection='dashboard', sub: in
   if(view==='new-bank-account')
     return <BankAccountPage account={viewData} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
 
-  const SECTIONS = [
-    { id:'dashboard',      icon:'🏠',  label:'لوحة التحكم',   sub:null },
-    { id:'operations',     icon:'💼',  label:'العمليات',       sub:'cash' },
-    { id:'settings',       icon:'⚙️',  label:'الإعدادات',      sub:null },
-    { id:'petty',          icon:'👜',  label:'العهدة النثرية', sub:null },
-    { id:'reconciliation', icon:'🔗',  label:'التسويات',       sub:null },
-    { id:'reports',        icon:'📊',  label:'التقارير',       sub:null },
-  ]
+  const meta = SECTION_META[activePage] || SECTION_META.dashboard
 
   return (
     <div className="space-y-4" dir="rtl">
       {toast&&<Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/>}
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <span className="text-2xl">{meta.icon}</span>
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">🏦 الخزينة والبنوك</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Treasury & Banking Module</p>
+          <h1 className="text-xl font-bold text-slate-800">{meta.title}</h1>
+          <p className="text-xs text-slate-400">الخزينة والبنوك · Treasury & Banking Module</p>
         </div>
       </div>
 
-      {/* ── شريط التنقل الرئيسي — slim tabs ── */}
-      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1.5 overflow-x-auto">
-        {SECTIONS.map(s=>(
-          <button key={s.id} onClick={()=>setSection(s.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all
-              ${section===s.id
-                ? 'bg-white text-blue-700 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'}`}>
-            <span>{s.icon}</span>
-            <span>{s.label}</span>
-          </button>
+      {/* ── الصفحة المطلوبة مباشرة ── */}
+      {activePage==='dashboard'      && <DashboardTab showToast={showToast} openView={openView}/>}
+      {activePage==='cash'           && <CashFocusedPage showToast={showToast} openView={openView}/>}
+      {activePage==='bank'           && <BankFocusedPage showToast={showToast} openView={openView}/>}
+      {activePage==='transfers'      && <TransfersFocusedPage showToast={showToast} openView={openView}/>}
+      {activePage==='checks'         && <ChecksTab showToast={showToast}/>}
+      {activePage==='accounts'       && <BankAccountsTab showToast={showToast} openView={openView}/>}
+      {activePage==='settings'       && <BankAccountsTab showToast={showToast} openView={openView}/>}
+      {activePage==='petty'          && <PettyCashTab showToast={showToast}/>}
+      {activePage==='reconciliation' && <ReconciliationSection showToast={showToast}/>}
+      {activePage==='reports'        && <ReportsSection showToast={showToast}/>}
+      {activePage==='fees'           && <BankFeesTab showToast={showToast}/>}
+      {activePage==='recurring'      && <RecurringTab showToast={showToast} openView={openView}/>}
+      {activePage==='activity'       && <ActivityLogTab showToast={showToast}/>}
+      {activePage==='operations'     && <CashFocusedPage showToast={showToast} openView={openView}/>}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════
+// صفحة سندات القبض والصرف النقدي المركّزة
+// KPI خاص + قائمة + أزرار إنشاء فقط
+// ══════════════════════════════════════════════════════════
+function CashFocusedPage({showToast, openView}) {
+  const [items,setItems]   = useState([])
+  const [total,setTotal]   = useState(0)
+  const [loading,setLoading] = useState(true)
+  const [selected,setSelected] = useState(null)
+  const [accounts,setAccounts] = useState([])
+  const [filters,setFilters]   = useState({tx_type:'',status:'',date_from:'',date_to:''})
+  const [selectedIds,setSelectedIds] = useState(new Set())
+  const [bulkPosting,setBulkPosting] = useState(false)
+
+  const load = useCallback(async()=>{
+    setLoading(true)
+    try{
+      const p = Object.fromEntries(Object.entries(filters).filter(([,v])=>v))
+      const [r,a] = await Promise.all([
+        api.treasury.listCashTransactions(p),
+        api.treasury.listBankAccounts(),
+      ])
+      setItems(r?.data?.items||[])
+      setTotal(r?.data?.total||0)
+      setAccounts(a?.data||[])
+    }catch(e){showToast(e.message,'error')}
+    finally{setLoading(false)}
+  },[filters])
+  useEffect(()=>{load()},[load])
+
+  // KPI محسوب محلياً من البيانات الموجودة
+  const totalRV  = items.filter(i=>i.tx_type==='RV').reduce((s,i)=>s+parseFloat(i.amount||0),0)
+  const totalPV  = items.filter(i=>i.tx_type==='PV').reduce((s,i)=>s+parseFloat(i.amount||0),0)
+  const posted   = items.filter(i=>i.status==='posted').length
+  const drafts   = items.filter(i=>i.status==='draft').length
+
+  const doPost   = async(id)=>{try{await api.treasury.postCashTransaction(id);load();showToast('تم الترحيل ✅')}catch(e){showToast(e.message,'error')}}
+  const doCancel = async(id)=>{try{await api.treasury.cancelCashTransaction(id);load();showToast('تم الإلغاء')}catch(e){showToast(e.message,'error')}}
+
+  const handleBulkPost = async()=>{
+    if(!selectedIds.size) return
+    setBulkPosting(true)
+    try{
+      const r = await api.treasury.bulkPostCash([...selectedIds])
+      showToast(r?.message||`✅ تم ترحيل ${r?.data?.posted?.length||0} سند`)
+      setSelectedIds(new Set())
+      load()
+    }catch(e){showToast(e.message,'error')}
+    finally{setBulkPosting(false)}
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* KPI خاص بالعمليات النقدية */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          {l:'إجمالي القبض (RV)', v:`${fmt(totalRV,2)} ر.س`, i:'📥', c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700'},
+          {l:'إجمالي الصرف (PV)', v:`${fmt(totalPV,2)} ر.س`, i:'📤', c:'bg-red-50 border-red-200',         t:'text-red-700'},
+          {l:'مُرحَّل',           v:posted,                  i:'✅', c:'bg-blue-50 border-blue-200',        t:'text-blue-700', s:'قيود محاسبية'},
+          {l:'مسودة / في انتظار',v:drafts,                   i:'📋', c:'bg-amber-50 border-amber-200',      t:'text-amber-700', s:'في انتظار الترحيل'},
+        ].map((k,i)=>(
+          <div key={i} className={`rounded-2xl border ${k.c} p-4 flex items-center gap-3`}>
+            <span className="text-2xl">{k.i}</span>
+            <div>
+              <div className="text-xs text-slate-400">{k.l}</div>
+              <div className={`text-xl font-bold font-mono ${k.t}`}>{k.v}</div>
+              {k.s&&<div className="text-xs text-slate-400">{k.s}</div>}
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* ── المحتوى ── */}
-      {section==='dashboard'      && <DashboardTab showToast={showToast} openView={openView}/>}
-      {section==='operations'     && <OperationsSection showToast={showToast} openView={openView} initSub={initSubTab}/>}
-      {section==='settings'       && <SettingsSection showToast={showToast} openView={openView}/>}
-      {section==='petty'          && <PettyCashTab showToast={showToast}/>}
-      {section==='reconciliation' && <ReconciliationSection showToast={showToast}/>}
-      {section==='reports'        && <ReportsSection showToast={showToast}/>}
+      {/* أزرار الإنشاء والفلاتر */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-2">
+          <button onClick={()=>openView('new-cash','RV')}
+            className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 flex items-center gap-1.5">
+            💰 سند قبض جديد
+          </button>
+          <button onClick={()=>openView('new-cash','PV')}
+            className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 flex items-center gap-1.5">
+            💸 سند صرف جديد
+          </button>
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none"
+            value={filters.tx_type} onChange={e=>setFilters(p=>({...p,tx_type:e.target.value}))}>
+            <option value="">كل الأنواع</option>
+            <option value="RV">💰 قبض (RV)</option>
+            <option value="PV">💸 صرف (PV)</option>
+          </select>
+          <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none"
+            value={filters.status} onChange={e=>setFilters(p=>({...p,status:e.target.value}))}>
+            <option value="">كل الحالات</option>
+            <option value="draft">مسودة</option>
+            <option value="posted">مُرحَّل</option>
+            <option value="pending_approval">بانتظار الاعتماد</option>
+          </select>
+          <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none"
+            value={filters.date_from||''} onChange={e=>setFilters(p=>({...p,date_from:e.target.value}))}/>
+          <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none"
+            value={filters.date_to||''} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
+          <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍 بحث</button>
+          <button onClick={()=>exportXLS(
+            items.map(i=>[i.serial,i.tx_type==='RV'?'قبض':'صرف',fmtDate(i.tx_date),i.bank_account_name||'',parseFloat(i.amount||0),i.status==='posted'?'مُرحَّل':i.status==='draft'?'مسودة':'معلق',i.description||'']),
+            ['الرقم','النوع','التاريخ','الحساب','المبلغ','الحالة','البيان'],
+            'سندات_نقدية'
+          )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">
+            📥 Excel
+          </button>
+        </div>
+      </div>
+
+      {/* ترحيل مجمّع */}
+      {selectedIds.size>0&&(
+        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3">
+          <span className="text-sm text-blue-800 font-semibold">{selectedIds.size} سند محدد</span>
+          <button onClick={handleBulkPost} disabled={bulkPosting}
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50">
+            {bulkPosting?'⏳ جارٍ الترحيل...':'✅ ترحيل المحدد'}
+          </button>
+        </div>
+      )}
+
+      {/* الجدول */}
+      <TxTable items={items} total={total} loading={loading} onView={setSelected}
+        selectable selectedIds={selectedIds}
+        onSelectAll={()=>setSelectedIds(s=>s.size===items.filter(i=>i.status==='draft').length?new Set():new Set(items.filter(i=>i.status==='draft').map(i=>i.id)))}
+        onSelectOne={(id)=>setSelectedIds(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}/>
+      <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
+        onClose={()=>setSelected(null)}
+        onPosted={()=>{setSelected(null);load()}}
+        onCancelled={()=>{setSelected(null);load()}}/>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════
+// صفحة حركات البنوك المركّزة
+// ══════════════════════════════════════════════════════════
+function BankFocusedPage({showToast, openView}) {
+  const [items,setItems]   = useState([])
+  const [total,setTotal]   = useState(0)
+  const [loading,setLoading] = useState(true)
+  const [selected,setSelected] = useState(null)
+  const [accounts,setAccounts] = useState([])
+  const [filters,setFilters]   = useState({tx_type:'',status:'',date_from:'',date_to:''})
+  const [selectedIds,setSelectedIds] = useState(new Set())
+  const [bulkPosting,setBulkPosting] = useState(false)
+
+  const load = useCallback(async()=>{
+    setLoading(true)
+    try{
+      const p = Object.fromEntries(Object.entries(filters).filter(([,v])=>v))
+      const [r,a] = await Promise.all([
+        api.treasury.listBankTransactions(p),
+        api.treasury.listBankAccounts(),
+      ])
+      setItems(r?.data?.items||[])
+      setTotal(r?.data?.total||0)
+      setAccounts(a?.data||[])
+    }catch(e){showToast(e.message,'error')}
+    finally{setLoading(false)}
+  },[filters])
+  useEffect(()=>{load()},[load])
+
+  const totalBP = items.filter(i=>i.tx_type==='BP').reduce((s,i)=>s+parseFloat(i.amount||0),0)
+  const totalBR = items.filter(i=>i.tx_type==='BR').reduce((s,i)=>s+parseFloat(i.amount||0),0)
+  const posted  = items.filter(i=>i.status==='posted').length
+  const drafts  = items.filter(i=>i.status==='draft').length
+
+  const handleBulkPost = async()=>{
+    setBulkPosting(true)
+    try{
+      const r = await api.treasury.bulkPostBank([...selectedIds])
+      showToast(r?.message||'✅ تم الترحيل')
+      setSelectedIds(new Set()); load()
+    }catch(e){showToast(e.message,'error')}finally{setBulkPosting(false)}
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* KPI */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          {l:'إجمالي الدفعات (BP)', v:`${fmt(totalBP,2)} ر.س`, i:'💸', c:'bg-red-50 border-red-200',         t:'text-red-700'},
+          {l:'إجمالي القبض (BR)',   v:`${fmt(totalBR,2)} ر.س`, i:'🏦', c:'bg-blue-50 border-blue-200',        t:'text-blue-700'},
+          {l:'مُرحَّل',             v:posted,                  i:'✅', c:'bg-emerald-50 border-emerald-200',   t:'text-emerald-700', s:'قيود محاسبية'},
+          {l:'مسودة',               v:drafts,                  i:'📋', c:'bg-amber-50 border-amber-200',       t:'text-amber-700'},
+        ].map((k,i)=>(
+          <div key={i} className={`rounded-2xl border ${k.c} p-4 flex items-center gap-3`}>
+            <span className="text-2xl">{k.i}</span>
+            <div>
+              <div className="text-xs text-slate-400">{k.l}</div>
+              <div className={`text-xl font-bold font-mono ${k.t}`}>{k.v}</div>
+              {k.s&&<div className="text-xs text-slate-400">{k.s}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-2 flex-wrap">
+          {[{t:'BP',l:'💸 دفعة بنكية',c:'bg-red-600 hover:bg-red-700'},
+            {t:'BR',l:'🏦 قبض بنكي',  c:'bg-emerald-600 hover:bg-emerald-700'},
+            {t:'BT',l:'↔️ تحويل بنكي',c:'bg-blue-600 hover:bg-blue-700'},
+          ].map(b=>(
+            <button key={b.t} onClick={()=>openView('new-bank-tx',b.t)}
+              className={`px-3 py-2 rounded-xl text-white text-sm font-semibold ${b.c}`}>{b.l}</button>
+          ))}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none"
+            value={filters.tx_type} onChange={e=>setFilters(p=>({...p,tx_type:e.target.value}))}>
+            <option value="">كل الأنواع</option><option value="BP">دفعة</option><option value="BR">قبض</option><option value="BT">تحويل</option>
+          </select>
+          <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none"
+            value={filters.status} onChange={e=>setFilters(p=>({...p,status:e.target.value}))}>
+            <option value="">كل الحالات</option><option value="draft">مسودة</option><option value="posted">مُرحَّل</option>
+          </select>
+          <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs" value={filters.date_from||''} onChange={e=>setFilters(p=>({...p,date_from:e.target.value}))}/>
+          <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs" value={filters.date_to||''}   onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
+          <button onClick={load} className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold">🔍</button>
+        </div>
+      </div>
+
+      {selectedIds.size>0&&(
+        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3">
+          <span className="text-sm text-blue-800 font-semibold">{selectedIds.size} سند محدد</span>
+          <button onClick={handleBulkPost} disabled={bulkPosting}
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-700 text-white disabled:opacity-50">
+            {bulkPosting?'⏳...':'✅ ترحيل المحدد'}
+          </button>
+        </div>
+      )}
+
+      <TxTable items={items} total={total} loading={loading} onView={setSelected}
+        selectable selectedIds={selectedIds}
+        onSelectAll={()=>setSelectedIds(s=>s.size===items.filter(i=>i.status==='draft').length?new Set():new Set(items.filter(i=>i.status==='draft').map(i=>i.id)))}
+        onSelectOne={(id)=>setSelectedIds(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}/>
+      <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
+        onClose={()=>setSelected(null)}
+        onPosted={()=>{setSelected(null);load()}}
+        onCancelled={()=>{setSelected(null);load()}}/>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════
+// صفحة التحويلات الداخلية المركّزة
+// ══════════════════════════════════════════════════════════
+function TransfersFocusedPage({showToast, openView}) {
+  const [items,setItems]   = useState([])
+  const [accounts,setAccounts] = useState([])
+  const [loading,setLoading]   = useState(true)
+  const [selected,setSelected] = useState(null)
+
+  const load = useCallback(async()=>{
+    setLoading(true)
+    try{
+      const [r,a] = await Promise.all([
+        api.treasury.listInternalTransfers(),
+        api.treasury.listBankAccounts(),
+      ])
+      setItems(r?.data?.items||[])
+      setAccounts(a?.data||[])
+    }catch(e){showToast(e.message,'error')}
+    finally{setLoading(false)}
+  },[])
+  useEffect(()=>{load()},[load])
+
+  const posted = items.filter(i=>i.status==='posted').length
+  const drafts = items.filter(i=>i.status==='draft').length
+  const total  = items.reduce((s,i)=>s+parseFloat(i.amount||0),0)
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          {l:'إجمالي التحويلات', v:`${fmt(total,2)} ر.س`, i:'🔄', c:'bg-purple-50 border-purple-200', t:'text-purple-700'},
+          {l:'مُرحَّل',          v:posted,                 i:'✅', c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700'},
+          {l:'مسودة',            v:drafts,                 i:'📋', c:'bg-amber-50 border-amber-200', t:'text-amber-700'},
+        ].map((k,i)=>(
+          <div key={i} className={`rounded-2xl border ${k.c} p-4 flex items-center gap-3`}>
+            <span className="text-2xl">{k.i}</span>
+            <div>
+              <div className="text-xs text-slate-400">{k.l}</div>
+              <div className={`text-xl font-bold font-mono ${k.t}`}>{k.v}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-start">
+        <button onClick={()=>openView('new-transfer')}
+          className="px-5 py-2.5 rounded-xl bg-purple-700 text-white text-sm font-semibold hover:bg-purple-800">
+          🔄 تحويل داخلي جديد
+        </button>
+      </div>
+      <TxTable items={items} total={items.length} loading={loading} onView={setSelected}/>
+      <TransferSlideOver tx={selected} accounts={accounts} showToast={showToast}
+        onClose={()=>setSelected(null)}
+        onPosted={()=>{setSelected(null);load()}}/>
     </div>
   )
 }
@@ -2079,8 +2360,8 @@ function SettingsSection({showToast,openView}) {
 }
 
 // ══ OPERATIONS SECTION ════════════════════════════════════
-function OperationsSection({showToast,openView,initSub=null}) {
-  const [sub,setSub] = useState(initSub||'cash')
+function OperationsSection({showToast,openView}) {
+  const [sub,setSub] = useState('cash')
   const SUBS = [
     {id:'cash',      icon:'💵', label:'نقدي',              desc:'سندات القبض والصرف'},
     {id:'bank',      icon:'🏛️', label:'بنكي',              desc:'الدفعات والقبض البنكي'},
@@ -2487,7 +2768,7 @@ function ReportsSection({showToast}) {
 }
 
 // ══ DASHBOARD ═════════════════════════════════════════════
-function DashboardTab({showToast,openView}) {
+function DashboardTab({showToast,setTab,openView}) {
   const [data,setData]=useState(null)
   const [forecast,setForecast]=useState(null)
   const [loading,setLoading]=useState(true)
@@ -2496,7 +2777,7 @@ function DashboardTab({showToast,openView}) {
   useEffect(()=>{
     Promise.all([
       api.treasury.dashboard().catch(()=>null),
-      (api.treasury.cashForecast ? api.treasury.cashForecast({days:30}) : Promise.resolve(null)).catch(()=>null),
+      api.treasury.cashForecast({days:30}).catch(()=>null),
     ]).then(([d,f])=>{setData(d?.data); setForecast(f?.data)}).finally(()=>setLoading(false))
   },[])
 
@@ -2520,30 +2801,24 @@ function DashboardTab({showToast,openView}) {
     return ()=>clearInterval(t)
   },[showToast])
   if(loading) return <div className="py-20 text-center"><div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/><p className="text-slate-400 mt-3 text-sm">جارٍ التحميل...</p></div>
-  if(!data) return (
-    <div className="space-y-4">
-      <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-6 text-center">
-        <div className="text-2xl mb-2">⚠️</div>
-        <div className="font-bold text-amber-800">تعذّر تحميل بيانات لوحة التحكم</div>
-        <div className="text-sm text-amber-600 mt-1">تحقق من تشغيل migration في Supabase وأن السيرفر يعمل</div>
-        <button onClick={()=>window.location.reload()} className="mt-3 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600">🔄 إعادة المحاولة</button>
-      </div>
-      <div className="flex gap-2 flex-wrap">
-        {[{l:'💰 سند قبض',c:'bg-emerald-600',v:'new-cash',d:'RV'},
-          {l:'💸 سند صرف',c:'bg-red-600',v:'new-cash',d:'PV'},
-          {l:'🏦 دفعة بنكية',c:'bg-blue-600',v:'new-bank-tx',d:'BP'},
-          {l:'🔄 تحويل داخلي',c:'bg-purple-600',v:'new-transfer',d:null},
-        ].map((b,i)=>(
-          <button key={i} onClick={()=>openView(b.v,b.d)} className={`px-4 py-2 rounded-xl text-white text-sm font-semibold ${b.c} hover:opacity-90`}>{b.l}</button>
-        ))}
-      </div>
-    </div>
-  )
+  if(!data) return <div className="py-20 text-center text-red-500 bg-red-50 rounded-2xl p-6">⚠️ تعذّر تحميل البيانات — تحقق من Railway logs</div>
 
   const {kpis,accounts=[],alerts=[],due_checks={},cash_flow_chart=[]}=data
   return <div className="space-y-5">
-    {/* KPI Strip — فقط في لوحة التحكم */}
-    <TreasuryKPIStrip kpis={kpis}/>
+    <div className="grid grid-cols-4 gap-4">
+      {[
+        {l:'إجمالي الأرصدة',v:`${fmt(kpis.total_balance,2)} ر.س`,i:'💰',c:'bg-blue-50 border-blue-200',t:'text-blue-700',s:`بنوك: ${fmt(kpis.bank_balance,2)} | صناديق: ${fmt(kpis.cash_balance,2)}`},
+        {l:'قبض اليوم',v:`${fmt(kpis.today_receipts,2)} ر.س`,i:'📥',c:'bg-emerald-50 border-emerald-200',t:'text-emerald-700'},
+        {l:'صرف اليوم',v:`${fmt(kpis.today_payments,2)} ر.س`,i:'📤',c:'bg-red-50 border-red-200',t:'text-red-700'},
+        {l:'مستندات معلقة',v:(kpis.pending_vouchers||0)+(kpis.pending_bank_tx||0),i:'⏳',c:'bg-amber-50 border-amber-200',t:'text-amber-700'},
+      ].map((k,i)=>(
+        <div key={i} className={`rounded-2xl border ${k.c} p-4`}>
+          <div className="flex justify-between mb-2"><span className="text-xs text-slate-400">{k.l}</span><span className="text-xl">{k.i}</span></div>
+          <div className={`text-xl font-bold font-mono ${k.t}`}>{k.v}</div>
+          {k.s&&<div className="text-xs text-slate-400 mt-1">{k.s}</div>}
+        </div>
+      ))}
+    </div>
 
     {/* أزرار سريعة */}
     <div className="bg-white rounded-2xl border border-slate-200 p-4">
