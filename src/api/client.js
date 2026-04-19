@@ -294,16 +294,26 @@ export const api = {
 
     // إضافة حقوق API الجديدة
     toggleBankAccount:   (id, d={}) => patch(`/treasury/bank-accounts/${id}/toggle-active`, d),
-    submitCashTx:        (id)    => post(`/treasury/cash-transactions/${id}/submit`, {}),
-    approveCashTx:       (id)    => post(`/treasury/cash-transactions/${id}/approve`, {}),
-    rejectCashTx:        (id, note='') => post(`/treasury/cash-transactions/${id}/reject`, {note}),
-    reverseCashTx:       (id, note='') => post(`/treasury/cash-transactions/${id}/reverse`, {note}),
-    bulkPostCash:        (ids)   => post('/treasury/cash-transactions/bulk-post', {ids}),
-    submitBankTx:        (id)    => post(`/treasury/bank-transactions/${id}/submit`, {}),
-    approveBankTx:       (id)    => post(`/treasury/bank-transactions/${id}/approve`, {}),
-    rejectBankTx:        (id, note='') => post(`/treasury/bank-transactions/${id}/reject`, {note}),
-    reverseBankTx:       (id, note='') => post(`/treasury/bank-transactions/${id}/reverse`, {note}),
-    bulkPostBank:        (ids)   => post('/treasury/bank-transactions/bulk-post', {ids}),
+    // Cash workflow
+    submitCashTx:            (id)         => post(`/treasury/cash-transactions/${id}/submit`, {}),
+    submitCashTransaction:   (id)         => post(`/treasury/cash-transactions/${id}/submit`, {}),
+    approveCashTx:           (id)         => post(`/treasury/cash-transactions/${id}/approve`, {}),
+    approveCashTransaction:  (id)         => post(`/treasury/cash-transactions/${id}/approve`, {}),
+    rejectCashTx:            (id, note='')=> post(`/treasury/cash-transactions/${id}/reject`, {note}),
+    rejectCashTransaction:   (id, note='')=> post(`/treasury/cash-transactions/${id}/reject`, {note}),
+    reverseCashTx:           (id, note='')=> post(`/treasury/cash-transactions/${id}/reverse`, {note}),
+    reverseCashTransaction:  (id, note='')=> post(`/treasury/cash-transactions/${id}/reverse`, {note}),
+    bulkPostCash:            (ids)        => post('/treasury/cash-transactions/bulk-post', {ids}),
+    // Bank workflow
+    submitBankTx:            (id)         => post(`/treasury/bank-transactions/${id}/submit`, {}),
+    submitBankTransaction:   (id)         => post(`/treasury/bank-transactions/${id}/submit`, {}),
+    approveBankTx:           (id)         => post(`/treasury/bank-transactions/${id}/approve`, {}),
+    approveBankTransaction:  (id)         => post(`/treasury/bank-transactions/${id}/approve`, {}),
+    rejectBankTx:            (id, note='')=> post(`/treasury/bank-transactions/${id}/reject`, {note}),
+    rejectBankTransaction:   (id, note='')=> post(`/treasury/bank-transactions/${id}/reject`, {note}),
+    reverseBankTx:           (id, note='')=> post(`/treasury/bank-transactions/${id}/reverse`, {note}),
+    reverseBankTransaction:  (id, note='')=> post(`/treasury/bank-transactions/${id}/reverse`, {note}),
+    bulkPostBank:            (ids)        => post('/treasury/bank-transactions/bulk-post', {ids}),
     autoMatch:           (sessId) => post(`/treasury/reconciliation/sessions/${sessId}/auto-match`, {}),
 
     // المعاملات المتكررة
