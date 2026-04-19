@@ -1029,12 +1029,14 @@ const SECTION_META = {
   transfers:      { icon:'🔄', title:'التحويلات الداخلية' },
   checks:         { icon:'📝', title:'إدارة الشيكات' },
   accounts:       { icon:'🏦', title:'الحسابات البنكية والصناديق' },
+  settings:       { icon:'🏦', title:'الحسابات البنكية والصناديق' },
   petty:          { icon:'👜', title:'العهدة النثرية' },
   reconciliation: { icon:'⚖️', title:'التسوية البنكية' },
   reports:        { icon:'📊', title:'تقارير الخزينة' },
   fees:           { icon:'💸', title:'الرسوم البنكية' },
   recurring:      { icon:'🔁', title:'المعاملات المتكررة' },
   activity:       { icon:'📋', title:'سجل النشاط' },
+  operations:     { icon:'💼', title:'العمليات المالية' },
 }
 
 export default function TreasuryPage({ section: initSection='dashboard', sub: initSub=null }) {
@@ -3114,14 +3116,75 @@ function BankAccountsTab({showToast,openView}) {
   },[])
   useEffect(()=>{load()},[load])
 
-  const doToggle=async(a)=>{
+  const [toggleModal,setToggleModal] = useState(null) // الحساب المراد تغيير حالته
+  const [toggleReason,setToggleReason] = useState('')
+  const [toggling,setToggling] = useState(false)
+
+  const openToggleModal = (a) => { setToggleModal(a); setToggleReason('') }
+
+  const doToggle = async() => {
+    if(!toggleModal) return
+    // إذا كان سيُوقف → يطلب سبب اختياري
+    setToggling(true)
     try{
-      const r=await api.treasury.toggleBankAccount(a.id)
+      const r = await api.treasury.toggleBankAccount(toggleModal.id, {reason: toggleReason||null})
       showToast(r?.message||'تم تغيير الحالة ✅')
+      setToggleModal(null)
+      setToggleReason('')
       load()
     }catch(e){showToast(e.message,'error')}
+    finally{setToggling(false)}
   }
   const historyMap=Object.fromEntries(balHistory.map(h=>[h.id,h.history||[]]))
+
+  // ── Modal تأكيد التبديل ──────────────────────────────
+  const ToggleModal = () => {
+    if(!toggleModal) return null
+    const isActive = toggleModal.is_active
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center" dir="rtl">
+        <div className="absolute inset-0 bg-slate-900/50" onClick={()=>setToggleModal(null)}/>
+        <div className="relative bg-white rounded-2xl shadow-2xl w-[480px] p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl">{isActive?'🔴':'🟢'}</span>
+            <div>
+              <h3 className="font-bold text-lg">{isActive?'إيقاف الحساب':'تفعيل الحساب'}</h3>
+              <p className="text-sm text-slate-500">{toggleModal.account_name}</p>
+            </div>
+          </div>
+          {isActive&&(
+            <div className="mb-4">
+              <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+                سبب الإيقاف <span className="text-slate-400 text-xs font-normal">(اختياري)</span>
+              </label>
+              <input
+                className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-400"
+                placeholder="مثال: إغلاق الحساب بسبب انتهاء العقد..."
+                value={toggleReason}
+                onChange={e=>setToggleReason(e.target.value)}
+              />
+            </div>
+          )}
+          {!isActive&&toggleModal.deactivated_at&&(
+            <div className="mb-4 bg-slate-50 rounded-xl p-3 text-sm">
+              <div className="text-slate-500">أُوقف بتاريخ: <span className="font-semibold text-slate-700">{fmtDate(toggleModal.deactivated_at)}</span></div>
+              {toggleModal.deactivation_reason&&<div className="text-slate-500 mt-1">السبب: <span className="font-semibold text-slate-700">{toggleModal.deactivation_reason}</span></div>}
+              {toggleModal.deactivated_by&&<div className="text-slate-400 text-xs mt-1">بواسطة: {toggleModal.deactivated_by}</div>}
+            </div>
+          )}
+          <div className="flex gap-3 mt-2">
+            <button onClick={()=>setToggleModal(null)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
+            <button onClick={doToggle} disabled={toggling}
+              className={`flex-1 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50
+                ${isActive?'bg-red-600 hover:bg-red-700':'bg-emerald-600 hover:bg-emerald-700'}`}>
+              {toggling?'⏳...':isActive?'🔴 إيقاف':'🟢 تفعيل'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   const [glCheck,setGlCheck]=useState(null)
   const [glChecking,setGlChecking]=useState(false)
   const doGlCheck=async()=>{
@@ -3139,6 +3202,7 @@ function BankAccountsTab({showToast,openView}) {
   const SUB_LABELS={'checking':'جاري','savings':'توفير','credit':'ائتمان','term':'وديعة آجلة'}
 
   return <div className="space-y-4">
+    <ToggleModal/>
     <KPIBar cards={[
       {icon:'🏦', label:'الحسابات البنكية', value:banks.length, sub:`إجمالي: ${fmt(totalBank,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
       {icon:'💵', label:'الصناديق النقدية', value:funds.length, sub:`إجمالي: ${fmt(totalFund,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},

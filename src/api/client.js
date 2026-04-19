@@ -293,7 +293,7 @@ export const api = {
       post(`/treasury/petty-cash/counts?fund_id=${fundId}&actual_balance=${actual}&notes=${encodeURIComponent(notes)}`, {}),
 
     // إضافة حقوق API الجديدة
-    toggleBankAccount:   (id)    => patch(`/treasury/bank-accounts/${id}/toggle-active`, {}),
+    toggleBankAccount:   (id, d={}) => patch(`/treasury/bank-accounts/${id}/toggle-active`, d),
     submitCashTx:        (id)    => post(`/treasury/cash-transactions/${id}/submit`, {}),
     approveCashTx:       (id)    => post(`/treasury/cash-transactions/${id}/approve`, {}),
     rejectCashTx:        (id, note='') => post(`/treasury/cash-transactions/${id}/reject`, {note}),
