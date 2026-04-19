@@ -2807,6 +2807,21 @@ function DashboardTab({showToast,setTab,openView}) {
 
   const {kpis,accounts=[],alerts=[],due_checks={},cash_flow_chart=[]}=data
   return <div className="space-y-5">
+    {/* تنبيهات الرصيد المنخفض */}
+    {alerts&&alerts.length>0&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+      <div className="font-bold text-amber-800 text-sm mb-2">⚠️ تنبيهات الرصيد المنخفض ({alerts.length})</div>
+      <div className="flex flex-wrap gap-2">
+        {alerts.map(a=>(
+          <div key={a.id} className="bg-white border border-amber-200 rounded-xl px-3 py-2 flex items-center gap-2 text-sm">
+            <span>⚠️</span>
+            <span className="font-semibold text-slate-700">{a.account_name}</span>
+            <span className="font-mono text-red-600 font-bold">{fmt(a.current_balance,2)}</span>
+            <span className="text-slate-400 text-xs">من {fmt(a.low_balance_alert,2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>}
+
     <div className="grid grid-cols-4 gap-4">
       {[
         {l:'إجمالي الأرصدة',v:`${fmt(kpis.total_balance,2)} ر.س`,i:'💰',c:'bg-blue-50 border-blue-200',t:'text-blue-700',s:`بنوك: ${fmt(kpis.bank_balance,2)} | صناديق: ${fmt(kpis.cash_balance,2)}`},
@@ -3187,6 +3202,7 @@ function BankAccountsTab({showToast,openView}) {
   }
   const [glCheck,setGlCheck]=useState(null)
   const [glChecking,setGlChecking]=useState(false)
+  const [showGlDetails,setShowGlDetails]=useState(false)
   const doGlCheck=async()=>{
     setGlChecking(true)
     try{const r=await api.treasury.glBalanceCheck();setGlCheck(r?.data||null)}
@@ -3212,39 +3228,106 @@ function BankAccountsTab({showToast,openView}) {
 
     {/* GL Balance Check Widget */}
     <div className={`rounded-2xl border-2 p-4 ${!glCheck?'border-slate-200 bg-white':glCheck.all_matched?'border-emerald-200 bg-emerald-50':'border-red-200 bg-red-50'}`}>
-      <div className="flex items-center justify-between">
+      {/* رأس الـ widget */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xl">⚖️</span>
           <div>
             <div className="font-bold text-slate-800 text-sm">التحقق من توافق رصيد الخزينة مع الأستاذ العام</div>
-            {glCheck&&<div className={`text-xs mt-0.5 ${glCheck.all_matched?'text-emerald-700':'text-red-700 font-semibold'}`}>
-              {glCheck.all_matched?`✅ جميع الأرصدة متطابقة (${glCheck.total_accounts} حساب)`
-                :`⚠️ ${glCheck.mismatches} حساب غير متطابق — فرق إجمالي: ${fmt(glCheck.total_diff,3)} ر.س`}
-            </div>}
+            {glCheck&&(
+              <div className={`text-xs mt-0.5 font-semibold ${glCheck.all_matched?'text-emerald-700':'text-red-700'}`}>
+                {glCheck.all_matched
+                  ? `✅ جميع الأرصدة متطابقة (${glCheck.total_accounts} حساب)`
+                  : `⚠️ ${glCheck.mismatches} حساب غير متطابق — فرق إجمالي: ${fmt(glCheck.total_diff,2)} ر.س`}
+              </div>
+            )}
             {!glCheck&&<div className="text-xs text-slate-400 mt-0.5">اضغط للتحقق من التطابق بين رصيد الخزينة والأستاذ العام</div>}
           </div>
         </div>
-        <button onClick={doGlCheck} disabled={glChecking}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50
-            ${glCheck?.all_matched?'bg-emerald-600 hover:bg-emerald-700 text-white':glCheck?.mismatches>0?'bg-red-600 hover:bg-red-700 text-white':'bg-slate-700 hover:bg-slate-800 text-white'}`}>
-          {glChecking?'⏳ جارٍ التحقق...':'🔍 فحص الأرصدة'}
-        </button>
+        <div className="flex gap-2">
+          {glCheck&&!glCheck.all_matched&&(
+            <button onClick={()=>setShowGlDetails(v=>!v)}
+              className="px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1.5">
+              📋 {showGlDetails?'إخفاء التفاصيل':'عرض تفاصيل الفروقات'}
+            </button>
+          )}
+          <button onClick={doGlCheck} disabled={glChecking}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50
+              ${glCheck?.all_matched
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                : glCheck?.mismatches>0
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-slate-700 hover:bg-slate-800 text-white'}`}>
+            {glChecking?'⏳ جارٍ التحقق...':'🔍 فحص الأرصدة'}
+          </button>
+        </div>
       </div>
-      {glCheck&&!glCheck.all_matched&&<div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto">
-        {glCheck.accounts.filter(a=>a.status==='mismatch').map(a=>(
-          <div key={a.id} className="flex items-center justify-between bg-white rounded-xl border border-red-200 px-3 py-2 text-xs">
-            <div>
-              <span className="font-bold text-slate-800">{a.account_name}</span>
-              <span className="text-slate-400 mr-2 font-mono">{a.gl_account_code}</span>
+
+      {/* جدول الفروقات المفصّل */}
+      {glCheck&&!glCheck.all_matched&&showGlDetails&&(
+        <div className="mt-4 space-y-3">
+          <div className="text-xs font-bold text-red-700 border-b border-red-200 pb-1">
+            الحسابات ذات الفروقات ({glCheck.mismatches})
+          </div>
+          {glCheck.accounts.filter(a=>a.status==='mismatch').map(a=>(
+            <div key={a.id} className="bg-white rounded-2xl border border-red-200 p-4">
+              {/* اسم الحساب */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{a.account_type==='bank'?'🏦':'💵'}</span>
+                  <span className="font-bold text-slate-800">{a.account_name}</span>
+                </div>
+                <span className="text-xs font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg">{a.gl_account_code}</span>
+              </div>
+              {/* الأرقام */}
+              <div className="grid grid-cols-3 gap-3 text-center text-sm mb-3">
+                <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                  <div className="text-xs text-slate-400 mb-1">رصيد الخزينة</div>
+                  <div className="font-mono font-bold text-blue-700 text-base">{fmt(a.treasury_balance,2)}</div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                  <div className="text-xs text-slate-400 mb-1">الأستاذ العام</div>
+                  <div className="font-mono font-bold text-slate-700 text-base">{fmt(a.gl_balance,2)}</div>
+                </div>
+                <div className="bg-red-50 rounded-xl p-3 border border-red-200">
+                  <div className="text-xs text-slate-400 mb-1">الفرق</div>
+                  <div className="font-mono font-bold text-red-600 text-base">{fmt(a.diff,2)}</div>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-4 text-left shrink-0">
-              <div><div className="text-slate-400">خزينة</div><div className="font-mono font-bold text-blue-700">{fmt(a.treasury_balance,3)}</div></div>
-              <div><div className="text-slate-400">أستاذ عام</div><div className="font-mono font-bold text-slate-700">{fmt(a.gl_balance,3)}</div></div>
-              <div><div className="text-slate-400">الفرق</div><div className="font-mono font-bold text-red-600">{fmt(a.diff,3)}</div></div>
+          ))}
+          {/* إرشادات الإصلاح */}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm">
+            <div className="font-bold text-blue-800 mb-2">💡 كيفية إصلاح الفروقات</div>
+            <div className="space-y-1 text-blue-700 text-xs">
+              <div>1. اذهب إلى <strong>سندات القبض والصرف</strong> أو <strong>حركات البنوك</strong></div>
+              <div>2. ابحث عن السندات بحالة <strong>مسودة</strong> الخاصة بهذا الحساب</div>
+              <div>3. <strong>رحّل</strong> جميع السندات حتى تظهر في الأستاذ العام</div>
+              <div className="text-slate-500 pt-1">ملاحظة: إذا كانت الفروقات ناتجة عن أرصدة افتتاحية، أنشئ قيد تسوية يدوي</div>
             </div>
           </div>
-        ))}
-      </div>}
+        </div>
+      )}
+
+      {/* عرض مختصر بدون تفاصيل */}
+      {glCheck&&!glCheck.all_matched&&!showGlDetails&&(
+        <div className="mt-3 space-y-1.5 max-h-36 overflow-y-auto">
+          {glCheck.accounts.filter(a=>a.status==='mismatch').map(a=>(
+            <div key={a.id} className="flex items-center justify-between bg-white rounded-xl border border-red-200 px-3 py-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span>{a.account_type==='bank'?'🏦':'💵'}</span>
+                <span className="font-bold text-slate-800">{a.account_name}</span>
+                <span className="text-slate-400 font-mono">{a.gl_account_code}</span>
+              </div>
+              <div className="flex gap-3 text-left shrink-0">
+                <div className="text-center"><div className="text-slate-400">خزينة</div><div className="font-mono font-bold text-blue-700">{fmt(a.treasury_balance,2)}</div></div>
+                <div className="text-center"><div className="text-slate-400">GL</div><div className="font-mono font-bold text-slate-600">{fmt(a.gl_balance,2)}</div></div>
+                <div className="text-center"><div className="text-slate-400">فرق</div><div className="font-mono font-bold text-red-600">{fmt(a.diff,2)}</div></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
 
     {/* تنبيهات الرصيد المنخفض */}
@@ -4844,17 +4927,53 @@ function PettyCashTab({showToast}) {
       <div className="grid grid-cols-3 gap-4">
         {loading?<div className="col-span-3 py-8 text-center text-slate-400">...</div>:
         funds.length===0?<div className="col-span-3 py-8 text-center text-slate-400">لا توجد صناديق عهدة</div>:
-        funds.map(f=>{const pct=parseFloat(f.balance_pct)||0;return(
-          <div key={f.id} className={`bg-white rounded-2xl border p-4 ${f.needs_replenishment?'border-amber-300':'border-slate-200'}`}>
-            <div className="flex justify-between mb-2">
-              <div><div className="font-bold text-slate-800">{f.fund_name}</div><div className="text-xs text-slate-400">{f.custodian_name||'—'} · {f.fund_code}</div></div>
-              <div className="text-left"><div className={`font-mono font-bold text-lg ${pct<20?'text-red-600':'text-emerald-700'}`}>{fmt(f.current_balance,3)}</div><div className="text-xs text-slate-400">من {fmt(f.limit_amount,0)}</div></div>
+        funds.map(f=>{const pct=parseFloat(f.balance_pct)||0;const isActive=f.is_active!==false;return(
+          <div key={f.id} className={`bg-white rounded-2xl border p-4 transition-all
+            ${!isActive?'opacity-60 border-slate-200 bg-slate-50':f.needs_replenishment?'border-amber-300':'border-slate-200'}`}>
+            {/* رأس البطاقة */}
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-slate-800 truncate">{f.fund_name}</span>
+                  {/* تصنيف الصندوق */}
+                  {f.fund_type&&(
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium
+                      ${f.fund_type==='sales'?'bg-orange-100 text-orange-700':
+                        f.fund_type==='cashier'?'bg-purple-100 text-purple-700':
+                        f.fund_type==='main'?'bg-blue-100 text-blue-700':
+                        'bg-slate-100 text-slate-600'}`}>
+                      {FUND_TYPE_LABELS[f.fund_type]||f.fund_type}
+                    </span>
+                  )}
+                  {/* بادج الإغلاق اليومي */}
+                  {f.require_daily_close&&(
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">🔒 إغلاق يومي</span>
+                  )}
+                  {/* حالة النشاط */}
+                  {!isActive&&<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">🔴 موقوف</span>}
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">{f.custodian_name||'—'} · {f.fund_code}</div>
+              </div>
+              <div className="text-left shrink-0 mr-2">
+                <div className={`font-mono font-bold text-lg ${pct<20?'text-red-600':'text-emerald-700'}`}>{fmt(f.current_balance,3)}</div>
+                <div className="text-xs text-slate-400">من {fmt(f.limit_amount,0)}</div>
+              </div>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-2 mb-2"><div className={`h-2 rounded-full ${pct<20?'bg-red-400':pct<50?'bg-amber-400':'bg-emerald-400'}`} style={{width:`${Math.min(pct,100)}%`}}/></div>
-            <div className="flex justify-between text-xs mb-3"><span className="text-slate-400">{pct}%</span>{f.needs_replenishment&&<span className="text-amber-600 font-medium">⚠️ تحتاج تعبئة</span>}</div>
+            {/* شريط الرصيد */}
+            <div className="w-full bg-slate-100 rounded-full h-2 mb-2">
+              <div className={`h-2 rounded-full ${pct<20?'bg-red-400':pct<50?'bg-amber-400':'bg-emerald-400'}`} style={{width:`${Math.min(pct,100)}%`}}/>
+            </div>
+            <div className="flex justify-between text-xs mb-3">
+              <span className="text-slate-400">{pct}%</span>
+              {f.needs_replenishment&&isActive&&<span className="text-amber-600 font-medium">⚠️ تحتاج تعبئة</span>}
+            </div>
+            {/* أزرار */}
             <div className="flex gap-2">
-              <button onClick={()=>{setEditFund(f);setShowFundForm(true)}} className="flex-1 text-xs py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">✏️ تعديل</button>
-              {f.needs_replenishment&&<button onClick={()=>doReplenish(f.id)} className="flex-1 text-xs py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600">🔄 تعبئة</button>}
+              <button onClick={()=>{setEditFund(f);setShowFundForm(true)}}
+                className="flex-1 text-xs py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">✏️ تعديل</button>
+              {f.needs_replenishment&&isActive&&(
+                <button onClick={()=>doReplenish(f.id)} className="flex-1 text-xs py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600">🔄 تعبئة</button>
+              )}
             </div>
           </div>
         )})}
@@ -4917,41 +5036,365 @@ function PettyCashTab({showToast}) {
   </div>
 }
 
-function PettyCashFundModal({fund,bankAccounts,onClose,onSaved,showToast}) {
-  const isEdit=!!fund
-  const [form,setForm]=useState({fund_code:fund?.fund_code||'',fund_name:fund?.fund_name||'',custodian_name:fund?.custodian_name||'',custodian_email:fund?.custodian_email||'',currency_code:fund?.currency_code||'SAR',limit_amount:fund?.limit_amount||'',gl_account_code:fund?.gl_account_code||'',bank_account_id:fund?.bank_account_id||'',replenish_threshold:fund?.replenish_threshold||20})
-  const [saving,setSaving]=useState(false)
-  const s=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const save=async()=>{
-    if(!form.fund_code||!form.fund_name||!form.limit_amount||!form.gl_account_code){showToast('الكود والاسم والحد وحساب الأستاذ مطلوبة','error');return}
-    setSaving(true)
-    try{
-      if(isEdit) await api.treasury.updatePettyCashFund(fund.id,form)
-      else await api.treasury.createPettyCashFund(form)
-      onSaved()
-    }catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+// ── Tooltip Helper ─────────────────────────────────────
+function FieldTooltip({text}) {
+  const [show,setShow] = useState(false)
+  return (
+    <span className="relative inline-flex items-center mr-1 cursor-help"
+      onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)}>
+      <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold inline-flex items-center justify-center leading-none">?</span>
+      {show&&<span className="absolute bottom-full right-0 mb-1 w-56 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 z-[500] text-right leading-relaxed shadow-xl">
+        {text}
+      </span>}
+    </span>
+  )
+}
+
+// ── تصنيفات الصناديق ────────────────────────────────────
+const FUND_TYPES = [
+  { value:'main',       label:'🏛️ رئيسي',          desc:'الصندوق الرئيسي للمنشأة' },
+  { value:'sub',        label:'📂 فرعي',            desc:'صندوق تابع لصندوق رئيسي' },
+  { value:'sales',      label:'🛒 صندوق مبيعات',    desc:'مرتبط بعمليات المبيعات — يتطلب إغلاق يومي' },
+  { value:'cashier',    label:'💳 صندوق كاشير',     desc:'صندوق نقاط البيع — يتطلب إغلاق يومي' },
+  { value:'custodian',  label:'👤 أمين صندوق',       desc:'صندوق شخصي لموظف محدد' },
+]
+const FUND_TYPE_LABELS = Object.fromEntries(FUND_TYPES.map(t=>[t.value,t.label]))
+const DAILY_CLOSE_TYPES = ['sales','cashier'] // هذه الأنواع تحتاج إغلاق يومي
+
+function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
+  const isEdit = !!fund
+  const [form, setForm] = useState({
+    fund_code:           fund?.fund_code           || '',
+    fund_name:           fund?.fund_name           || '',
+    fund_type:           fund?.fund_type           || 'main',
+    custodian_name:      fund?.custodian_name      || '',
+    custodian_email:     fund?.custodian_email     || '',
+    custodian_phone:     fund?.custodian_phone     || '',
+    currency_code:       fund?.currency_code       || 'SAR',
+    limit_amount:        fund?.limit_amount        || '',
+    gl_account_code:     fund?.gl_account_code     || '',
+    bank_account_id:     fund?.bank_account_id     || '',
+    branch_code:         fund?.branch_code         || '',
+    replenish_threshold: fund?.replenish_threshold || 20,
+    require_daily_close: fund?.require_daily_close ?? false,
+    notes:               fund?.notes               || '',
+    // إغلاق / تعطيل
+    is_active:           fund?.is_active           ?? true,
+  })
+  const [saving, setSaving] = useState(false)
+  // Toggle modal
+  const [showDeactivate, setShowDeactivate] = useState(false)
+  const [deactivateReason, setDeactivateReason] = useState('')
+  const [deactivating, setDeactivating] = useState(false)
+
+  const s = (k,v) => setForm(p=>({...p,[k]:v}))
+
+  // عند تغيير نوع الصندوق — تفعيل الإغلاق اليومي تلقائياً
+  const onFundTypeChange = (val) => {
+    s('fund_type', val)
+    if(DAILY_CLOSE_TYPES.includes(val)) s('require_daily_close', true)
+    else s('require_daily_close', false)
   }
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center" dir="rtl">
-    <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}/>
-    <div className="relative bg-white rounded-2xl shadow-2xl w-[560px] max-h-[90vh] overflow-y-auto p-6">
-      <div className="flex justify-between mb-5"><h3 className="font-bold text-xl">{isEdit?'تعديل صندوق':'صندوق عهدة جديد'}</h3><button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">✕</button></div>
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="text-xs font-semibold text-slate-600 block mb-1">الكود *</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.fund_code} onChange={e=>s('fund_code',e.target.value)}/></div>
-          <div><label className="text-xs font-semibold text-slate-600 block mb-1">الاسم *</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.fund_name} onChange={e=>s('fund_name',e.target.value)}/></div>
-          <div><label className="text-xs font-semibold text-slate-600 block mb-1">أمين العهدة</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.custodian_name} onChange={e=>s('custodian_name',e.target.value)}/></div>
-          <div><label className="text-xs font-semibold text-slate-600 block mb-1">الحد الأقصى *</label><input type="number" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.limit_amount} onChange={e=>s('limit_amount',e.target.value)}/></div>
-          <div><label className="text-xs font-semibold text-slate-600 block mb-1">نسبة التعبئة %</label><input type="number" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.replenish_threshold} onChange={e=>s('replenish_threshold',e.target.value)} min="0" max="100"/></div>
-          <div><label className="text-xs font-semibold text-slate-600 block mb-1">مرتبط ببنك</label><select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}><option value="">—</option>{bankAccounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}</select></div>
+
+  const save = async() => {
+    if(!form.fund_code||!form.fund_name||!form.limit_amount||!form.gl_account_code) {
+      showToast('الكود والاسم والحد وحساب الأستاذ مطلوبة','error'); return
+    }
+    setSaving(true)
+    try {
+      if(isEdit) await api.treasury.updatePettyCashFund(fund.id, form)
+      else       await api.treasury.createPettyCashFund(form)
+      onSaved()
+    } catch(e) { showToast(e.message,'error') }
+    finally { setSaving(false) }
+  }
+
+  const doToggleActive = async() => {
+    if(form.is_active && !deactivateReason.trim()) {
+      showToast('يرجى إدخال سبب الإيقاف','error'); return
+    }
+    setDeactivating(true)
+    try {
+      await api.treasury.updatePettyCashFund(fund.id, {
+        is_active:          !form.is_active,
+        deactivated_at:     form.is_active ? new Date().toISOString() : null,
+        deactivation_reason:form.is_active ? deactivateReason : null,
+        deactivated_by:     form.is_active ? 'current_user' : null,
+      })
+      showToast(form.is_active ? '🔴 تم إيقاف الصندوق' : '🟢 تم تفعيل الصندوق')
+      setShowDeactivate(false)
+      onSaved()
+    } catch(e) { showToast(e.message,'error') }
+    finally { setDeactivating(false) }
+  }
+
+  const needsDailyClose = DAILY_CLOSE_TYPES.includes(form.fund_type)
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center" dir="rtl">
+      <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}/>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-[660px] max-h-[92vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">💵</span>
+            <div>
+              <h3 className="font-bold text-lg">{isEdit ? 'تعديل صندوق' : 'صندوق نقدي جديد'}</h3>
+              <p className="text-xs text-slate-400">إعداد بيانات الصندوق وخصائصه المحاسبية</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {isEdit && (
+              <button onClick={()=>setShowDeactivate(true)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all
+                  ${form.is_active
+                    ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200'}`}>
+                <span className={`w-2 h-2 rounded-full ${form.is_active?'bg-emerald-500':'bg-red-500'}`}/>
+                {form.is_active ? 'نشط — إيقاف' : 'موقوف — تفعيل'}
+              </button>
+            )}
+            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200">✕</button>
+          </div>
         </div>
-        <AccountPicker label="حساب الأستاذ العام *" required value={form.gl_account_code} onChange={(code)=>s('gl_account_code',code)}/>
+
+        <div className="p-6 space-y-5">
+
+          {/* ── القسم 1: التعريف الأساسي ── */}
+          <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-4">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">📋 التعريف الأساسي</div>
+            <div className="grid grid-cols-2 gap-4">
+              {/* كود الصندوق */}
+              <div>
+                <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">
+                  كود الصندوق <span className="text-red-500 mr-0.5">*</span>
+                  <FieldTooltip text="كود فريد يُستخدم لتمييز الصندوق في النظام. مثال: FUND-001"/>
+                </label>
+                <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={form.fund_code} onChange={e=>s('fund_code',e.target.value)} placeholder="FUND-001"/>
+              </div>
+              {/* اسم الصندوق */}
+              <div>
+                <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">
+                  اسم الصندوق <span className="text-red-500 mr-0.5">*</span>
+                </label>
+                <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={form.fund_name} onChange={e=>s('fund_name',e.target.value)} placeholder="مثال: صندوق المبيعات الرئيسي"/>
+              </div>
+            </div>
+
+            {/* تصنيف الصندوق */}
+            <div>
+              <label className="flex items-center text-xs font-semibold text-slate-600 mb-2">
+                تصنيف الصندوق <span className="text-red-500 mr-0.5">*</span>
+                <FieldTooltip text="نوع الصندوق يحدد سلوكه في النظام. صناديق المبيعات والكاشير تتطلب إغلاقاً يومياً."/>
+              </label>
+              <div className="grid grid-cols-5 gap-2">
+                {FUND_TYPES.map(ft=>(
+                  <button key={ft.value} type="button"
+                    onClick={()=>onFundTypeChange(ft.value)}
+                    title={ft.desc}
+                    className={`py-2.5 px-2 rounded-xl text-xs font-semibold border-2 transition-all text-center
+                      ${form.fund_type===ft.value
+                        ? DAILY_CLOSE_TYPES.includes(ft.value)
+                          ? 'bg-orange-500 border-orange-500 text-white'
+                          : 'bg-blue-600 border-blue-600 text-white'
+                        : 'border-slate-200 text-slate-600 hover:border-blue-300 bg-white'}`}>
+                    {ft.label}
+                  </button>
+                ))}
+              </div>
+              {/* وصف التصنيف المختار */}
+              <div className="mt-2 text-xs text-slate-400 flex items-center gap-1.5">
+                <span>ℹ️</span>
+                <span>{FUND_TYPES.find(t=>t.value===form.fund_type)?.desc}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── القسم 2: الإغلاق اليومي (يظهر فقط لمبيعات/كاشير) ── */}
+          {needsDailyClose && (
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🔒</span>
+                  <div>
+                    <div className="font-bold text-orange-800 text-sm">الإغلاق اليومي للصندوق</div>
+                    <div className="text-xs text-orange-600">مطلوب لصناديق المبيعات والكاشير</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-orange-700">{form.require_daily_close?'مفعّل':'معطّل'}</span>
+                  <button type="button" onClick={()=>s('require_daily_close',!form.require_daily_close)}
+                    className={`relative w-12 h-6 rounded-full transition-colors
+                      ${form.require_daily_close?'bg-orange-500':'bg-slate-300'}`}>
+                    <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform
+                      ${form.require_daily_close?'translate-x-7':'translate-x-1'}`}/>
+                  </button>
+                </div>
+              </div>
+              {form.require_daily_close && (
+                <div className="bg-white rounded-xl border border-orange-200 p-3 text-xs text-orange-700 space-y-1">
+                  <div className="font-semibold mb-1.5">عند تفعيل الإغلاق اليومي:</div>
+                  <div>✅ يجب إغلاق هذا الصندوق في نهاية كل يوم عمل</div>
+                  <div>📋 يُنشئ النظام قيد إغلاق تلقائي (DR صندوق ← CR حساب مؤقت)</div>
+                  <div>📄 يصدر تقرير إغلاق يومي مفصّل</div>
+                  <div>🔔 تنبيه تلقائي إذا لم يُغلق الصندوق</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── القسم 3: بيانات أمين الصندوق ── */}
+          <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-3">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">👤 بيانات المسؤول</div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">
+                  أمين الصندوق
+                  <FieldTooltip text="الشخص المسؤول عن إدارة هذا الصندوق والمحاسب عليه"/>
+                </label>
+                <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={form.custodian_name} onChange={e=>s('custodian_name',e.target.value)} placeholder="اسم أمين الصندوق"/>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">البريد الإلكتروني</label>
+                <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={form.custodian_email} onChange={e=>s('custodian_email',e.target.value)} placeholder="email@example.com" dir="ltr"/>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">رقم الجوال</label>
+                <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={form.custodian_phone||''} onChange={e=>s('custodian_phone',e.target.value)} placeholder="05xxxxxxxx" dir="ltr"/>
+              </div>
+            </div>
+          </div>
+
+          {/* ── القسم 4: الإعدادات المالية ── */}
+          <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-3">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">💰 الإعدادات المالية</div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">
+                  الحد الأقصى <span className="text-red-500 mr-0.5">*</span>
+                  <FieldTooltip text="الحد الأعلى المسموح به في هذا الصندوق. عند تجاوزه يُرسل تنبيه."/>
+                </label>
+                <input type="number" step="0.001"
+                  className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={form.limit_amount} onChange={e=>s('limit_amount',e.target.value)} placeholder="0.000"/>
+              </div>
+              <div>
+                <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">
+                  نسبة التعبئة %
+                  <FieldTooltip text="عند انخفاض الرصيد لهذه النسبة من الحد الأقصى، يُرسل تنبيه بالحاجة للتعبئة. المقترح: 20%"/>
+                </label>
+                <input type="number" min="0" max="100"
+                  className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={form.replenish_threshold} onChange={e=>s('replenish_threshold',e.target.value)}/>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">العملة</label>
+                <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={form.currency_code} onChange={e=>s('currency_code',e.target.value)}>
+                  <option value="SAR">🇸🇦 ريال سعودي (SAR)</option>
+                  <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
+                  <option value="EUR">🇪🇺 يورو (EUR)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* ── القسم 5: الربط المحاسبي ── */}
+          <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4 space-y-3">
+            <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">🔗 الربط المحاسبي</div>
+            <AccountPicker
+              label="حساب الأستاذ العام"
+              required
+              value={form.gl_account_code}
+              onChange={(code)=>s('gl_account_code',code)}/>
+            <div className="text-xs text-blue-500 flex items-center gap-1.5">
+              <FieldTooltip text="يُستخدم هذا الحساب في كل قيود الصندوق. يُنصح باستخدام حساب صناديق نقدية مستقل."/>
+              <span>يجب أن يكون حساباً مستقلاً لهذا الصندوق فقط</span>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">ربط بحساب بنكي</label>
+              <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                value={form.bank_account_id} onChange={e=>s('bank_account_id',e.target.value)}>
+                <option value="">— لا يوجد ربط بنكي —</option>
+                {bankAccounts.map(a=><option key={a.id} value={a.id}>{a.account_name} ({fmt(a.current_balance,2)} {a.currency_code})</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* ملاحظات */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1.5">ملاحظات</label>
+            <textarea rows={2}
+              className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+              value={form.notes||''} onChange={e=>s('notes',e.target.value)} placeholder="أي ملاحظات إضافية..."/>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-white border-t border-slate-100 px-6 py-4 flex gap-3 rounded-b-2xl">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50">إلغاء</button>
+          <button onClick={save} disabled={saving}
+            className="flex-1 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50 flex items-center justify-center gap-2">
+            {saving ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ الحفظ...</> : '💾 حفظ'}
+          </button>
+        </div>
       </div>
-      <div className="flex gap-3 mt-5">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
-        <button onClick={save} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':'💾 حفظ'}</button>
-      </div>
+
+      {/* ── Modal تأكيد تغيير الحالة ── */}
+      {showDeactivate && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={()=>setShowDeactivate(false)}/>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-[440px] p-6" dir="rtl">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">{form.is_active?'🔴':'🟢'}</span>
+              <div>
+                <h4 className="font-bold text-lg">{form.is_active?'إيقاف الصندوق':'تفعيل الصندوق'}</h4>
+                <p className="text-sm text-slate-500">{form.fund_name}</p>
+              </div>
+            </div>
+            {form.is_active ? (
+              <>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-xs text-red-700">
+                  ⚠️ بعد الإيقاف لن يمكن إضافة معاملات جديدة لهذا الصندوق. يمكن إعادة تفعيله لاحقاً.
+                </div>
+                <div className="mb-4">
+                  <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+                    سبب الإيقاف <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-red-400"
+                    placeholder="مثال: انتهاء عقد أمين الصندوق..."
+                    value={deactivateReason}
+                    onChange={e=>setDeactivateReason(e.target.value)}/>
+                </div>
+              </>
+            ) : (
+              fund?.deactivated_at && (
+                <div className="bg-slate-50 rounded-xl p-3 mb-4 text-sm space-y-1">
+                  <div className="text-slate-500">أُوقف بتاريخ: <span className="font-semibold">{fmtDate(fund.deactivated_at)}</span></div>
+                  {fund.deactivation_reason && <div className="text-slate-500">السبب: <span className="font-semibold">{fund.deactivation_reason}</span></div>}
+                </div>
+              )
+            )}
+            <div className="flex gap-3">
+              <button onClick={()=>setShowDeactivate(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
+              <button onClick={doToggleActive} disabled={deactivating}
+                className={`flex-1 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50
+                  ${form.is_active?'bg-red-600 hover:bg-red-700':'bg-emerald-600 hover:bg-emerald-700'}`}>
+                {deactivating?'⏳...':(form.is_active?'🔴 إيقاف':'🟢 تفعيل')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  </div>
+  )
 }
 
 function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
