@@ -189,7 +189,8 @@ function AppContent() {
       case 'inventory':          return <InventoryPage/>
       case 'hr':                 return <HRPage/>
       case 'assets':             return <AssetsPage/>
-      default:                   return <DashboardPage/>
+      // ── sub-pages (قيد التطوير) ──
+      default:                   return <ComingSoonPage pageKey={page}/>
     }
   }
 
