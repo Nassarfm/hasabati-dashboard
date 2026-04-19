@@ -159,16 +159,14 @@ export default function NotificationBell({ onNavigate }) {
                 <div className="text-slate-400 text-sm">لا توجد إشعارات</div>
               </div>
             ) : <>
-              {/* تنبيهات الخزينة أولاً */}
+              {/* تنبيهات الخزينة */}
               {treasuryAlerts.map(a=>(
-                <div key={a.id}
-                  className="flex gap-3 px-3 py-2.5 border-r-4 border-r-orange-400 bg-orange-50 text-right cursor-default">
+                <div key={a.id} className="flex gap-3 px-3 py-2.5 border-r-4 border-r-orange-400 bg-orange-50 text-right">
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold text-slate-800">{a.title}</div>
                     <div className="text-xs text-slate-500 mt-0.5">{a.body}</div>
                   </div>
                 </div>
-            </>
               ))}
               {notifications.map(n => (
               <div key={n.id}
@@ -188,6 +186,7 @@ export default function NotificationBell({ onNavigate }) {
               </div>
             ))}
           </div>
+            </>
 
           {/* Footer */}
           {notifications.length > 0 && (
