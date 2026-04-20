@@ -268,6 +268,9 @@ export const api = {
     smartImportCreate:      (b)     => post('/treasury/smart-import/create-drafts', b),
     smartImportSettings:    ()      => get('/treasury/smart-import/settings'),
     saveSmartImportSettings:(b)     => post('/treasury/smart-import/settings', b),
+    // Activity Log & Cash Flow
+    activityLog:            (p={})   => get('/treasury/activity-log', p),
+    cashFlowStatement:      (p={})   => get('/treasury/reports/cash-flow-statement', p),
 
     // الشيكات (CHK)
     listChecks:        (p={})       => get('/treasury/checks', p),

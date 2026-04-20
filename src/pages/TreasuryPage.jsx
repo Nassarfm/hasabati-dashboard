@@ -1141,6 +1141,7 @@ export default function TreasuryPage({ section: initSection='dashboard', sub: in
       {activePage==='activity'       && <ActivityLogTab showToast={showToast}/>}
       {activePage==='operations'     && <CashFocusedPage showToast={showToast} openView={openView}/>}
       {activePage==='gl-import'      && <GLImportPage showToast={showToast}/>}
+      {activePage==='cash-flow'      && <CashFlowPage showToast={showToast}/>}
       {activePage==='smart-import'   && <SmartBankImportPage showToast={showToast}/>}
     </div>
   )
@@ -6772,6 +6773,517 @@ function SmartBankImportPage({showToast}) {
               🔄 استيراد ملف جديد
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ══════════════════════════════════════════════════════════
+// ActivityLogTab — سجل الأحداث والـ Audit Trail
+// عرض موحد: المعاملات + timeline الإجراءات + فلاتر
+// ══════════════════════════════════════════════════════════
+function ActivityLogTab({showToast}) {
+  const [rows,     setRows]     = useState([])
+  const [stats,    setStats]    = useState({})
+  const [loading,  setLoading]  = useState(true)
+  const [expanded, setExpanded] = useState(null)
+  const [filters,  setFilters]  = useState({
+    date_from:'', date_to:'', tx_type:'', action:'', user_email:''
+  })
+
+  const load = async() => {
+    setLoading(true)
+    try {
+      const p = Object.fromEntries(Object.entries(filters).filter(([,v])=>v))
+      const r = await api.treasury.activityLog({...p, limit:200})
+      setRows(r?.data?.rows||[])
+      setStats(r?.data?.stats||{})
+    } catch(e){ showToast(e.message,'error') }
+    finally{ setLoading(false) }
+  }
+
+  useEffect(()=>{ load() },[])
+
+  const ACTION_COLORS = {
+    created:  'bg-blue-100 text-blue-700 border-blue-200',
+    approved: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    posted:   'bg-green-100 text-green-700 border-green-200',
+    rejected: 'bg-red-100 text-red-700 border-red-200',
+    reversed: 'bg-orange-100 text-orange-700 border-orange-200',
+  }
+  const ACTION_ICONS = {
+    created:'✏️', approved:'✅', posted:'📤', rejected:'❌', reversed:'🔄'
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* KPI Stats */}
+      <div className="grid grid-cols-5 gap-3">
+        {[
+          {l:'إجمالي',  v:stats.total||0,    c:'bg-blue-50 border-blue-200 text-blue-700',   i:'📋'},
+          {l:'مُرحَّل', v:stats.posted||0,   c:'bg-emerald-50 border-emerald-200 text-emerald-700', i:'✅'},
+          {l:'مسودة',   v:stats.draft||0,    c:'bg-amber-50 border-amber-200 text-amber-700', i:'📝'},
+          {l:'انتظار',  v:stats.pending||0,  c:'bg-purple-50 border-purple-200 text-purple-700', i:'⏳'},
+          {l:'معكوس',   v:stats.reversed||0, c:'bg-red-50 border-red-200 text-red-600',      i:'🔄'},
+        ].map((k,i)=>(
+          <div key={i} className={`rounded-2xl border p-4 flex items-center gap-3 ${k.c}`}>
+            <span className="text-2xl">{k.i}</span>
+            <div>
+              <div className="text-2xl font-bold font-mono">{k.v}</div>
+              <div className="text-xs opacity-70">{k.l}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4">
+        <div className="flex gap-3 flex-wrap items-end">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">من تاريخ</label>
+            <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs"
+              value={filters.date_from} onChange={e=>setFilters(p=>({...p,date_from:e.target.value}))}/>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">إلى تاريخ</label>
+            <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs"
+              value={filters.date_to} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">نوع المعاملة</label>
+            <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs"
+              value={filters.tx_type} onChange={e=>setFilters(p=>({...p,tx_type:e.target.value}))}>
+              <option value="">الكل</option>
+              {['PV','RV','BP','BR','BT','IT'].map(t=><option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">المستخدم</label>
+            <input className="border border-slate-200 rounded-xl px-3 py-2 text-xs w-44"
+              placeholder="بريد المستخدم..."
+              value={filters.user_email} onChange={e=>setFilters(p=>({...p,user_email:e.target.value}))}/>
+          </div>
+          <button onClick={load} disabled={loading}
+            className="px-4 py-2 bg-blue-700 text-white rounded-xl text-xs font-semibold hover:bg-blue-800 disabled:opacity-50">
+            {loading?'⏳':'🔍'} بحث
+          </button>
+          <button onClick={()=>{setFilters({date_from:'',date_to:'',tx_type:'',action:'',user_email:''});setTimeout(load,50)}}
+            className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs hover:bg-slate-50">
+            مسح
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        {/* Header */}
+        <div className="grid text-white text-xs font-semibold"
+          style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',
+            gridTemplateColumns:'2rem 1.5fr 4rem 1fr 1fr 5rem 4rem 1fr'}}>
+          {['','الرقم','النوع','التاريخ','الحساب','المبلغ','الحالة','آخر إجراء'].map((h,i)=>(
+            <div key={i} className="px-3 py-3">{h}</div>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="py-12 text-center text-slate-400">⏳ جارٍ التحميل...</div>
+        ) : rows.length===0 ? (
+          <div className="py-12 text-center text-slate-400">لا توجد سجلات</div>
+        ) : rows.map((row,i)=>{
+          const meta     = TX_META[row.tx_type]||{label:row.tx_type,color:'text-slate-600'}
+          const isOpen   = expanded===row.id
+          const lastEvt  = row.events?.[row.events.length-1]
+
+          return (
+            <div key={row.id}>
+              {/* Main Row */}
+              <div
+                className={`grid items-center border-b border-slate-100 text-xs cursor-pointer hover:bg-blue-50/40
+                  ${isOpen?'bg-blue-50':''}${!isOpen&&i%2===0?' bg-white':' bg-slate-50/30'}`}
+                style={{gridTemplateColumns:'2rem 1.5fr 4rem 1fr 1fr 5rem 4rem 1fr'}}
+                onClick={()=>setExpanded(isOpen?null:row.id)}>
+                {/* Expand */}
+                <div className="px-2 py-3 text-center text-slate-400">
+                  {isOpen?'▲':'▼'}
+                </div>
+                {/* Serial */}
+                <div className={`px-3 py-3 font-mono font-bold text-sm ${meta.color}`}>
+                  {row.serial}
+                </div>
+                {/* Type */}
+                <div className="px-3 py-3">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 ${meta.color}`}>
+                    {meta.label||row.tx_type}
+                  </span>
+                </div>
+                {/* Date */}
+                <div className="px-3 py-3 text-slate-500">{fmtDate(row.tx_date)}</div>
+                {/* Account */}
+                <div className="px-3 py-3 text-slate-600 truncate">{row.bank_account_name||'—'}</div>
+                {/* Amount */}
+                <div className="px-3 py-3 font-mono font-bold text-slate-800">{fmt(row.amount,3)}</div>
+                {/* Status */}
+                <div className="px-3 py-3"><StatusBadge status={row.status}/></div>
+                {/* Last Action */}
+                <div className="px-3 py-3">
+                  {lastEvt&&(
+                    <div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${ACTION_COLORS[lastEvt.action]||'bg-slate-100 text-slate-600'}`}>
+                        {ACTION_ICONS[lastEvt.action]} {lastEvt.label}
+                      </span>
+                      <div className="text-[10px] text-slate-400 mt-0.5 truncate">{lastEvt.by}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Expanded: Audit Trail Timeline */}
+              {isOpen&&(
+                <div className="bg-blue-50/30 border-b border-slate-200 px-6 py-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-bold text-slate-600">🕐 سجل الإجراءات — Audit Trail</span>
+                    {row.je_serial&&(
+                      <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-mono">
+                        قيد: {row.je_serial}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-0 items-start">
+                    {(row.events||[]).map((evt,ei)=>(
+                      <div key={ei} className="flex items-start flex-1 min-w-0">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2
+                            ${evt.color==='blue'?'bg-blue-100 border-blue-400':
+                              evt.color==='emerald'?'bg-emerald-100 border-emerald-400':
+                              evt.color==='green'?'bg-green-100 border-green-400':
+                              evt.color==='red'?'bg-red-100 border-red-400':'bg-orange-100 border-orange-400'}`}>
+                            {ACTION_ICONS[evt.action]}
+                          </div>
+                          {ei<row.events.length-1&&<div className="w-0.5 h-4 bg-slate-300 my-1"/>}
+                        </div>
+                        <div className="mr-2 min-w-0 flex-1 pb-3">
+                          <div className={`text-xs font-bold
+                            ${evt.color==='blue'?'text-blue-700':evt.color==='red'?'text-red-700':evt.color==='orange'?'text-orange-700':'text-emerald-700'}`}>
+                            {evt.label}
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate">{evt.by||'—'}</div>
+                          <div className="text-[10px] text-slate-400">{evt.at?.slice(0,16)?.replace('T',' ')||'—'}</div>
+                        </div>
+                        {ei<row.events.length-1&&(
+                          <div className="flex-1 h-0.5 bg-slate-200 mt-4 mx-1"/>
+                        )}
+                      </div>
+                    ))}
+                    {(!row.events||row.events.length===0)&&(
+                      <span className="text-xs text-slate-400">لا توجد سجلات إجراءات</span>
+                    )}
+                  </div>
+                  {/* تفاصيل إضافية */}
+                  <div className="mt-3 grid grid-cols-3 gap-3 text-xs text-slate-500">
+                    <div><span className="font-semibold">البيان:</span> {row.description||'—'}</div>
+                    <div><span className="font-semibold">المصدر:</span> {row.source_table==='cash'?'نقدي':row.source_table==='bank'?'بنكي':'تحويل'}</div>
+                    <div><span className="font-semibold">الرقم المرجعي:</span> {row.id?.slice(0,8)}...</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* Footer */}
+        {rows.length>0&&(
+          <div className="px-4 py-2.5 bg-slate-50 border-t flex justify-between text-xs text-slate-500">
+            <span><strong>{rows.length}</strong> سجل</span>
+            <span>إجمالي: <strong className="font-mono">{fmt(rows.reduce((s,r)=>s+parseFloat(r.amount||0),0),3)} ر.س</strong></span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
+// ══════════════════════════════════════════════════════════
+// CashFlowPage — تقرير التدفقات النقدية الرسمي + لوحة تفاعلية
+// ══════════════════════════════════════════════════════════
+function CashFlowPage({showToast}) {
+  const [data,    setData]    = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [view,    setView]    = useState('interactive') // 'interactive' | 'formal'
+  const [filters, setFilters] = useState({year:new Date().getFullYear(), date_from:'', date_to:''})
+
+  const load = async() => {
+    setLoading(true)
+    try {
+      const r = await api.treasury.cashFlowStatement(filters)
+      setData(r?.data)
+    } catch(e){ showToast(e.message,'error') }
+    finally{ setLoading(false) }
+  }
+
+  useEffect(()=>{ load() },[])
+
+  const MONTH_NAMES = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+
+  const printFormal = () => {
+    if(!data) return
+    const s = data.summary
+    const w = window.open('','_blank','width=900,height=700')
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar">
+<head><meta charset="utf-8"/>
+<style>
+  body{font-family:Arial,sans-serif;padding:30px;color:#1e293b}
+  h1{font-size:20px;border-bottom:3px solid #1e40af;padding-bottom:10px;color:#1e40af;text-align:center}
+  .summary{background:#f0f9ff;border:2px solid #bae6fd;padding:15px;border-radius:10px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .kpi{text-align:center}.kpi-val{font-size:22px;font-weight:bold;font-family:monospace}
+  .kpi-lbl{font-size:12px;color:#64748b}
+  table{width:100%;border-collapse:collapse;margin-top:15px;font-size:12px}
+  th{background:#1e40af;color:white;padding:8px 10px;text-align:right}
+  td{padding:7px 10px;border-bottom:1px solid #e2e8f0}
+  tr:nth-child(even){background:#f8fafc}
+  .positive{color:#059669;font-weight:bold} .negative{color:#dc2626;font-weight:bold}
+  .total{background:#dbeafe;font-weight:bold}
+  @media print{button{display:none}}
+</style></head><body>
+<h1>📊 تقرير التدفقات النقدية — ${filters.year}</h1>
+<p style="text-align:center;color:#64748b;font-size:13px">الفترة: ${data.period.from} إلى ${data.period.to}</p>
+<div class="summary">
+  <div class="kpi"><div class="kpi-val" style="color:#059669">${fmt(s.total_cash_in,3)}</div><div class="kpi-lbl">إجمالي التدفقات الداخلة</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:#dc2626">${fmt(s.total_cash_out,3)}</div><div class="kpi-lbl">إجمالي التدفقات الخارجة</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:${s.net_flow>=0?'#1d4ed8':'#dc2626'}">${fmt(s.net_flow,3)}</div><div class="kpi-lbl">صافي التدفق النقدي</div></div>
+</div>
+<table>
+  <thead><tr><th>الشهر</th><th>تدفقات داخلة</th><th>تدفقات خارجة</th><th>صافي التدفق</th></tr></thead>
+  <tbody>
+    ${(data.monthly||[]).map(m=>`<tr>
+      <td style="font-weight:bold">${MONTH_NAMES[(m.month||1)-1]||m.period}</td>
+      <td class="positive">${fmt(m.cash_in,3)}</td>
+      <td class="negative">${fmt(m.cash_out,3)}</td>
+      <td class="${m.net>=0?'positive':'negative'}">${fmt(m.net,3)}</td>
+    </tr>`).join('')}
+    <tr class="total">
+      <td>الإجمالي</td>
+      <td class="positive">${fmt(s.total_cash_in,3)}</td>
+      <td class="negative">${fmt(s.total_cash_out,3)}</td>
+      <td class="${s.net_flow>=0?'positive':'negative'}">${fmt(s.net_flow,3)}</td>
+    </tr>
+  </tbody>
+</table>
+<br/>
+<h2 style="font-size:15px;color:#374151">🔮 التوقعات المستقبلية (بناءً على المسودات)</h2>
+<table>
+  <thead><tr><th>البند</th><th>المبلغ</th></tr></thead>
+  <tbody>
+    <tr><td>متوقع دخول</td><td class="positive">${fmt(data.forecast?.expected_in||0,3)}</td></tr>
+    <tr><td>متوقع خروج</td><td class="negative">${fmt(data.forecast?.expected_out||0,3)}</td></tr>
+    <tr class="total"><td>الرصيد المتوقع</td><td class="${(data.forecast?.forecast_balance||0)>=0?'positive':'negative'}">${fmt(data.forecast?.forecast_balance||0,3)}</td></tr>
+  </tbody>
+</table>
+</body></html>`)
+    w.document.close(); setTimeout(()=>w.print(),500)
+  }
+
+  return (
+    <div className="space-y-5 pb-8" dir="rtl">
+
+      {/* Header */}
+      <div className="relative rounded-3xl overflow-hidden p-6 text-white"
+        style={{background:'linear-gradient(135deg,#0f172a,#1e3a5f,#065f46)'}}>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">📊 تقرير التدفقات النقدية</h1>
+            <p className="text-emerald-200 text-sm mt-1">Cash Flow Statement — رسمي وتفاعلي</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={()=>setView('interactive')}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold ${view==='interactive'?'bg-white text-blue-700':'bg-white/10 text-white'}`}>
+              📈 تفاعلي
+            </button>
+            <button onClick={()=>setView('formal')}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold ${view==='formal'?'bg-white text-blue-700':'bg-white/10 text-white'}`}>
+              📄 رسمي
+            </button>
+          </div>
+        </div>
+        {/* Filters */}
+        <div className="flex gap-3 mt-4 flex-wrap">
+          <select className="bg-white/20 text-white rounded-xl px-3 py-2 text-sm border border-white/30"
+            value={filters.year} onChange={e=>setFilters(p=>({...p,year:parseInt(e.target.value)}))}>
+            {[2024,2025,2026,2027].map(y=><option key={y} value={y} className="text-slate-800">{y}</option>)}
+          </select>
+          <input type="date" className="bg-white/20 text-white rounded-xl px-3 py-2 text-sm border border-white/30"
+            value={filters.date_from} onChange={e=>setFilters(p=>({...p,date_from:e.target.value}))}/>
+          <input type="date" className="bg-white/20 text-white rounded-xl px-3 py-2 text-sm border border-white/30"
+            value={filters.date_to} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
+          <button onClick={load} disabled={loading}
+            className="px-5 py-2 bg-white text-blue-700 rounded-xl text-sm font-bold hover:bg-blue-50 disabled:opacity-50">
+            {loading?'⏳':'🔍'} عرض
+          </button>
+          {data&&<button onClick={printFormal}
+            className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-sm font-bold hover:bg-emerald-600">
+            🖨️ طباعة رسمي
+          </button>}
+        </div>
+      </div>
+
+      {data&&(
+        <>
+        {/* Summary KPIs */}
+        <div className="grid grid-cols-4 gap-4">
+          {[
+            {l:'إجمالي التدفقات الداخلة', v:data.summary.total_cash_in,  c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700', i:'📥'},
+            {l:'إجمالي التدفقات الخارجة', v:data.summary.total_cash_out, c:'bg-red-50 border-red-200',         t:'text-red-600',     i:'📤'},
+            {l:'صافي التدفق النقدي',      v:data.summary.net_flow,       c:`${data.summary.net_flow>=0?'bg-blue-50 border-blue-200':'bg-amber-50 border-amber-200'}`, t:`${data.summary.net_flow>=0?'text-blue-700':'text-amber-700'}`, i:'⚖️'},
+            {l:'الرصيد الحالي',           v:data.summary.current_balance,c:'bg-slate-50 border-slate-200',     t:'text-slate-700',   i:'🏦'},
+          ].map((k,i)=>(
+            <div key={i} className={`rounded-2xl border p-5 ${k.c}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xl">{k.i}</span>
+                <span className={`text-xs font-semibold ${k.t} opacity-70`}>{k.l}</span>
+              </div>
+              <div className={`text-2xl font-bold font-mono ${k.t}`}>{fmt(k.v,3)}</div>
+              <div className="text-xs text-slate-400 mt-1">ر.س</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Forecast */}
+        {data.forecast&&(
+          <div className="bg-gradient-to-l from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">🔮</span>
+              <span className="font-bold text-indigo-700">التوقعات المستقبلية</span>
+              <span className="text-xs text-indigo-400">(بناءً على المعاملات المسودة)</span>
+            </div>
+            <div className="grid grid-cols-4 gap-3 text-sm">
+              {[
+                {l:'متوقع دخول',  v:data.forecast.expected_in,      c:'text-emerald-600'},
+                {l:'متوقع خروج',  v:data.forecast.expected_out,     c:'text-red-600'},
+                {l:'صافي متوقع',  v:data.forecast.expected_net,     c:data.forecast.expected_net>=0?'text-blue-700':'text-red-600'},
+                {l:'رصيد متوقع',  v:data.forecast.forecast_balance, c:data.forecast.forecast_balance>=0?'text-indigo-700':'text-red-700'},
+              ].map((k,i)=>(
+                <div key={i} className="bg-white rounded-xl p-3 border border-indigo-100 text-center">
+                  <div className={`text-lg font-bold font-mono ${k.c}`}>{fmt(k.v,3)}</div>
+                  <div className="text-xs text-slate-400 mt-1">{k.l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {view==='interactive'&&(
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b flex items-center justify-between">
+              <span className="font-bold text-slate-700">📈 التدفق الشهري</span>
+              <div className="flex gap-3 text-xs">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-400 rounded inline-block"/>داخل</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-400 rounded inline-block"/>خارج</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-500 rounded inline-block"/>صافي</span>
+              </div>
+            </div>
+            <div className="p-5 overflow-x-auto">
+              {(()=>{
+                const months = data.monthly||[]
+                if(months.length===0) return <div className="py-8 text-center text-slate-400">لا توجد بيانات للعرض</div>
+                const maxVal = Math.max(...months.map(m=>Math.max(m.cash_in,m.cash_out)),1)
+                return (
+                  <div className="flex items-end gap-3" style={{minHeight:'200px'}}>
+                    {months.map((m,i)=>(
+                      <div key={i} className="flex flex-col items-center gap-1 flex-1 min-w-[60px]">
+                        <div className="text-[10px] font-mono text-slate-500 mb-1">
+                          {m.net>=0?`+${fmt(m.net,0)}`:`${fmt(m.net,0)}`}
+                        </div>
+                        <div className="flex items-end gap-1 w-full justify-center" style={{height:'160px'}}>
+                          {/* Cash In */}
+                          <div className="flex flex-col items-center justify-end" style={{height:'100%',width:'30%'}}>
+                            <div className="w-full bg-emerald-400 rounded-t hover:bg-emerald-500 transition-all cursor-pointer"
+                              style={{height:`${Math.max(2,Math.round(m.cash_in/maxVal*140))}px`}}
+                              title={`داخل: ${fmt(m.cash_in,3)}`}/>
+                          </div>
+                          {/* Cash Out */}
+                          <div className="flex flex-col items-center justify-end" style={{height:'100%',width:'30%'}}>
+                            <div className="w-full bg-red-400 rounded-t hover:bg-red-500 transition-all cursor-pointer"
+                              style={{height:`${Math.max(2,Math.round(m.cash_out/maxVal*140))}px`}}
+                              title={`خارج: ${fmt(m.cash_out,3)}`}/>
+                          </div>
+                          {/* Net */}
+                          <div className="flex flex-col items-center justify-end" style={{height:'100%',width:'30%'}}>
+                            <div className={`w-full rounded-t hover:opacity-80 transition-all ${m.net>=0?'bg-blue-500':'bg-amber-400'}`}
+                              style={{height:`${Math.max(2,Math.round(Math.abs(m.net)/maxVal*140))}px`}}
+                              title={`صافي: ${fmt(m.net,3)}`}/>
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-semibold text-center">
+                          {MONTH_NAMES[(m.month||1)-1]?.slice(0,3)||m.period}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+            {/* Monthly Table */}
+            <div className="overflow-x-auto border-t">
+              <table className="w-full text-xs">
+                <thead><tr className="bg-slate-50">
+                  {['الشهر','تدفقات داخلة','تدفقات خارجة','صافي','تراكمي'].map(h=>(
+                    <th key={h} className="px-4 py-2.5 text-right text-slate-500 font-semibold">{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {(()=>{
+                    let cumulative = 0
+                    return (data.monthly||[]).map((m,i)=>{
+                      cumulative += m.net
+                      return (
+                        <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
+                          <td className="px-4 py-2.5 font-semibold">{MONTH_NAMES[(m.month||1)-1]}</td>
+                          <td className="px-4 py-2.5 font-mono text-emerald-700">{fmt(m.cash_in,3)}</td>
+                          <td className="px-4 py-2.5 font-mono text-red-600">{fmt(m.cash_out,3)}</td>
+                          <td className={`px-4 py-2.5 font-mono font-bold ${m.net>=0?'text-blue-700':'text-amber-600'}`}>{fmt(m.net,3)}</td>
+                          <td className={`px-4 py-2.5 font-mono font-bold ${cumulative>=0?'text-slate-700':'text-red-700'}`}>{fmt(cumulative,3)}</td>
+                        </tr>
+                      )
+                    })
+                  })()}
+                  <tr className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
+                    <td className="px-4 py-3 text-blue-800">الإجمالي</td>
+                    <td className="px-4 py-3 font-mono text-emerald-700">{fmt(data.summary.total_cash_in,3)}</td>
+                    <td className="px-4 py-3 font-mono text-red-600">{fmt(data.summary.total_cash_out,3)}</td>
+                    <td className={`px-4 py-3 font-mono font-bold ${data.summary.net_flow>=0?'text-blue-800':'text-red-700'}`}>{fmt(data.summary.net_flow,3)}</td>
+                    <td className="px-4 py-3"/>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Quarterly */}
+        {view==='interactive'&&data.quarterly?.length>0&&(
+          <div className="grid grid-cols-4 gap-3">
+            {data.quarterly.map((q,i)=>(
+              <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4">
+                <div className="text-sm font-bold text-slate-700 mb-3">{q.quarter}</div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between"><span className="text-emerald-600">داخل</span><span className="font-mono">{fmt(q.cash_in,3)}</span></div>
+                  <div className="flex justify-between"><span className="text-red-500">خارج</span><span className="font-mono">{fmt(q.cash_out,3)}</span></div>
+                  <div className={`flex justify-between font-bold border-t pt-1.5 ${q.net>=0?'text-blue-700':'text-amber-600'}`}>
+                    <span>صافي</span><span className="font-mono">{fmt(q.net,3)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        </>
+      )}
+      {!data&&!loading&&(
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 py-16 text-center text-slate-400">
+          <div className="text-4xl mb-3">📊</div>
+          <p>اضغط "عرض" لتحميل تقرير التدفقات</p>
         </div>
       )}
     </div>
