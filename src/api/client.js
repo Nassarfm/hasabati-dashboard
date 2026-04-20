@@ -340,6 +340,7 @@ export const api = {
     outstandingChecks:  ()       => get('/treasury/reports/outstanding-checks'),
     pettyCashStatement: (p={})   => get('/treasury/reports/petty-cash-statement', p),
     accountStatement:   (p={})   => get('/treasury/reports/account-statement', p),
+    inactiveAccounts:   (p={})   => get('/treasury/reports/inactive-accounts', p),
     monthlyCashFlow:    (p={})   => get('/treasury/reports/monthly-cash-flow', p),
     cashForecast:       (p={})   => get('/treasury/reports/cash-forecast', p),
     checkAging:         ()       => get('/treasury/reports/check-aging'),

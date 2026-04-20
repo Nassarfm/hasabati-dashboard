@@ -2502,8 +2502,9 @@ function ReportsSection({showToast}) {
     {id:'monthly-flow',     icon:'📊', label:'التدفق الشهري'},
     {id:'check-aging',      icon:'⏱️', label:'أعمار الديون'},
     {id:'cash-flow',        icon:'📈', label:'سندات القبض والصرف'},
-    {id:'bank-expenses',    icon:'💸', label:'المصاريف البنكية'},
+    {id:'bank-expenses',    icon:'💸', label:'المصاريف والرسوم البنكية'},
     {id:'inactive',         icon:'🔒', label:'الحسابات غير النشطة'},
+    {id:'reconciliation',   icon:'✅', label:'تقرير التسوية البنكية'},
   ]
 
   const load = async() => {
@@ -2513,13 +2514,27 @@ function ReportsSection({showToast}) {
       if(sub==='balances')           r = await api.treasury.cashPositionReport()
       else if(sub==='account-statement') {
         if(!filters.account_id){showToast('اختر حساباً أولاً','error');setLoading(false);return}
-        r = await api.treasury.accountStatement({account_id:filters.account_id,date_from:filters.date_from,date_to:filters.date_to})
+        r = await api.treasury.accountStatement({
+          bank_account_id: filters.account_id,
+          date_from: filters.date_from,
+          date_to:   filters.date_to,
+        })
       }
-      else if(sub==='monthly-flow')  r = await api.treasury.monthlyCashFlow({months:12})
+      else if(sub==='monthly-flow') {
+        r = await api.treasury.monthlyCashFlow({
+          bank_account_id: filters.account_id||undefined,
+          year: filters.year||(new Date().getFullYear()),
+          month: filters.month||undefined,
+        })
+      }
       else if(sub==='check-aging')   r = await api.treasury.checkAging()
       else if(sub==='cash-flow')     r = await api.treasury.listCashTransactions({status:'posted',date_from:filters.date_from,date_to:filters.date_to})
-      else if(sub==='bank-expenses') r = await api.treasury.listBankTransactions({tx_type:'BP',status:'posted',date_from:filters.date_from,date_to:filters.date_to})
-      else if(sub==='inactive')      r = await api.treasury.listBankAccounts({is_active:false})
+      else if(sub==='bank-expenses') r = await api.treasury.listBankFees({
+          bank_account_id: filters.account_id||undefined,
+          date_from: filters.date_from, date_to: filters.date_to,
+        })
+      else if(sub==='inactive')      r = await api.treasury.inactiveAccounts()
+      else if(sub==='reconciliation') r = {data:{message:'استخدم التسوية في صفحة حركات البنك'}}
       setData(r?.data||null)
     } catch(e){ showToast(e.message,'error') }
     finally{ setLoading(false) }
