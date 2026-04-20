@@ -1141,6 +1141,7 @@ export default function TreasuryPage({ section: initSection='dashboard', sub: in
       {activePage==='activity'       && <ActivityLogTab showToast={showToast}/>}
       {activePage==='operations'     && <CashFocusedPage showToast={showToast} openView={openView}/>}
       {activePage==='gl-import'      && <GLImportPage showToast={showToast}/>}
+      {activePage==='smart-import'   && <SmartBankImportPage showToast={showToast}/>}
     </div>
   )
 }
@@ -6214,6 +6215,481 @@ function GLImportPage({showToast}) {
           <div className="text-4xl mb-3">📭</div>
           <p className="font-semibold">اضغط "بحث" لعرض القيود غير المُستورَدة</p>
           <p className="text-xs mt-1">يبحث في جميع قيود الأستاذ العام التي تؤثر على حسابات البنك/الصندوق</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ══════════════════════════════════════════════════════════
+// SmartBankImportPage — المعاملات البنكية الذكية
+// استيراد كشف البنك Excel → سندات مسودة BP/BR
+// ══════════════════════════════════════════════════════════
+function SmartBankImportPage({showToast}) {
+  // ── States ──────────────────────────────────────────────
+  const [step,        setStep]        = useState(1)  // 1=إعداد 2=رفع 3=مراجعة 4=اكتمل
+  const [accounts,    setAccounts]    = useState([])
+  const [vendors,     setVendors]     = useState([])
+  const [customers,   setCustomers]   = useState([])
+  const [glAccounts,  setGlAccounts]  = useState([])
+  const [settings,    setSettings]    = useState({
+    smart_import_transit_pay:'',      smart_import_transit_pay_name:'دفعات تحت التسوية',
+    smart_import_transit_rec:'',      smart_import_transit_rec_name:'مقبوضات تحت التسوية',
+  })
+  const [config, setConfig] = useState({
+    bank_account_id:'', col_date:'date', col_desc:'description',
+    col_debit:'debit',  col_credit:'credit',
+  })
+  const [rawRows,  setRawRows]  = useState([])   // صفوف Excel الخام
+  const [headers,  setHeaders]  = useState([])   // أعمدة الملف
+  const [preview,  setPreview]  = useState([])   // قيود المعاينة
+  const [summary,  setSummary]  = useState(null)
+  const [loading,  setLoading]  = useState(false)
+  const [saving,   setSaving]   = useState(false)
+  const [settingsSaving, setSettingsSaving] = useState(false)
+  const [editRow,  setEditRow]  = useState(null)  // الصف قيد التعديل
+
+  // ── Load ────────────────────────────────────────────────
+  useEffect(()=>{
+    Promise.all([
+      api.treasury.listBankAccounts(),
+      api.treasury.smartImportSettings(),
+      api.ap?.listVendors?.({limit:200}).catch(()=>({data:{items:[]}})),
+      api.ar?.listCustomers?.({limit:200}).catch(()=>({data:{items:[]}})),
+      api.accounting?.listAccounts?.().catch(()=>({data:[]})),
+    ]).then(([a,s,v,c,g])=>{
+      setAccounts(a?.data||[])
+      if(s?.data) setSettings(prev=>({...prev,...s.data}))
+      setVendors(v?.data?.items||[])
+      setCustomers(c?.data?.items||[])
+      setGlAccounts(g?.data||[])
+    })
+  },[])
+
+  // ── Excel Parser (بدون مكتبة خارجية — CSV أو نص) ───────
+  const parseFile = (file) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target.result
+      // نحاول parse كـ CSV
+      const lines = text.trim().split(/\r?\n/)
+      if(lines.length < 2){ showToast('الملف لا يحتوي على بيانات كافية','error'); return }
+      // الصف الأول = headers
+      const sep = lines[0].includes('\t') ? '\t' : ','
+      const hdrs = lines[0].split(sep).map(h=>h.replace(/"/g,'').trim())
+      setHeaders(hdrs)
+      // نُحدّث config بأعمدة ذكية تلقائياً
+      const autoDetect = (keywords) => hdrs.find(h=>keywords.some(k=>h.toLowerCase().includes(k)))||''
+      setConfig(prev=>({
+        ...prev,
+        col_date:   autoDetect(['date','تاريخ','tarikh']),
+        col_desc:   autoDetect(['desc','بيان','وصف','narr','detail']),
+        col_debit:  autoDetect(['debit','مدين','مخصوم','خصم']),
+        col_credit: autoDetect(['credit','دائن','إيداع','deposit']),
+      }))
+      const rows = lines.slice(1).map(line=>{
+        const vals = line.split(sep).map(v=>v.replace(/"/g,'').trim())
+        return Object.fromEntries(hdrs.map((h,i)=>[h, vals[i]||'']))
+      }).filter(r=>Object.values(r).some(v=>v))
+      setRawRows(rows)
+      showToast(`✅ تم قراءة ${rows.length} صف من الملف`)
+      setStep(2)
+    }
+    reader.readAsText(file, 'UTF-8')
+  }
+
+  // ── Preview ─────────────────────────────────────────────
+  const handlePreview = async () => {
+    if(!config.bank_account_id){ showToast('اختر الحساب البنكي','error'); return }
+    if(rawRows.length===0){ showToast('لا توجد بيانات — ارفع ملفاً أولاً','error'); return }
+    setLoading(true)
+    try {
+      const r = await api.treasury.smartImportPreview({
+        rows:            rawRows,
+        bank_account_id: config.bank_account_id,
+        col_date:        config.col_date,
+        col_desc:        config.col_desc,
+        col_debit:       config.col_debit,
+        col_credit:      config.col_credit,
+        transit_pay_account: settings.smart_import_transit_pay,
+        transit_rec_account: settings.smart_import_transit_rec,
+      })
+      setPreview(r?.data?.preview||[])
+      setSummary(r?.data?.summary||null)
+      setStep(3)
+    } catch(e){ showToast(e.message,'error') }
+    finally{ setLoading(false) }
+  }
+
+  // ── Create Drafts ────────────────────────────────────────
+  const handleCreate = async () => {
+    const confirmed = window.confirm(
+      `هل تريد إنشاء ${preview.length} سند مسودة؟\n\nدفعات: ${summary?.payments||0}\nمقبوضات: ${summary?.receipts||0}`
+    )
+    if(!confirmed) return
+    setSaving(true)
+    try {
+      const r = await api.treasury.smartImportCreate({rows: preview})
+      showToast(r?.message||'✅ تم الإنشاء')
+      setStep(4)
+    } catch(e){ showToast(e.message,'error') }
+    finally{ setSaving(false) }
+  }
+
+  // ── Save Settings ────────────────────────────────────────
+  const saveSettings = async () => {
+    setSettingsSaving(true)
+    try {
+      await api.treasury.saveSmartImportSettings(settings)
+      showToast('✅ تم حفظ إعدادات الحسابات الوسيطة')
+    } catch(e){ showToast(e.message,'error') }
+    finally{ setSettingsSaving(false) }
+  }
+
+  // ── Inline Edit ──────────────────────────────────────────
+  const updateRow = (idx, field, val) => {
+    setPreview(prev => prev.map((r,i)=>i===idx?{...r,[field]:val}:r))
+  }
+
+  // ── Steps indicator ──────────────────────────────────────
+  const STEPS = ['الإعداد','رفع الملف','المراجعة','الإنشاء']
+
+  return (
+    <div className="space-y-5 pb-8" dir="rtl">
+
+      {/* Hero Header */}
+      <div className="relative rounded-3xl overflow-hidden p-6 text-white"
+        style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af,#7c3aed)'}}>
+        <div className="absolute inset-0 opacity-10"
+          style={{backgroundImage:'radial-gradient(circle at 30% 50%, #60a5fa 0%,transparent 60%)'}}/>
+        <div className="relative flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">🧠 المعاملات البنكية الذكية</h1>
+            <p className="text-blue-200 text-sm mt-1">
+              استورد كشف حسابك من البنك → النظام ينشئ القيود تلقائياً → راجع وعدّل → رحّل
+            </p>
+          </div>
+          <div className="bg-white/10 rounded-2xl px-4 py-3 text-sm text-blue-100 max-w-xs text-right">
+            💡 يدعم: Excel (.xlsx) · CSV · أي تنسيق نصي مفصول بفواصل
+          </div>
+        </div>
+        {/* Progress Steps */}
+        <div className="relative flex items-center gap-0 mt-5">
+          {STEPS.map((s,i)=>(
+            <div key={i} className="flex items-center flex-1">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all
+                ${step===i+1?'bg-white text-blue-700 shadow-md':step>i+1?'text-emerald-300':'text-blue-300'}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold
+                  ${step>i+1?'bg-emerald-400 text-white':step===i+1?'bg-blue-700 text-white':'bg-white/20 text-blue-300'}`}>
+                  {step>i+1?'✓':i+1}
+                </span>
+                {s}
+              </div>
+              {i<STEPS.length-1&&<div className={`h-0.5 flex-1 mx-1 ${step>i+1?'bg-emerald-400':'bg-white/20'}`}/>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* STEP 1 — إعداد الحسابات الوسيطة */}
+      <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all
+        ${step===1?'border-blue-200':'border-slate-100'}`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 cursor-pointer"
+          onClick={()=>setStep(1)}>
+          <div className="flex items-center gap-2">
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+              ${step>1?'bg-emerald-500 text-white':'bg-blue-700 text-white'}`}>{step>1?'✓':'1'}</span>
+            <span className="font-bold text-slate-700">⚙️ إعداد الحسابات الوسيطة</span>
+            <span className="text-xs text-slate-400">(مرة واحدة فقط)</span>
+          </div>
+          {step>1&&<span className="text-xs text-emerald-600 font-semibold">✅ مكتمل</span>}
+        </div>
+        {step===1&&(
+          <div className="p-5 space-y-5">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+              💡 هذه الحسابات الوسيطة هي حسابات مؤقتة يضعها النظام تلقائياً —
+              المحاسب يعدّلها لاحقاً عند مراجعة كل قيد
+            </div>
+            <div className="grid grid-cols-2 gap-5">
+              {/* حساب الدفعات الصادرة */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-full bg-red-400 inline-block"/>
+                  حساب المدين للدفعات الصادرة
+                </label>
+                <p className="text-xs text-slate-400">عندما يُخصَم من البنك → يُجعَل مدين هذا الحساب</p>
+                <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500"
+                  placeholder="كود الحساب (مثال: 210901)"
+                  value={settings.smart_import_transit_pay}
+                  onChange={e=>setSettings(p=>({...p,smart_import_transit_pay:e.target.value}))}/>
+                <input className="w-full border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-400"
+                  placeholder="اسم الحساب (مثال: دفعات تحت التسوية)"
+                  value={settings.smart_import_transit_pay_name}
+                  onChange={e=>setSettings(p=>({...p,smart_import_transit_pay_name:e.target.value}))}/>
+              </div>
+              {/* حساب المقبوضات الواردة */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block"/>
+                  حساب الدائن للمقبوضات الواردة
+                </label>
+                <p className="text-xs text-slate-400">عندما يُضاف للبنك → يُجعَل دائن هذا الحساب</p>
+                <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500"
+                  placeholder="كود الحساب (مثال: 110901)"
+                  value={settings.smart_import_transit_rec}
+                  onChange={e=>setSettings(p=>({...p,smart_import_transit_rec:e.target.value}))}/>
+                <input className="w-full border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-400"
+                  placeholder="اسم الحساب (مثال: مقبوضات تحت التسوية)"
+                  value={settings.smart_import_transit_rec_name}
+                  onChange={e=>setSettings(p=>({...p,smart_import_transit_rec_name:e.target.value}))}/>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={saveSettings} disabled={settingsSaving}
+                className="px-5 py-2.5 bg-slate-700 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 disabled:opacity-50">
+                {settingsSaving?'⏳ حفظ...':'💾 حفظ الإعدادات'}
+              </button>
+              <button onClick={()=>setStep(2)}
+                className="px-5 py-2.5 bg-blue-700 text-white rounded-xl text-sm font-semibold hover:bg-blue-800">
+                التالي: رفع الملف ←
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* STEP 2 — رفع الملف وتعيين الأعمدة */}
+      <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden
+        ${step===2?'border-blue-200':'border-slate-100'}`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 cursor-pointer"
+          onClick={()=>step>1&&setStep(2)}>
+          <div className="flex items-center gap-2">
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+              ${step>2?'bg-emerald-500 text-white':step===2?'bg-blue-700 text-white':'bg-slate-300 text-white'}`}>
+              {step>2?'✓':'2'}
+            </span>
+            <span className="font-bold text-slate-700">📤 رفع كشف البنك وتعيين الأعمدة</span>
+          </div>
+          {rawRows.length>0&&<span className="text-xs text-emerald-600">{rawRows.length} صف</span>}
+        </div>
+        {step===2&&(
+          <div className="p-5 space-y-5">
+            {/* اختيار الحساب البنكي */}
+            <div>
+              <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+                الحساب البنكي المصدر <span className="text-red-500">*</span>
+              </label>
+              <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                value={config.bank_account_id}
+                onChange={e=>setConfig(p=>({...p,bank_account_id:e.target.value}))}>
+                <option value="">— اختر الحساب البنكي —</option>
+                {accounts.filter(a=>a.account_type==='bank').map(a=>(
+                  <option key={a.id} value={a.id}>{a.account_name} ({fmt(a.current_balance,2)})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* منطقة رفع الملف */}
+            <div className="border-2 border-dashed border-blue-200 rounded-2xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer bg-blue-50/30"
+              onDragOver={e=>e.preventDefault()}
+              onDrop={e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)parseFile(f)}}
+              onClick={()=>document.getElementById('bank-file-input').click()}>
+              <input id="bank-file-input" type="file" accept=".csv,.txt,.xls,.xlsx" className="hidden"
+                onChange={e=>{if(e.target.files[0])parseFile(e.target.files[0])}}/>
+              <div className="text-4xl mb-3">📂</div>
+              <p className="font-bold text-slate-700">اسحب الملف هنا أو انقر للاختيار</p>
+              <p className="text-xs text-slate-400 mt-1">Excel (.xlsx) · CSV · TXT مفصول بفواصل</p>
+              {rawRows.length>0&&(
+                <div className="mt-3 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl text-sm font-semibold inline-block">
+                  ✅ {rawRows.length} صف محمّل
+                </div>
+              )}
+            </div>
+
+            {/* تعيين الأعمدة */}
+            {headers.length>0&&(
+              <div>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">🗂️ تعيين الأعمدة</h3>
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    {key:'col_date',   label:'عمود التاريخ',     icon:'📅'},
+                    {key:'col_desc',   label:'عمود الوصف/البيان',icon:'📝'},
+                    {key:'col_debit',  label:'عمود المدين (خروج)',icon:'📤'},
+                    {key:'col_credit', label:'عمود الدائن (دخول)',icon:'📥'},
+                  ].map(({key,label,icon})=>(
+                    <div key={key}>
+                      <label className="text-xs text-slate-500 block mb-1">{icon} {label}</label>
+                      <select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-400"
+                        value={config[key]}
+                        onChange={e=>setConfig(p=>({...p,[key]:e.target.value}))}>
+                        <option value="">— اختر —</option>
+                        {headers.map(h=><option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* معاينة أول 3 صفوف */}
+            {rawRows.length>0&&headers.length>0&&(
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 mb-2">معاينة أول 3 صفوف:</h3>
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-slate-100">
+                      {headers.map(h=><th key={h} className="px-3 py-2 text-right font-semibold">{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {rawRows.slice(0,3).map((row,i)=>(
+                        <tr key={i} className="border-t border-slate-100">
+                          {headers.map(h=><td key={h} className="px-3 py-1.5 text-slate-600">{row[h]||'—'}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <button onClick={handlePreview} disabled={loading||rawRows.length===0||!config.bank_account_id}
+              className="w-full py-3 bg-blue-700 text-white rounded-xl font-bold text-sm hover:bg-blue-800 disabled:opacity-50">
+              {loading?'⏳ جارٍ إنشاء المعاينة...':'🔍 معاينة القيود ←'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* STEP 3 — مراجعة القيود */}
+      {step>=3&&preview.length>0&&(
+        <div className="bg-white rounded-2xl border border-blue-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b bg-gradient-to-l from-blue-50 to-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-700 text-white flex items-center justify-center text-xs font-bold">3</span>
+                <span className="font-bold text-slate-700">📋 مراجعة القيود ({preview.length} قيد)</span>
+              </div>
+              {summary&&(
+                <div className="flex gap-4 text-xs">
+                  <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">
+                    📤 دفعات: {summary.payments} | {fmt(summary.total_out,2)} ر.س
+                  </span>
+                  <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-semibold">
+                    📥 مقبوضات: {summary.receipts} | {fmt(summary.total_in,2)} ر.س
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* جدول القيود */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}} className="text-white">
+                  {['الرقم','النوع','التاريخ','الوصف','المبلغ','ح/ المدين','ح/ الدائن','الإجراء'].map(h=>(
+                    <th key={h} className="px-3 py-3 text-right font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {preview.map((row,idx)=>(
+                  <tr key={idx} className={`border-b border-slate-100 hover:bg-blue-50/30
+                    ${row.direction==='out'?'border-r-2 border-r-red-300':'border-r-2 border-r-emerald-300'}
+                    ${idx%2===0?'bg-white':'bg-slate-50/30'}`}>
+                    <td className="px-3 py-2.5 font-mono font-bold text-blue-700">{row.serial}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold
+                        ${row.direction==='out'?'bg-red-100 text-red-700':'bg-emerald-100 text-emerald-700'}`}>
+                        {row.direction==='out'?'📤 دفعة':'📥 قبض'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-500 font-mono text-[11px]">{row.tx_date}</td>
+                    <td className="px-3 py-2.5 text-slate-600 max-w-[180px] truncate" title={row.description}>
+                      {row.description}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono font-bold text-slate-800">
+                      {fmt(row.amount,3)}
+                    </td>
+                    {/* ح/ المدين — قابل للتعديل */}
+                    <td className="px-2 py-2">
+                      {editRow===idx&&row.direction==='in' ? (
+                        <input autoFocus
+                          className="w-28 border border-blue-300 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:border-blue-500"
+                          value={row.debit_account}
+                          onChange={e=>updateRow(idx,'debit_account',e.target.value)}
+                          onBlur={()=>setEditRow(null)}/>
+                      ) : (
+                        <div className={`flex items-center gap-1 cursor-pointer rounded-lg px-2 py-1
+                          ${!row.debit_account?'bg-red-50 border border-red-200':row.direction==='out'?'bg-slate-50':'bg-blue-50'}`}
+                          onClick={()=>row.direction==='in'&&setEditRow(idx)}>
+                          <span className="font-mono text-[10px]">{row.debit_account||'⚠️ حدد'}</span>
+                          {row.direction==='in'&&<span className="text-blue-400 text-[9px]">✏️</span>}
+                        </div>
+                      )}
+                    </td>
+                    {/* ح/ الدائن — قابل للتعديل */}
+                    <td className="px-2 py-2">
+                      {editRow===idx+10000&&row.direction==='out' ? (
+                        <input autoFocus
+                          className="w-28 border border-blue-300 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:border-blue-500"
+                          value={row.credit_account}
+                          onChange={e=>updateRow(idx,'credit_account',e.target.value)}
+                          onBlur={()=>setEditRow(null)}/>
+                      ) : (
+                        <div className={`flex items-center gap-1 cursor-pointer rounded-lg px-2 py-1
+                          ${!row.credit_account?'bg-red-50 border border-red-200':row.direction==='in'?'bg-slate-50':'bg-blue-50'}`}
+                          onClick={()=>row.direction==='out'&&setEditRow(idx+10000)}>
+                          <span className="font-mono text-[10px]">{row.credit_account||'⚠️ حدد'}</span>
+                          {row.direction==='out'&&<span className="text-blue-400 text-[9px]">✏️</span>}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2 py-2">
+                      <button onClick={()=>setPreview(p=>p.filter((_,i)=>i!==idx))}
+                        className="text-red-400 hover:text-red-600 text-[11px] px-2 py-0.5 rounded hover:bg-red-50">
+                        حذف
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Legend */}
+          <div className="px-5 py-3 bg-slate-50 border-t text-xs text-slate-400 flex gap-4">
+            <span>✏️ انقر على الحسابات الوسيطة لتعديلها</span>
+            <span className="text-red-500">📤 المدين قابل للتعديل في الدفعات</span>
+            <span className="text-emerald-600">📥 الدائن قابل للتعديل في المقبوضات</span>
+          </div>
+
+          {/* Action */}
+          <div className="p-5 border-t">
+            <button onClick={handleCreate} disabled={saving}
+              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
+              {saving?'⏳ جارٍ إنشاء السندات...':
+                `✅ إنشاء ${preview.length} سند مسودة (PAY + REC)`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 4 — اكتمل */}
+      {step===4&&(
+        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-8 text-center">
+          <div className="text-5xl mb-4">🎉</div>
+          <h2 className="text-xl font-bold text-emerald-700 mb-2">تم إنشاء السندات بنجاح!</h2>
+          <p className="text-slate-500 text-sm mb-5">
+            جميع السندات أصبحت مسودة — اذهب إلى حركات البنك للمراجعة والترحيل
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={()=>{setStep(1);setPreview([]);setRawRows([]);setSummary(null)}}
+              className="px-5 py-2.5 bg-white border border-emerald-300 text-emerald-700 rounded-xl text-sm font-semibold hover:bg-emerald-50">
+              🔄 استيراد ملف جديد
+            </button>
+          </div>
         </div>
       )}
     </div>

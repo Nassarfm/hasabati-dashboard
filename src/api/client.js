@@ -263,6 +263,11 @@ export const api = {
     // GL Import
     getUnlinkedGLEntries:   (p={})  => get('/treasury/gl-import/unlinked-entries', p),
     importGLEntries:        (b)     => post('/treasury/gl-import/import-entries', b),
+    // Smart Bank Import
+    smartImportPreview:     (b)     => post('/treasury/smart-import/preview', b),
+    smartImportCreate:      (b)     => post('/treasury/smart-import/create-drafts', b),
+    smartImportSettings:    ()      => get('/treasury/smart-import/settings'),
+    saveSmartImportSettings:(b)     => post('/treasury/smart-import/settings', b),
 
     // الشيكات (CHK)
     listChecks:        (p={})       => get('/treasury/checks', p),

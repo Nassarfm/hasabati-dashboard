@@ -376,6 +376,8 @@ export default function TopNav({ activePage, onNavigate }) {
     </nav>
   )
 }
+      { id:'treasury_smart_import', icon:'🧠', label:'استيراد البنك الذكي', sub:'smart-import', section:'bank', desc:'استيراد كشف البنك Excel → سندات ذكية' },
+      { id:'treasury_smart_import', icon:'🧠', label:'استيراد البنك الذكي', sub:'smart-import', section:'bank', desc:'استيراد كشف البنك Excel → سندات ذكية' },
       {id:'treasury_gl_import',  icon:'📥', label:'استيراد من GL',      section:'bank',  sub:'gl-import',     desc:'استيراد قيود JV/REV لحسابات البنك'},
 /**
  * TopNav.jsx — الشريط العلوي مع Mega Menus
