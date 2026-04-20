@@ -4116,38 +4116,63 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
 
 // ── حساب سطر الضريبة — نفس منطق القيود اليومية ──────────────────────────
 function applyTaxToLines(lines, lineId, taxCode, taxTypes) {
-  // احذف السطر الضريبي القديم المرتبط بهذا السطر
+  // 1. احذف السطر الضريبي القديم
   const filtered = lines.filter(l => l.parent_line_id !== lineId)
-  if (!taxCode) return filtered
-  const tx = taxTypes.find(t => t.code === taxCode)
-  if (!tx) return filtered
-  const parent = filtered.find(l => l.id === lineId)
-  if (!parent) return filtered
-  const baseDebit  = parseFloat(parent.debit  || 0)
-  const baseCredit = parseFloat(parent.credit || 0)
-  const base = baseDebit || baseCredit
-  if (base === 0) return filtered
-  const vatAmt   = parseFloat((base * tx.rate / 100).toFixed(3))
-  const isDebit  = baseDebit > 0
-  const taxAccCode = isDebit
-    ? (tx.input_account_code  || '')
-    : (tx.output_account_code || '')
-  const taxLine = {
-    id:             Math.random(),
-    parent_line_id: lineId,
-    is_tax_line:    true,
-    account_code:   taxAccCode,
-    account_name:   isDebit ? `ضريبة المدخلات (${tx.rate}%)` : `ضريبة المخرجات (${tx.rate}%)`,
-    description:    `ضريبة ${tx.name_ar||tx.code} ${tx.rate}% — تلقائي`,
-    debit:          isDebit  ? vatAmt : 0,
-    credit:         !isDebit ? vatAmt : 0,
-    currency_code:  parent.currency_code || 'SAR',
-    tax_type_code:  '',
-    is_auto:        true,
+
+  // 2. أضف السطر الضريبي الجديد إذا وُجد taxCode
+  let result = [...filtered]
+  if (taxCode) {
+    const tx = taxTypes.find(t => t.code === taxCode)
+    const parent = filtered.find(l => l.id === lineId)
+    if (tx && parent) {
+      const baseDebit  = parseFloat(parent.debit  || 0)
+      const baseCredit = parseFloat(parent.credit || 0)
+      const base = baseDebit || baseCredit
+      if (base > 0) {
+        const vatAmt     = parseFloat((base * tx.rate / 100).toFixed(3))
+        const isDebit    = baseDebit > 0
+        const taxAccCode = isDebit
+          ? (tx.input_account_code  || '')
+          : (tx.output_account_code || '')
+        const taxLine = {
+          id:             `tax_${lineId}`,
+          parent_line_id: lineId,
+          is_tax_line:    true,
+          account_code:   taxAccCode,
+          account_name:   isDebit
+            ? `ضريبة المدخلات ${tx.name_ar||tx.code} (${tx.rate}%)`
+            : `ضريبة المخرجات ${tx.name_ar||tx.code} (${tx.rate}%)`,
+          description:    `ضريبة ${tx.name_ar||tx.code} ${tx.rate}% — تلقائي`,
+          debit:          isDebit  ? vatAmt : 0,
+          credit:         !isDebit ? vatAmt : 0,
+          currency_code:  parent.currency_code || 'SAR',
+          tax_type_code:  '',
+          is_auto:        true,
+        }
+        const parentIdx = result.findIndex(l => l.id === lineId)
+        result.splice(parentIdx + 1, 0, taxLine)
+      }
+    }
   }
-  const parentIdx = filtered.findIndex(l => l.id === lineId)
-  const result = [...filtered]
-  result.splice(parentIdx + 1, 0, taxLine)
+
+  // 3. ★ الأهم: نُحدّث سطر الصندوق/البنك (id='gl') ليعكس الإجمالي الجديد
+  //    مثال: DR مصاريف 180 + DR ضريبة 27 → CR صندوق يصبح 207
+  const totalDR = result.filter(l => l.id !== 'gl').reduce((s,l) => s + parseFloat(l.debit  || 0), 0)
+  const totalCR = result.filter(l => l.id !== 'gl').reduce((s,l) => s + parseFloat(l.credit || 0), 0)
+  result = result.map(l => {
+    if (l.id === 'gl') {
+      // سطر الصندوق/البنك — نعدّل الجانب المعاكس
+      if (parseFloat(l.credit || 0) > 0) {
+        // سطر دائن (صرف) → يساوي مجموع المدينة
+        return {...l, credit: totalDR > 0 ? totalDR : parseFloat(l.credit||0)}
+      } else if (parseFloat(l.debit || 0) > 0) {
+        // سطر مدين (قبض) → يساوي مجموع الدائنة
+        return {...l, debit: totalCR > 0 ? totalCR : parseFloat(l.debit||0)}
+      }
+    }
+    return l
+  })
+
   return result
 }
 
