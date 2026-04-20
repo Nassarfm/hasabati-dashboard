@@ -2876,319 +2876,367 @@ function ReportsSection({showToast}) {
 
 // ══ DASHBOARD ═════════════════════════════════════════════
 function DashboardTab({showToast,setTab,openView}) {
-  const [data,setData]=useState(null)
-  const [forecast,setForecast]=useState(null)
-  const [loading,setLoading]=useState(true)
-  const [alertsDismissed,setAlertsDismissed]=useState(false)
+  const [data,    setData]    = useState(null)
+  const [forecast,setForecast]= useState(null)
+  const [loading, setLoading] = useState(true)
+  const [now,     setNow]     = useState(new Date())
 
   useEffect(()=>{
-    Promise.all([
-      api.treasury.dashboard().catch(()=>null),
-      api.treasury.cashForecast({days:30}).catch(()=>null),
-    ]).then(([d,f])=>{setData(d?.data); setForecast(f?.data)}).finally(()=>setLoading(false))
+    const tick = setInterval(()=>setNow(new Date()), 60000)
+    return ()=>clearInterval(tick)
   },[])
 
-  // تنبيهات الرصيد المنخفض — polling كل 90 ثانية
+  const load = async()=>{
+    setLoading(true)
+    try{
+      const [d,f] = await Promise.all([
+        api.treasury.dashboard().catch(()=>null),
+        api.treasury.cashForecast({days:30}).catch(()=>null),
+      ])
+      setData(d?.data)
+      setForecast(f?.data)
+    } catch(e){ showToast('تعذّر تحميل البيانات — تحقق من Railway logs','error') }
+    finally{ setLoading(false) }
+  }
+
+  useEffect(()=>{ load() },[])
+
+  // ── تنبيهات الرصيد المنخفض ──
   useEffect(()=>{
     let prev=[]
     const check=async()=>{
       try{
         const r=await api.treasury.lowBalanceAlerts()
         const alerts=r?.data||[]
-        // تنبيه فقط عند ظهور حسابات جديدة
         const newOnes=alerts.filter(a=>!prev.some(p=>p.id===a.id))
-        newOnes.forEach(a=>{
-          showToast(`⚠️ رصيد منخفض: ${a.account_name} — ${parseFloat(a.current_balance).toLocaleString('ar')} ر.س`,'warning')
-        })
+        if(newOnes.length>0) showToast(`⚠️ ${newOnes.length} حساب رصيده منخفض!`,'warning')
         prev=alerts
       }catch{}
     }
     check()
     const t=setInterval(check,90000)
-    return ()=>clearInterval(t)
-  },[showToast])
-  if(loading) return <div className="py-20 text-center"><div className="w-10 h-10 border-4 border-blue-200 border-t-blue-700 rounded-full animate-spin mx-auto"/><p className="text-slate-400 mt-3 text-sm">جارٍ التحميل...</p></div>
-  if(!data) return <div className="py-20 text-center text-red-500 bg-red-50 rounded-2xl p-6">⚠️ تعذّر تحميل البيانات — تحقق من Railway logs</div>
+    return()=>clearInterval(t)
+  },[])
 
-  const {kpis,accounts=[],alerts=[],due_checks={},cash_flow_chart=[]}=data
-  return <div className="space-y-5">
-    {/* تنبيهات الرصيد المنخفض */}
-    {alerts&&alerts.length>0&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
-      <div className="font-bold text-amber-800 text-sm mb-2">⚠️ تنبيهات الرصيد المنخفض ({alerts.length})</div>
-      <div className="flex flex-wrap gap-2">
-        {alerts.map(a=>(
-          <div key={a.id} className="bg-white border border-amber-200 rounded-xl px-3 py-2 flex items-center gap-2 text-sm">
-            <span>⚠️</span>
-            <span className="font-semibold text-slate-700">{a.account_name}</span>
-            <span className="font-mono text-red-600 font-bold">{fmt(a.current_balance,2)}</span>
-            <span className="text-slate-400 text-xs">من {fmt(a.low_balance_alert,2)}</span>
+  if(loading) return(
+    <div className="flex flex-col items-center justify-center h-80 gap-4">
+      <div className="w-12 h-12 border-4 border-blue-700 border-t-transparent rounded-full animate-spin"/>
+      <p className="text-slate-400 text-sm">جارٍ تحميل لوحة التحكم...</p>
+    </div>
+  )
+
+  if(!data) return(
+    <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-400">
+      <span className="text-4xl">⚠️</span>
+      <p className="font-semibold">تعذّر تحميل البيانات — تحقق من Railway logs</p>
+      <button onClick={load} className="px-5 py-2 bg-blue-700 text-white rounded-xl text-sm">إعادة المحاولة</button>
+    </div>
+  )
+
+  const kpi = data.kpis || {}
+  const accounts = data.accounts || []
+  const banks  = accounts.filter(a=>a.account_type==='bank')
+  const funds  = accounts.filter(a=>a.account_type==='cash_fund')
+  const alerts = data.alerts || []
+  const rec    = data.reconciliation || {}
+  const chart  = data.cash_flow_chart || []
+  const fc     = forecast || {}
+
+  const greeting = now.getHours()<12?'صباح الخير':'مساء الخير'
+  const dateStr  = now.toLocaleDateString('ar-SA-u-ca-gregory',{weekday:'long',year:'numeric',month:'long',day:'numeric'})
+
+  return(
+    <div className="space-y-5 pb-8" dir="rtl">
+
+      {/* ── HERO HEADER ── */}
+      <div className="relative rounded-3xl overflow-hidden"
+        style={{background:'linear-gradient(135deg,#0f172a 0%,#1e3a5f 50%,#1e40af 100%)'}}>
+        <div className="absolute inset-0 opacity-10"
+          style={{backgroundImage:'radial-gradient(circle at 20% 50%, #60a5fa 0%, transparent 50%), radial-gradient(circle at 80% 20%, #a78bfa 0%, transparent 50%)'}}/>
+        <div className="relative p-6">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <p className="text-blue-300 text-sm font-medium">{greeting} 👋</p>
+              <h1 className="text-white text-2xl font-bold mt-1">لوحة تحكم الخزينة والبنوك</h1>
+              <p className="text-blue-200 text-xs mt-1">{dateStr}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-blue-300 text-xs mb-1">إجمالي السيولة</p>
+              <div className="text-white text-3xl font-bold font-mono tracking-tight">
+                {fmt(kpi.total_balance||0,2)}
+                <span className="text-blue-300 text-base font-normal mr-2">ر.س</span>
+              </div>
+              <div className="flex gap-3 mt-2 text-xs">
+                <span className="text-emerald-300">🏦 بنوك: {fmt(kpi.bank_balance||0,2)}</span>
+                <span className="text-amber-300">💵 صناديق: {fmt(kpi.cash_balance||0,2)}</span>
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
-    </div>}
 
-    <div className="grid grid-cols-4 gap-4">
-      {[
-        {l:'إجمالي الأرصدة',v:`${fmt(kpis.total_balance,2)} ر.س`,i:'💰',c:'bg-blue-50 border-blue-200',t:'text-blue-700',s:`بنوك: ${fmt(kpis.bank_balance,2)} | صناديق: ${fmt(kpis.cash_balance,2)}`},
-        {l:'قبض اليوم',v:`${fmt(kpis.today_receipts,2)} ر.س`,i:'📥',c:'bg-emerald-50 border-emerald-200',t:'text-emerald-700'},
-        {l:'صرف اليوم',v:`${fmt(kpis.today_payments,2)} ر.س`,i:'📤',c:'bg-red-50 border-red-200',t:'text-red-700'},
-        {l:'مستندات معلقة',v:(kpis.pending_vouchers||0)+(kpis.pending_bank_tx||0),i:'⏳',c:'bg-amber-50 border-amber-200',t:'text-amber-700'},
-      ].map((k,i)=>(
-        <div key={i} className={`rounded-2xl border ${k.c} p-4`}>
-          <div className="flex justify-between mb-2"><span className="text-xs text-slate-400">{k.l}</span><span className="text-xl">{k.i}</span></div>
-          <div className={`text-xl font-bold font-mono ${k.t}`}>{k.v}</div>
-          {k.s&&<div className="text-xs text-slate-400 mt-1">{k.s}</div>}
-        </div>
-      ))}
-    </div>
-
-    {/* أزرار سريعة */}
-    <div className="bg-white rounded-2xl border border-slate-200 p-4">
-      <div className="text-sm font-bold text-slate-600 mb-3">⚡ إجراء سريع</div>
-      <div className="flex gap-2 flex-wrap">
-        {[
-          {l:'💰 سند قبض',c:'bg-emerald-600 hover:bg-emerald-700',v:'new-cash',d:'RV'},
-          {l:'💸 سند صرف',c:'bg-red-600 hover:bg-red-700',v:'new-cash',d:'PV'},
-          {l:'🏦 دفعة بنكية',c:'bg-blue-600 hover:bg-blue-700',v:'new-bank-tx',d:'BP'},
-          {l:'🏛️ قبض بنكي',c:'bg-teal-600 hover:bg-teal-700',v:'new-bank-tx',d:'BR'},
-          {l:'🔄 تحويل داخلي',c:'bg-purple-600 hover:bg-purple-700',v:'new-transfer',d:null},
-        ].map((b,i)=>(
-          <button key={i} onClick={()=>openView(b.v,b.d)} className={`px-4 py-2 rounded-xl text-white text-sm font-semibold ${b.c} transition-colors`}>{b.l}</button>
-        ))}
-      </div>
-    </div>
-
-    <div className="grid grid-cols-2 gap-5">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 font-bold text-sm text-white" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>💼 أرصدة الحسابات</div>
-        {accounts.length===0
-          ?<div className="py-8 text-center text-slate-400 text-sm">لا توجد حسابات — <button onClick={()=>openView('new-bank-account')} className="text-blue-500 underline">أضف حساباً</button></div>
-          :<>
-            <div className="p-3">
-              <ResponsiveContainer width="100%" height={130}>
-                <BarChart data={accounts.map(a=>({name:a.account_name.slice(0,12),balance:parseFloat(a.current_balance||0),type:a.account_type}))}
-                          margin={{top:5,right:5,left:-20,bottom:0}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                  <XAxis dataKey="name" tick={{fontSize:9}}/>
-                  <YAxis tick={{fontSize:9}}/>
-                  <Tooltip formatter={(v)=>[fmt(v,2)+' ر.س','الرصيد']} contentStyle={{fontSize:11}}/>
-                  <Bar dataKey="balance" radius={[4,4,0,0]}
-                    fill="#1d4ed8"
-                    label={false}/>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {accounts.map(a=>(
-                <div key={a.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{a.account_type==='bank'?'🏦':'💵'}</span>
-                    <div>
-                      <div className="text-sm font-semibold">{a.account_name}</div>
-                      <div className="text-xs text-blue-600 font-mono">{a.currency_code}</div>
-                    </div>
-                  </div>
-                  <div className="text-left">
-                    <div className={`font-mono font-bold text-sm ${parseFloat(a.current_balance)<0?'text-red-600':parseFloat(a.current_balance)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0?'text-amber-600':'text-emerald-700'}`}>{fmt(a.current_balance,2)}</div>
-                    {parseFloat(a.current_balance||0)<=parseFloat(a.low_balance_alert||0)&&parseFloat(a.low_balance_alert||0)>0&&<div className="text-[10px] text-amber-500">⚠️ رصيد منخفض</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>}
-      </div>
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 font-bold text-sm text-white flex items-center justify-between" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
-          <span>📈 التدفقات النقدية — آخر 30 يوم</span>
-          <div className="flex gap-3 text-xs font-normal opacity-80">
-            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-emerald-400 inline-block"/>قبض</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-400 inline-block"/>صرف</span>
+          {/* Mini KPI row */}
+          <div className="grid grid-cols-4 gap-3 mt-5">
+            {[
+              {l:'قبض اليوم',    v:fmt(kpi.today_receipts||0,2), i:'📥', c:'bg-emerald-500/20 border-emerald-400/30 text-emerald-300'},
+              {l:'صرف اليوم',    v:fmt(kpi.today_payments||0,2), i:'📤', c:'bg-red-500/20 border-red-400/30 text-red-300'},
+              {l:'مسودات نقدي',  v:kpi.pending_vouchers||0,     i:'📋', c:'bg-amber-500/20 border-amber-400/30 text-amber-300'},
+              {l:'مسودات بنك',   v:kpi.pending_bank_tx||0,      i:'🏦', c:'bg-purple-500/20 border-purple-400/30 text-purple-300'},
+            ].map((k,i)=>(
+              <div key={i} className={`border rounded-2xl p-3 ${k.c}`}>
+                <div className="text-lg">{k.i}</div>
+                <div className="font-mono font-bold text-lg leading-none mt-1">{k.v}</div>
+                <div className="text-[11px] opacity-80 mt-0.5">{k.l}</div>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="p-3">
-          {cash_flow_chart.length===0
-            ?<div className="text-center py-8 text-slate-400 text-sm">لا توجد حركات مرحّلة</div>
-            :<ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={cash_flow_chart} margin={{top:5,right:5,left:-20,bottom:0}}>
-                <defs>
-                  <linearGradient id="gRec" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="gPay" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                <XAxis dataKey="date" tick={{fontSize:9}} tickFormatter={v=>v?.slice(5)||''}/>
-                <YAxis tick={{fontSize:9}}/>
-                <Tooltip formatter={(v,n)=>[fmt(v,0)+' ر.س', n==='receipts'?'قبض':'صرف']}
-                         labelFormatter={l=>`تاريخ: ${l}`} contentStyle={{fontSize:11,direction:'rtl'}}/>
-                <Area type="monotone" dataKey="receipts" stroke="#10b981" fill="url(#gRec)" strokeWidth={2}/>
-                <Area type="monotone" dataKey="payments" stroke="#ef4444" fill="url(#gPay)" strokeWidth={2}/>
-              </AreaChart>
-            </ResponsiveContainer>}
-        </div>
       </div>
-    </div>
 
-    {/* التنبيهات والمستندات المعلقة */}
-    <div className="grid grid-cols-2 gap-5">
-      {alerts.length>0&&<div className="bg-amber-50 rounded-2xl border-2 border-amber-200 p-4">
-        <div className="font-bold text-amber-800 text-sm mb-3">⚠️ تنبيهات الرصيد المنخفض</div>
-        <div className="space-y-2">
-          {alerts.map(a=>(
-            <div key={a.id} className="flex justify-between items-center bg-white rounded-xl px-3 py-2 border border-amber-100">
-              <div className="text-sm font-medium text-slate-700">{a.account_name}</div>
-              <div className="font-mono font-bold text-amber-700 text-sm">{fmt(a.current_balance,2)}</div>
+      {/* ── RECONCILIATION STATS ── */}
+      <div className="grid grid-cols-3 gap-4">
+        {/* إجمالي المُسوَّى */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-500 text-sm font-medium">إجمالي التسوية البنكية</span>
+            <span className="text-2xl">✅</span>
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-400">مُسوَّى</span>
+              <div className="text-right">
+                <div className="font-bold font-mono text-emerald-600">{rec.reconciled||0} حركة</div>
+                <div className="text-xs text-emerald-500">{fmt(rec.reconciled_amount||0,2)} ر.س</div>
+              </div>
             </div>
-          ))}
+            <div className="w-full bg-slate-100 rounded-full h-2">
+              <div className="bg-emerald-500 h-2 rounded-full transition-all"
+                style={{width:`${rec.total_posted>0?(rec.reconciled/rec.total_posted*100):0}%`}}/>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-400">غير مُسوَّى</span>
+              <div className="text-right">
+                <div className="font-bold font-mono text-amber-600">{rec.unreconciled||0} حركة</div>
+                <div className="text-xs text-amber-500">{fmt(rec.unreconciled_amount||0,2)} ر.س</div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>}
-      {(kpis.pending_vouchers>0||kpis.pending_bank_tx>0)&&<div className="bg-blue-50 rounded-2xl border-2 border-blue-200 p-4">
-        <div className="font-bold text-blue-800 text-sm mb-3">⏳ مستندات بانتظار الترحيل</div>
-        <div className="space-y-2">
-          {kpis.pending_vouchers>0&&<div className="flex justify-between items-center bg-white rounded-xl px-3 py-2 border border-blue-100">
-            <div className="text-sm text-slate-700">سندات نقدية</div>
-            <span className="font-bold text-blue-700">{kpis.pending_vouchers} سند</span>
-          </div>}
-          {kpis.pending_bank_tx>0&&<div className="flex justify-between items-center bg-white rounded-xl px-3 py-2 border border-blue-100">
-            <div className="text-sm text-slate-700">حركات بنكية</div>
-            <span className="font-bold text-blue-700">{kpis.pending_bank_tx} حركة</span>
-          </div>}
-        </div>
-      </div>}
-    </div>
 
-    {/* توقع المركز النقدي — 30 يوم */}
-    {forecast&&forecast.days&&forecast.days.length>0&&(()=>{
-      const days    = forecast.days
-      const endBal  = days[days.length-1].balance
-      const change  = endBal - forecast.start_balance
-      const evDays  = days.filter(d=>d.inflow>0||d.outflow>0)
-      const summary = forecast.summary || {}
-      // legend colors per source
-      const srcColor = { ap:'bg-red-100 text-red-700', ar:'bg-emerald-100 text-emerald-700', recurring:'bg-purple-100 text-purple-700' }
-      const srcLabel = { ap:'AP مورد', ar:'AR عميل', recurring:'متكرر' }
-      return (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="px-4 py-3 font-bold text-sm text-white flex items-center justify-between" style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)'}}>
-            <span>🔮 توقع المركز النقدي — 30 يوم قادم</span>
-            <div className="flex gap-4 text-xs font-normal opacity-80">
-              <span>الرصيد الحالي: <strong>{fmt(forecast.start_balance,2)} ر.س</strong></span>
-              <span className={change>=0?'text-emerald-300':'text-red-300'}>
-                {change>=0?'▲':'▼'} {fmt(Math.abs(change),2)} ر.س بعد 30 يوم
+        {/* توقع السيولة */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-500 text-sm font-medium">توقع السيولة (30 يوم)</span>
+            <span className="text-2xl">🔮</span>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-400">الرصيد الحالي</span>
+              <span className="font-mono font-bold text-blue-700">{fmt(fc.current_balance||kpi.total_balance||0,2)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-emerald-500">+ تدفقات متوقعة</span>
+              <span className="font-mono text-emerald-600">+{fmt(fc.pending_inflow||0,2)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-red-400">- مدفوعات معلقة</span>
+              <span className="font-mono text-red-500">-{fmt(fc.pending_outflow||0,2)}</span>
+            </div>
+            <div className="border-t pt-2 flex justify-between">
+              <span className="text-sm font-semibold text-slate-700">الرصيد المتوقع</span>
+              <span className={`font-mono font-bold text-sm ${(fc.forecast_balance||0)>=0?'text-emerald-600':'text-red-600'}`}>
+                {fmt(fc.forecast_balance||kpi.total_balance||0,2)} ر.س
               </span>
             </div>
           </div>
+        </div>
 
-          {/* Summary pills — AP / AR / Recurring */}
-          <div className="grid grid-cols-4 divide-x divide-x-reverse divide-slate-100 border-b border-slate-100 text-center text-xs">
-            <div className="py-2.5 px-3">
-              <div className="text-slate-400 mb-0.5">مستحقات موردين (AP)</div>
-              <div className="font-bold text-red-600">-{fmt(summary.ap_due||0,2)} ر.س</div>
-            </div>
-            <div className="py-2.5 px-3">
-              <div className="text-slate-400 mb-0.5">تحصيلات عملاء (AR)</div>
-              <div className="font-bold text-emerald-600">+{fmt(summary.ar_due||0,2)} ر.س</div>
-            </div>
-            <div className="py-2.5 px-3">
-              <div className="text-slate-400 mb-0.5">مدفوعات متكررة</div>
-              <div className="font-bold text-orange-500">-{fmt(summary.rec_out||0,2)} ر.س</div>
-            </div>
-            <div className="py-2.5 px-3">
-              <div className="text-slate-400 mb-0.5">تحصيلات متكررة</div>
-              <div className="font-bold text-blue-600">+{fmt(summary.rec_in||0,2)} ر.س</div>
-            </div>
+        {/* الشيكات المستحقة */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-slate-500 text-sm font-medium">الشيكات المستحقة (7 أيام)</span>
+            <span className="text-2xl">📑</span>
           </div>
-
-          {/* Chart */}
-          <div className="p-3">
-            <ResponsiveContainer width="100%" height={140}>
-              <AreaChart data={days.filter((_,i)=>i%3===0||days[i].inflow>0||days[i].outflow>0)}
-                         margin={{top:5,right:5,left:-20,bottom:0}}>
-                <defs>
-                  <linearGradient id="gForecast" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                <XAxis dataKey="date" tick={{fontSize:8}} tickFormatter={v=>v?.slice(5)||''}/>
-                <YAxis tick={{fontSize:8}} tickFormatter={v=>fmt(v,0)}/>
-                <Tooltip
-                  content={({active,payload,label})=>{
-                    if(!active||!payload?.length) return null
-                    const pt=payload[0]?.payload
-                    return (
-                      <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-2.5 text-xs" dir="rtl" style={{minWidth:180}}>
-                        <div className="font-bold text-slate-700 mb-1.5">{label}</div>
-                        <div className="flex justify-between gap-4 mb-1">
-                          <span className="text-slate-500">الرصيد المتوقع</span>
-                          <span className="font-mono font-bold text-purple-700">{fmt(pt?.balance,2)} ر.س</span>
-                        </div>
-                        {pt?.inflow>0&&<div className="flex justify-between gap-4">
-                          <span className="text-emerald-600">دخل</span>
-                          <span className="font-mono text-emerald-600">+{fmt(pt.inflow,2)}</span>
-                        </div>}
-                        {pt?.outflow>0&&<div className="flex justify-between gap-4">
-                          <span className="text-red-500">صرف</span>
-                          <span className="font-mono text-red-500">-{fmt(pt.outflow,2)}</span>
-                        </div>}
-                        {pt?.items?.length>0&&(
-                          <div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5">
-                            {pt.items.map((it,i)=>(
-                              <div key={i} className="flex items-center gap-1.5">
-                                <span className={`px-1 rounded text-[10px] font-medium ${srcColor[it.source]||'bg-slate-100 text-slate-600'}`}>{srcLabel[it.source]||it.source}</span>
-                                <span className="text-slate-500 truncate flex-1">{it.label}</span>
-                                <span className={`font-mono font-bold ${it.direction==='inflow'?'text-emerald-600':'text-red-500'}`}>
-                                  {it.direction==='inflow'?'+':'-'}{fmt(it.amount,0)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  }}
-                />
-                <Area type="monotone" dataKey="balance" stroke="#7c3aed" fill="url(#gForecast)" strokeWidth={2} dot={false}/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Events list */}
-          {evDays.length>0&&(
-            <div className="border-t border-slate-100 px-4 py-3">
-              <div className="text-xs font-bold text-slate-500 mb-2">أحداث نقدية متوقعة</div>
-              <div className="flex flex-wrap gap-2">
-                {evDays.slice(0,10).map(d=>(
-                  <div key={d.date} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs">
-                    <span className="text-slate-400">{d.date.slice(5)}</span>
-                    {d.items?.filter(it=>it.source==='ap').length>0&&
-                      <span className="px-1 rounded bg-red-100 text-red-700 text-[10px]">AP</span>}
-                    {d.items?.filter(it=>it.source==='ar').length>0&&
-                      <span className="px-1 rounded bg-emerald-100 text-emerald-700 text-[10px]">AR</span>}
-                    {d.inflow>0&&<span className="text-emerald-600 font-mono font-bold">+{fmt(d.inflow,0)}</span>}
-                    {d.outflow>0&&<span className="text-red-500 font-mono font-bold">-{fmt(d.outflow,0)}</span>}
-                  </div>
-                ))}
-                {evDays.length>10&&<span className="text-xs text-slate-400 self-center">+{evDays.length-10} أخرى</span>}
+          {data.due_checks?.count>0?(
+            <div className="space-y-2">
+              <div className="text-3xl font-bold font-mono text-amber-600">{data.due_checks.count}</div>
+              <div className="text-sm text-slate-500">شيك مستحق السداد</div>
+              <div className="bg-amber-50 rounded-xl p-2 text-center">
+                <span className="font-mono font-bold text-amber-700">{fmt(data.due_checks.total,2)} ر.س</span>
               </div>
+              <button onClick={()=>setTab&&setTab('checks')}
+                className="w-full text-xs text-amber-600 hover:text-amber-700 border border-amber-200 rounded-xl py-1.5 hover:bg-amber-50">
+                عرض الشيكات ←
+              </button>
             </div>
-          )}
-          {evDays.length===0&&(
-            <div className="px-4 pb-3 text-xs text-slate-400 text-center">لا توجد أحداث نقدية مجدولة خلال 30 يوم</div>
+          ):(
+            <div className="text-center py-4 text-slate-300">
+              <div className="text-3xl mb-2">✓</div>
+              <div className="text-sm">لا توجد شيكات مستحقة</div>
+            </div>
           )}
         </div>
-      )
-    })()}
-  </div>
+      </div>
+
+      {/* ── ALERTS ── */}
+      {alerts.length>0&&(
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-red-600 font-bold text-sm">⚠️ تنبيهات الرصيد المنخفض</span>
+            <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full">{alerts.length}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {alerts.map(a=>(
+              <div key={a.id} className="bg-white rounded-xl border border-red-200 p-3">
+                <div className="text-xs font-semibold text-slate-700 truncate">{a.account_name}</div>
+                <div className="font-mono font-bold text-red-600 text-sm">{fmt(a.current_balance,2)} ر.س</div>
+                <div className="text-[10px] text-red-400">حد التنبيه: {fmt(a.low_balance_alert,2)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── ACCOUNTS GRID ── */}
+      <div className="grid grid-cols-2 gap-5">
+        {/* أرصدة البنوك */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b bg-gradient-to-l from-blue-50 to-white">
+            <span className="font-bold text-slate-700">🏦 أرصدة البنوك ({banks.length})</span>
+            <button onClick={()=>setTab&&setTab('accounts')}
+              className="text-xs text-blue-600 hover:text-blue-700">إدارة ←</button>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {banks.length===0
+              ? <div className="py-8 text-center text-slate-300 text-sm">لا توجد حسابات بنكية</div>
+              : banks.map(a=>{
+                const pct = a.low_balance_alert&&a.current_balance
+                  ? Math.min(100, Math.round(a.current_balance/Math.max(a.low_balance_alert*3,1)*100))
+                  : 70
+                const isLow = a.low_balance_alert && parseFloat(a.current_balance) <= parseFloat(a.low_balance_alert)
+                return(
+                  <div key={a.id} className="px-5 py-3 hover:bg-slate-50">
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-700 truncate">{a.account_name}</div>
+                        <div className="text-xs text-slate-400">{a.account_code||'—'}</div>
+                      </div>
+                      <div className="text-right shrink-0 mr-3">
+                        <div className={`font-mono font-bold text-sm ${isLow?'text-red-600':'text-slate-800'}`}>
+                          {fmt(a.current_balance,2)}
+                        </div>
+                        <div className="text-[10px] text-slate-400">{a.currency_code||'SAR'}</div>
+                      </div>
+                    </div>
+                    <div className="mt-2 w-full bg-slate-100 rounded-full h-1.5">
+                      <div className={`h-1.5 rounded-full transition-all ${isLow?'bg-red-400':'bg-blue-500'}`}
+                        style={{width:`${pct}%`}}/>
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+          <div className="px-5 py-3 bg-slate-50 border-t flex justify-between text-xs">
+            <span className="text-slate-500">الإجمالي</span>
+            <span className="font-mono font-bold text-blue-700">{fmt(kpi.bank_balance||0,2)} ر.س</span>
+          </div>
+        </div>
+
+        {/* أرصدة الصناديق */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b bg-gradient-to-l from-amber-50 to-white">
+            <span className="font-bold text-slate-700">💵 أرصدة الصناديق ({funds.length})</span>
+            <button onClick={()=>setTab&&setTab('cash')}
+              className="text-xs text-amber-600 hover:text-amber-700">الحركات ←</button>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {funds.length===0
+              ? <div className="py-8 text-center text-slate-300 text-sm">لا توجد صناديق نقدية</div>
+              : funds.map(a=>{
+                const isLow = a.low_balance_alert && parseFloat(a.current_balance) <= parseFloat(a.low_balance_alert)
+                return(
+                  <div key={a.id} className="px-5 py-3 hover:bg-slate-50">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-700">{a.account_name}</div>
+                        <div className="text-[10px] text-slate-400">{a.account_type==='cash_fund'?'صندوق':'صندوق عهدة'}</div>
+                      </div>
+                      <div className={`font-mono font-bold text-sm ${isLow?'text-red-600':'text-amber-700'}`}>
+                        {fmt(a.current_balance,2)} <span className="text-[10px] text-slate-400">{a.currency_code||'SAR'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+          <div className="px-5 py-3 bg-slate-50 border-t flex justify-between text-xs">
+            <span className="text-slate-500">الإجمالي</span>
+            <span className="font-mono font-bold text-amber-700">{fmt(kpi.cash_balance||0,2)} ر.س</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── CHART ── */}
+      {chart.length>0&&(
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="font-bold text-slate-700">📊 التدفق النقدي — آخر 30 يوم</span>
+            <div className="flex gap-3 text-xs">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"/>قبض</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-400 inline-block"/>صرف</span>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="flex items-end gap-1 h-36 min-w-max">
+              {(()=>{
+                const maxVal = Math.max(...chart.map(r=>Math.max(r.receipts,r.payments)),1)
+                return chart.map((row,i)=>(
+                  <div key={i} className="flex flex-col items-center gap-0.5" style={{minWidth:'28px'}}>
+                    <div className="flex items-end gap-0.5 h-28">
+                      <div className="w-3 bg-emerald-400 rounded-t transition-all hover:bg-emerald-500"
+                        style={{height:`${Math.round(row.receipts/maxVal*100)}%`,minHeight:'2px'}}
+                        title={`قبض: ${fmt(row.receipts,0)}`}/>
+                      <div className="w-3 bg-red-300 rounded-t transition-all hover:bg-red-400"
+                        style={{height:`${Math.round(row.payments/maxVal*100)}%`,minHeight:'2px'}}
+                        title={`صرف: ${fmt(row.payments,0)}`}/>
+                    </div>
+                    <div className="text-[8px] text-slate-300 rotate-45 origin-right"
+                      style={{writingMode:'initial'}}>
+                      {row.date?.slice(5)}
+                    </div>
+                  </div>
+                ))
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── QUICK ACTIONS ── */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          {l:'سند صرف نقدي', i:'💸', c:'bg-red-600 hover:bg-red-700',   fn:()=>openView('new-cash','PV')},
+          {l:'سند قبض نقدي', i:'💰', c:'bg-emerald-600 hover:bg-emerald-700', fn:()=>openView('new-cash','RV')},
+          {l:'دفعة بنكية',   i:'🏦', c:'bg-blue-600 hover:bg-blue-700',  fn:()=>openView('new-bank-tx','BP')},
+          {l:'قبض بنكي',     i:'📥', c:'bg-indigo-600 hover:bg-indigo-700', fn:()=>openView('new-bank-tx','BR')},
+        ].map((b,i)=>(
+          <button key={i} onClick={b.fn}
+            className={`${b.c} text-white rounded-2xl p-4 text-sm font-semibold flex items-center gap-2 justify-center transition-all shadow-sm hover:shadow-md`}>
+            <span className="text-xl">{b.i}</span> {b.l}
+          </button>
+        ))}
+      </div>
+
+      {/* ── REFRESH ── */}
+      <div className="flex justify-end">
+        <button onClick={load}
+          className="text-xs text-slate-400 hover:text-blue-600 flex items-center gap-1 px-3 py-1.5 rounded-xl hover:bg-blue-50">
+          🔄 تحديث البيانات
+        </button>
+      </div>
+    </div>
+  )
 }
 
-// ══ BANK ACCOUNTS LIST ════════════════════════════════════
+
 function AccountSparkline({history}) {
   if(!history||history.length<2) return <div className="h-10 flex items-center justify-center text-xs text-slate-300">—</div>
   const min=Math.min(...history.map(h=>h.balance))
