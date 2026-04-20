@@ -2491,7 +2491,7 @@ function ReportsSection({showToast}) {
   const [sub,setSub] = useState('balances')
   const [loading,setLoading] = useState(false)
   const [data,setData] = useState(null)
-  const [filters,setFilters] = useState({date_from:'',date_to:'',month:'',year:new Date().getFullYear()})
+  const [filters,setFilters] = useState({account_id:'',date_from:'',date_to:'',month:'',year:new Date().getFullYear()})
   const sf=(k,v)=>setFilters(p=>({...p,[k]:v}))
 
   const [accounts,setAccounts] = useState([])
@@ -2503,7 +2503,7 @@ function ReportsSection({showToast}) {
     {id:'monthly-flow',     icon:'📊', label:'التدفق الشهري'},
     {id:'check-aging',      icon:'⏱️', label:'أعمار الديون'},
     {id:'cash-flow',        icon:'📈', label:'سندات القبض والصرف'},
-    {id:'bank-expenses',    icon:'💸', label:'المصاريف والرسوم البنكية'},
+    {id:'bank-expenses',    icon:'💸', label:'الرسوم والعمولات البنكية'},
     {id:'inactive',         icon:'🔒', label:'الحسابات غير النشطة'},
     {id:'reconciliation',   icon:'✅', label:'تقرير التسوية البنكية'},
   ]
@@ -2870,8 +2870,90 @@ function ReportsSection({showToast}) {
         </table>}
     </div>}
 
-    {/* كشف الحساب */}
-    {sub==='statement' && <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 text-sm">📄 كشف الحساب البنكي — يتطلب اختيار حساب بنكي محدد — قريباً</div>}
+    {/* كشف الحساب البنكي */}
+    {sub==='account-statement' && data && (
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-3 bg-blue-700 text-white text-sm font-bold flex justify-between">
+          <span>📄 كشف حساب — {data.account?.account_name}</span>
+          <span className="text-blue-200 text-xs">رصيد أول المدة: {fmt(data.opening||0,3)} | رصيد آخر المدة: {fmt(data.closing||0,3)}</span>
+        </div>
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 text-slate-500"><tr>
+            {['الرقم','التاريخ','البيان','مدين','دائن','الرصيد'].map(h=><th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(data.rows||[]).map((r,i)=>(
+              <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
+                <td className="px-3 py-2.5 font-mono text-blue-700 font-bold text-[11px]">{r.serial}</td>
+                <td className="px-3 py-2.5 text-slate-500">{fmtDate(r.tx_date)}</td>
+                <td className="px-3 py-2.5 text-slate-600 truncate max-w-[200px]">{r.description||'—'}</td>
+                <td className="px-3 py-2.5 font-mono text-emerald-700">{r.debit>0?fmt(r.debit,3):'—'}</td>
+                <td className="px-3 py-2.5 font-mono text-red-600">{r.credit>0?fmt(r.credit,3):'—'}</td>
+                <td className={`px-3 py-2.5 font-mono font-bold ${r.running_balance>=0?'text-blue-700':'text-red-700'}`}>{fmt(r.running_balance,3)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
+            <tr>
+              <td colSpan={3} className="px-3 py-3 text-blue-800">الإجمالي</td>
+              <td className="px-3 py-3 font-mono text-emerald-700">{fmt(data.total_debit||0,3)}</td>
+              <td className="px-3 py-3 font-mono text-red-600">{fmt(data.total_credit||0,3)}</td>
+              <td className="px-3 py-3 font-mono text-blue-800 font-bold">{fmt(data.closing||0,3)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    )}
+
+    {/* التدفق الشهري */}
+    {sub==='monthly-flow' && data && (
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-3 bg-indigo-700 text-white text-sm font-bold">📊 التدفق النقدي الشهري</div>
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 text-slate-500"><tr>
+            {['الفترة','تدفقات داخلة','تدفقات خارجة','صافي التدفق'].map(h=><th key={h} className="px-4 py-2.5 text-right font-semibold">{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(data.rows||[]).map((r,i)=>(
+              <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
+                <td className="px-4 py-2.5 font-semibold text-slate-700">{r.period}</td>
+                <td className="px-4 py-2.5 font-mono text-emerald-700">{fmt(r.inflow,3)}</td>
+                <td className="px-4 py-2.5 font-mono text-red-600">{fmt(r.outflow,3)}</td>
+                <td className={`px-4 py-2.5 font-mono font-bold ${r.net>=0?'text-blue-700':'text-red-700'}`}>{fmt(r.net,3)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="bg-indigo-50 border-t-2 border-indigo-200 font-bold text-xs">
+            <tr>
+              <td className="px-4 py-3 text-indigo-800">الإجمالي</td>
+              <td className="px-4 py-3 font-mono text-emerald-700">{fmt(data.total_inflow||0,3)}</td>
+              <td className="px-4 py-3 font-mono text-red-600">{fmt(data.total_outflow||0,3)}</td>
+              <td className={`px-4 py-3 font-mono font-bold ${(data.net||0)>=0?'text-blue-800':'text-red-700'}`}>{fmt(data.net||0,3)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    )}
+
+    {/* تقرير التسوية */}
+    {sub==='reconciliation' && (
+      <div className="bg-white rounded-2xl border border-emerald-200 overflow-hidden">
+        <div className="px-5 py-4 bg-emerald-600 text-white text-sm font-bold">
+          ✅ تقرير التسوية البنكية
+        </div>
+        <div className="p-6 text-center text-slate-500 space-y-3">
+          <div className="text-4xl">🏦</div>
+          <p className="font-semibold">التسوية البنكية اليدوية تعمل من صفحة حركات البنك</p>
+          <p className="text-xs text-slate-400">افتح الخزينة والبنوك ← حركات البنوك ← ضع ✓ على الحركات الموجودة في كشف البنك</p>
+          <button
+            onClick={()=>window.dispatchEvent(new CustomEvent('navigate',{detail:'treasury_bank'}))}
+            className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700">
+            الذهاب لحركات البنك ←
+          </button>
+        </div>
+      </div>
+    )}
+
   </div>
 }
 
