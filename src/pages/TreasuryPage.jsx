@@ -234,6 +234,7 @@ function AccountingTable({lines=[], taxTypes=[], onTaxChange=null}) {
               )}
             </div>
 
+        ))}
         {/* ── صف الإجماليات ── */}
         <div className="grid border-t-2 border-slate-200"
           style={{background:'#f8fafc', gridTemplateColumns:COLS}}>
