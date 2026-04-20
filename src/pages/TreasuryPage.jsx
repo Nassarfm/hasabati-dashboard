@@ -4164,6 +4164,9 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const [taxTypes,setTaxTypes]=useState([])
   const [jeLines,setJeLines]=useState([])  // سطور القيد قابلة للتعديل
   const [payType,setPayType]=useState('expense')
+  const [vendorInvoices,setVendorInvoices]=useState([])
+  const [selectedInvoice,setSelectedInvoice]=useState(null)
+  const [loadingInvoices,setLoadingInvoices]=useState(false)
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
@@ -4187,7 +4190,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       api.settings.listCostCenters().catch(()=>({data:[]})),
       api.settings.listProjects().catch(()=>({data:[]})),
       api.dimensions?.list?.().catch(()=>({data:[]})) ?? Promise.resolve({data:[]}),
-    ]).then(([a,v,b,cc,p,dims])=>{
+    ]).then(([tt,a,v,b,cc,p,dims])=>{
       setTaxTypes(tt?.data||[])
       setAccounts(a?.data||[])
       setVendors(v?.data?.items||[])
@@ -4205,10 +4208,20 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
 
-  const selectVendor=(v)=>{
-    s('party_name',v.vendor_name)
-    s('counterpart_account',v.gl_account_code||'210101')
-    s('counterpart_name',v.vendor_name)
+  const selectVendor = async (v) => {
+    s('counterpart_account', v.ap_account_code || v.gl_account_code || '210101')
+    s('counterpart_name',    v.vendor_name || '')
+    s('party_name',          v.vendor_name || '')
+    setSelectedInvoice(null)
+    setVendorInvoices([])
+    if (v.id) {
+      setLoadingInvoices(true)
+      try {
+        const r = await api.ap?.getVendorOpenInvoices?.(v.id).catch(()=>null)
+        setVendorInvoices(r?.data?.items || r?.data || [])
+      } catch {}
+      finally { setLoadingInvoices(false) }
+    }
   }
 
   // التوجيه المحاسبي مع دعم الضريبة
@@ -4387,6 +4400,61 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
             <option value="">— اختر المورد —</option>
             {vendors.map(v=><option key={v.id} value={v.id}>{v.vendor_name}</option>)}
           </select>
+
+          {/* فواتير المورد المفتوحة */}
+          {loadingInvoices && <div className="text-xs text-slate-400 mt-2 animate-pulse">⏳ جارٍ تحميل الفواتير...</div>}
+          {!loadingInvoices && vendorInvoices.length > 0 && (
+            <div className="mt-3">
+              <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+                🧾 الفاتورة المراد سدادها
+                <span className="text-xs font-normal text-slate-400 mr-2">({vendorInvoices.length} فاتورة مفتوحة)</span>
+              </label>
+              <select
+                className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none
+                  ${selectedInvoice ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 focus:border-blue-500'}`}
+                value={selectedInvoice?.id||''}
+                onChange={e => {
+                  const inv = vendorInvoices.find(i=>i.id===e.target.value)
+                  setSelectedInvoice(inv||null)
+                  if (inv) {
+                    s('amount',      String(inv.balance_due || inv.amount_due || inv.total_amount || ''))
+                    s('reference',   inv.invoice_number || inv.serial || '')
+                    s('description', `سداد فاتورة ${inv.invoice_number||inv.serial||''} — ${inv.vendor_name||''}`)
+                  }
+                }}>
+                <option value="">— اختر الفاتورة —</option>
+                {vendorInvoices.map(inv => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.invoice_number||inv.serial} | {fmt(inv.balance_due||inv.amount_due||inv.total_amount||0,2)} ر.س
+                    {inv.invoice_date ? ` | ${fmtDate(inv.invoice_date)}` : ''}
+                  </option>
+                ))}
+              </select>
+              {selectedInvoice && (
+                <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">رقم الفاتورة</span>
+                    <span className="font-mono font-bold text-slate-700">{selectedInvoice.invoice_number||selectedInvoice.serial}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">المبلغ المستحق</span>
+                    <span className="font-mono font-bold text-red-600">{fmt(selectedInvoice.balance_due||selectedInvoice.amount_due||selectedInvoice.total_amount||0,2)} ر.س</span>
+                  </div>
+                  {selectedInvoice.invoice_date && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">تاريخ الفاتورة</span>
+                      <span className="text-slate-600">{fmtDate(selectedInvoice.invoice_date)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {!loadingInvoices && vendors.length > 0 && vendorInvoices.length === 0 && payType==='vendor' && (
+            <div className="mt-2 text-xs text-slate-400 text-center py-2">
+              لا توجد فواتير مفتوحة لهذا المورد
+            </div>
+          )}
         </div>}
       </div>}
 

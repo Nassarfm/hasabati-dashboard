@@ -457,6 +457,7 @@ export const api = {
 
     // Vendors
     listVendors:   (p={})   => get('/ap/vendors', p),
+    getVendorOpenInvoices: (vendorId) => get(`/ap/vendors/${vendorId}/open-invoices`),
     createVendor:  (b)      => post('/ap/vendors', b),
     updateVendor:  (id, b)  => put(`/ap/vendors/${id}`, b),
     getVendor:     (id)     => get(`/ap/vendors/${id}`),
