@@ -4607,6 +4607,8 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   const [costCenters,setCostCenters]=useState([])
   const [projects,setProjects]=useState([])
   const [expClass,setExpClass]=useState([])
+  const [jeLinesState,setJeLinesState]=useState([])
+  const [taxTypes,setTaxTypes]=useState([])
   const [dimDefs,setDimDefs]=useState([])
   const [payType,setPayType]=useState('expense')
   const [form,setForm]=useState({
