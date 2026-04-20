@@ -376,10 +376,6 @@ export default function TopNav({ activePage, onNavigate }) {
     </nav>
   )
 }
-      { id:'treasury_smart_import', icon:'🧠', label:'استيراد البنك الذكي', sub:'smart-import', section:'bank', desc:'استيراد كشف البنك Excel → سندات ذكية' },
-      { id:'treasury_smart_import', icon:'🧠', label:'استيراد البنك الذكي', sub:'smart-import', section:'bank', desc:'استيراد كشف البنك Excel → سندات ذكية' },
-      {id:'treasury_gl_import',  icon:'📥', label:'استيراد من GL',      section:'bank',  sub:'gl-import',     desc:'استيراد قيود JV/REV لحسابات البنك'},
-/**
  * TopNav.jsx — الشريط العلوي مع Mega Menus
  * حساباتي ERP v2.0
  */
@@ -450,6 +446,7 @@ const NAV_ITEMS = [
           { id:'treasury_petty',       icon:'👜', label:'العهدة النثرية',         sub:'Petty Cash Management' },
           { id:'treasury_reports',     icon:'📈', label:'تقارير الخزينة',         sub:'Treasury Reports' },
           { id:'treasury_recurring',   icon:'🔁', label:'المعاملات المتكررة',     sub:'Recurring Transactions' },
+          { id:'treasury_smart_import', icon:'🧠', label:'استيراد البنك الذكي', sub:'smart-import', section:'bank', desc:'استيراد كشف البنك Excel → سندات ذكية' },
           { id:'treasury_gl_import',  icon:'📥', label:'استيراد من GL',          sub:'gl-import',     section:'bank', desc:'استيراد قيود JV/REV لحسابات البنك' },
         ]
       },
