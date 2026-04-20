@@ -1155,8 +1155,10 @@ function CashFocusedPage({showToast, openView}) {
   const [selected,setSelected] = useState(null)
   const [accounts,setAccounts] = useState([])
   const [filters,setFilters]   = useState({tx_type:'',status:'',date_from:'',date_to:''})
-  const [selectedIds,setSelectedIds] = useState(new Set())
-  const [bulkPosting,setBulkPosting] = useState(false)
+  const [selectedIds,setSelectedIds]     = useState(new Set())
+  const [bulkPosting,setBulkPosting]     = useState(false)
+  const [reconciledIds,setReconciledIds] = useState(new Set())
+  const [showReconReport,setShowReconReport] = useState(false)
 
   const load = useCallback(async()=>{
     setLoading(true)
@@ -1182,6 +1184,14 @@ function CashFocusedPage({showToast, openView}) {
 
   const doPost   = async(id)=>{try{await api.treasury.postCashTransaction(id);load();showToast('تم الترحيل ✅')}catch(e){showToast(e.message,'error')}}
   const doCancel = async(id)=>{try{await api.treasury.cancelCashTransaction(id);load();showToast('تم الإلغاء')}catch(e){showToast(e.message,'error')}}
+
+  const handleReconcile = (id) => {
+    setReconciledIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const handleBulkPost = async()=>{
     if(!selectedIds.size) return
@@ -1269,10 +1279,42 @@ function CashFocusedPage({showToast, openView}) {
       )}
 
       {/* الجدول */}
+      {/* زر تقرير التسوية */}
+      {reconciledIds.size>0&&(
+        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-emerald-700 font-semibold text-sm">✅ {reconciledIds.size} حركة مُسوَّاة مع كشف البنك</span>
+            <span className="text-emerald-600 text-xs">
+              إجمالي: {fmt(items.filter(i=>reconciledIds.has(i.id)).reduce((s,i)=>s+parseFloat(i.amount||0),0),3)} ر.س
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={()=>setShowReconReport(true)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700">
+              📋 تقرير التسوية
+            </button>
+            <button onClick={()=>setReconciledIds(new Set())}
+              className="px-3 py-2 rounded-xl text-xs text-emerald-600 border border-emerald-300 hover:bg-emerald-50">
+              مسح
+            </button>
+          </div>
+        </div>
+      )}
+
       <TxTable items={items} total={total} loading={loading} onView={setSelected}
         selectable selectedIds={selectedIds}
         onSelectAll={()=>setSelectedIds(s=>s.size===items.filter(i=>i.status==='draft').length?new Set():new Set(items.filter(i=>i.status==='draft').map(i=>i.id)))}
-        onSelectOne={(id)=>setSelectedIds(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}/>
+        onSelectOne={(id)=>setSelectedIds(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}
+        onReconcile={handleReconcile}
+        reconciledIds={reconciledIds}/>
+
+      {/* تقرير التسوية البنكية */}
+      {showReconReport&&(
+        <ReconciliationReport
+          items={items.filter(i=>reconciledIds.has(i.id))}
+          pendingItems={items.filter(i=>i.status==='posted'&&!reconciledIds.has(i.id))}
+          onClose={()=>setShowReconReport(false)}/>
+      )}
       <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
         onClose={()=>setSelected(null)}
         onPosted={()=>{setSelected(null);load()}}
@@ -3805,12 +3847,202 @@ const TX_META={
   BT:{label:'تحويل بنكي',color:'text-blue-700'},
   IT:{label:'تحويل داخلي',color:'text-purple-700'},
 }
-function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,onSelectOne}) {
+// ══════════════════════════════════════════════════════════
+// تقرير التسوية البنكية اليدوية
+// ══════════════════════════════════════════════════════════
+function ReconciliationReport({items=[], pendingItems=[], onClose}) {
+  const reconTotal   = items.reduce((s,i)=>s+parseFloat(i.amount||0),0)
+  const pendingTotal = pendingItems.reduce((s,i)=>s+parseFloat(i.amount||0),0)
+  const today = new Date().toLocaleDateString('ar-SA-u-ca-gregory',{year:'numeric',month:'long',day:'numeric'})
+
+  const printReport = () => {
+    const w = window.open('','_blank','width=900,height=650')
+    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar">
+<head><meta charset="utf-8"/>
+<style>
+  body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;direction:rtl}
+  h1{font-size:22px;border-bottom:3px solid #1e40af;padding-bottom:10px;color:#1e40af}
+  h2{font-size:15px;color:#374151;margin-top:20px;background:#f1f5f9;padding:8px 12px;border-radius:6px}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}
+  th{background:#1e40af;color:white;padding:8px 10px;text-align:right}
+  td{padding:7px 10px;border-bottom:1px solid #e2e8f0}
+  tr:nth-child(even){background:#f8fafc}
+  .total{font-weight:bold;background:#e0f2fe;font-size:13px}
+  .pending{color:#dc2626}
+  .reconciled{color:#059669}
+  .summary{background:#f0fdf4;border:2px solid #86efac;padding:15px;border-radius:10px;margin:20px 0}
+  .summary-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #bbf7d0}
+  @media print{button{display:none}}
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:start">
+  <div>
+    <h1>🏦 تقرير التسوية البنكية</h1>
+    <p style="color:#64748b;font-size:13px">تاريخ التسوية: ${today}</p>
+  </div>
+  <div style="text-align:left;font-size:12px;color:#64748b">
+    <div>حساباتي ERP v2.0</div>
+  </div>
+</div>
+
+<div class="summary">
+  <div class="summary-row"><span>✅ حركات مُسوَّاة مع كشف البنك</span><span class="reconciled" style="font-weight:bold">${items.length} حركة</span></div>
+  <div class="summary-row"><span>إجمالي المُسوَّى</span><span class="reconciled" style="font-weight:bold">${fmt(reconTotal,3)} ر.س</span></div>
+  <div class="summary-row"><span>⏳ حركات معلقة (غير مُسوَّاة)</span><span class="pending">${pendingItems.length} حركة</span></div>
+  <div class="summary-row"><span>إجمالي المعلق</span><span class="pending">${fmt(pendingTotal,3)} ر.س</span></div>
+</div>
+
+<h2>✅ الحركات المُسوَّاة مع كشف البنك (${items.length})</h2>
+<table>
+  <thead><tr><th>#</th><th>الرقم</th><th>النوع</th><th>التاريخ</th><th>الحساب</th><th>الطرف</th><th>المبلغ</th></tr></thead>
+  <tbody>
+    ${items.map((item,i)=>`<tr>
+      <td>${i+1}</td>
+      <td style="font-weight:bold;color:#1e40af">${item.serial||'—'}</td>
+      <td>${{BP:'دفعة بنكية',BR:'قبض بنكي',BT:'تحويل بنكي'}[item.tx_type]||item.tx_type}</td>
+      <td>${fmtDate(item.tx_date)}</td>
+      <td>${item.bank_account_name||'—'}</td>
+      <td>${item.party_name||item.beneficiary_name||'—'}</td>
+      <td style="font-weight:bold;text-align:left">${fmt(item.amount,3)} ر.س</td>
+    </tr>`).join('')}
+    <tr class="total"><td colspan="6" style="text-align:right">الإجمالي</td><td style="text-align:left">${fmt(reconTotal,3)} ر.س</td></tr>
+  </tbody>
+</table>
+
+${pendingItems.length>0?`
+<h2 class="pending" style="color:#dc2626">⏳ الحركات المعلقة — لم تظهر في كشف البنك (${pendingItems.length})</h2>
+<table>
+  <thead><tr><th>#</th><th>الرقم</th><th>النوع</th><th>التاريخ</th><th>الحساب</th><th>الطرف</th><th>المبلغ</th></tr></thead>
+  <tbody>
+    ${pendingItems.map((item,i)=>`<tr>
+      <td>${i+1}</td>
+      <td style="font-weight:bold;color:#dc2626">${item.serial||'—'}</td>
+      <td>${{BP:'دفعة بنكية',BR:'قبض بنكي',BT:'تحويل بنكي'}[item.tx_type]||item.tx_type}</td>
+      <td>${fmtDate(item.tx_date)}</td>
+      <td>${item.bank_account_name||'—'}</td>
+      <td>${item.party_name||item.beneficiary_name||'—'}</td>
+      <td style="font-weight:bold;text-align:left">${fmt(item.amount,3)} ر.س</td>
+    </tr>`).join('')}
+    <tr class="total"><td colspan="6" style="text-align:right">الإجمالي</td><td style="text-align:left">${fmt(pendingTotal,3)} ر.س</td></tr>
+  </tbody>
+</table>
+`:''}
+
+<div style="margin-top:30px;padding-top:15px;border-top:2px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center">
+  تقرير تسوية بنكية يدوية — حساباتي ERP — ${today}
+</div>
+</body></html>`)
+    w.document.close()
+    setTimeout(()=>w.print(),500)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden" onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b" style={{background:'linear-gradient(135deg,#065f46,#059669)'}}>
+          <div>
+            <h2 className="text-white font-bold text-lg">🏦 تقرير التسوية البنكية</h2>
+            <p className="text-emerald-100 text-xs mt-0.5">{today}</p>
+          </div>
+          <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-xl">✕</button>
+        </div>
+
+        <div className="p-5 overflow-y-auto max-h-[65vh] space-y-4">
+          {/* ملخص */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+              <div className="text-xs text-emerald-600 font-semibold">✅ مُسوَّى مع كشف البنك</div>
+              <div className="text-2xl font-bold font-mono text-emerald-700 mt-1">{items.length} حركة</div>
+              <div className="text-sm font-mono text-emerald-800 font-bold">{fmt(reconTotal,3)} ر.س</div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+              <div className="text-xs text-red-600 font-semibold">⏳ معلق — لم يظهر في الكشف</div>
+              <div className="text-2xl font-bold font-mono text-red-600 mt-1">{pendingItems.length} حركة</div>
+              <div className="text-sm font-mono text-red-700 font-bold">{fmt(pendingTotal,3)} ر.س</div>
+            </div>
+          </div>
+
+          {/* جدول المُسوَّى */}
+          {items.length>0&&(
+            <div>
+              <h3 className="text-sm font-bold text-emerald-700 mb-2">✅ الحركات المُسوَّاة ({items.length})</h3>
+              <div className="overflow-x-auto rounded-xl border border-emerald-200">
+                <table className="w-full text-xs">
+                  <thead><tr className="bg-emerald-600 text-white">
+                    {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ'].map(h=><th key={h} className="px-3 py-2 text-right">{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {items.map(item=>(
+                      <tr key={item.id} className="border-b border-emerald-100 hover:bg-emerald-50">
+                        <td className="px-3 py-2 font-mono font-bold text-blue-700">{item.serial}</td>
+                        <td className="px-3 py-2 text-slate-600">{{BP:'دفعة',BR:'قبض',BT:'تحويل'}[item.tx_type]||item.tx_type}</td>
+                        <td className="px-3 py-2 text-slate-500">{fmtDate(item.tx_date)}</td>
+                        <td className="px-3 py-2 text-slate-600 truncate max-w-[120px]">{item.bank_account_name||'—'}</td>
+                        <td className="px-3 py-2 text-slate-600 truncate max-w-[100px]">{item.party_name||item.beneficiary_name||'—'}</td>
+                        <td className="px-3 py-2 font-mono font-bold text-right">{fmt(item.amount,3)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-emerald-100 font-bold">
+                      <td colSpan={5} className="px-3 py-2 text-right text-emerald-800">الإجمالي</td>
+                      <td className="px-3 py-2 font-mono text-emerald-800 text-right">{fmt(reconTotal,3)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* جدول المعلق */}
+          {pendingItems.length>0&&(
+            <div>
+              <h3 className="text-sm font-bold text-red-600 mb-2">⏳ الحركات المعلقة — لم تظهر في الكشف ({pendingItems.length})</h3>
+              <div className="overflow-x-auto rounded-xl border border-red-200">
+                <table className="w-full text-xs">
+                  <thead><tr className="bg-red-500 text-white">
+                    {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ'].map(h=><th key={h} className="px-3 py-2 text-right">{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {pendingItems.map(item=>(
+                      <tr key={item.id} className="border-b border-red-100 hover:bg-red-50">
+                        <td className="px-3 py-2 font-mono font-bold text-red-600">{item.serial}</td>
+                        <td className="px-3 py-2 text-slate-600">{{BP:'دفعة',BR:'قبض',BT:'تحويل'}[item.tx_type]||item.tx_type}</td>
+                        <td className="px-3 py-2 text-slate-500">{fmtDate(item.tx_date)}</td>
+                        <td className="px-3 py-2 text-slate-600 truncate max-w-[120px]">{item.bank_account_name||'—'}</td>
+                        <td className="px-3 py-2 text-slate-600 truncate max-w-[100px]">{item.party_name||item.beneficiary_name||'—'}</td>
+                        <td className="px-3 py-2 font-mono font-bold text-right">{fmt(item.amount,3)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-red-100 font-bold">
+                      <td colSpan={5} className="px-3 py-2 text-right text-red-700">الإجمالي المعلق</td>
+                      <td className="px-3 py-2 font-mono text-red-700 text-right">{fmt(pendingTotal,3)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t bg-slate-50 flex justify-between items-center">
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm hover:bg-slate-100">إغلاق</button>
+          <button onClick={printReport} className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+            🖨️ طباعة تقرير التسوية
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,onSelectOne,onReconcile,reconciledIds=new Set()}) {
   const cols = selectable
-    ? '2rem 1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr'
-    : '1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr'
+    ? '2rem 1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr 3rem'
+    : '1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr 3rem'
   const draftItems = items.filter(x=>x.status==='draft')
   const allDraftSelected = draftItems.length>0 && draftItems.every(x=>selectedIds?.has(x.id))
+  const reconciledCount = items.filter(i=>reconciledIds.has(i.id)).length
   return <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
     <div className="grid text-white text-xs font-semibold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:cols}}>
       {selectable && (
@@ -3822,16 +4054,26 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
         </div>
       )}
       {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ','الحالة'].map(h=><div key={h} className="px-3 py-3">{h}</div>)}
+      <div className="px-2 py-3 text-center text-[11px] leading-tight">
+        <div>تسوية</div>
+        <div className="text-blue-300 font-normal">{reconciledCount>0?`${reconciledCount}✓`:''}</div>
+      </div>
     </div>
     {loading?<div className="py-10 text-center text-slate-400">جارٍ التحميل...</div>:
     items.length===0?<div className="py-12 text-center text-slate-400">لا توجد مستندات</div>:
     items.map((item,i)=>{
-      const meta=TX_META[item.tx_type]||{}
-      const isDraft = item.status==='draft'
+      const meta       = TX_META[item.tx_type]||{}
+      const isDraft    = item.status==='draft'
+      const isPosted   = item.status==='posted'
       const isSelected = selectedIds?.has(item.id)
+      const isReconciled = reconciledIds.has(item.id)
       return <div key={item.id}
         onClick={()=>onView&&onView(item)}
-        className={`grid items-center border-b border-slate-50 text-xs cursor-pointer hover:bg-blue-50/40 transition-colors ${isSelected?'bg-blue-50':''}${!isSelected&&i%2===0?' bg-white':''}${!isSelected&&i%2!==0?' bg-slate-50/30':''}`}
+        className={`grid items-center border-b border-slate-50 text-xs cursor-pointer hover:bg-blue-50/40 transition-colors
+          ${isReconciled?'bg-emerald-50/40':''}
+          ${!isReconciled&&isSelected?'bg-blue-50':''}
+          ${!isReconciled&&!isSelected&&i%2===0?' bg-white':''}
+          ${!isReconciled&&!isSelected&&i%2!==0?' bg-slate-50/30':''}`}
         style={{gridTemplateColumns:cols}}>
         {selectable && (
           <div className="px-3 py-3 flex items-center" onClick={e=>e.stopPropagation()}>
@@ -3850,11 +4092,34 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
         <div className="px-3 py-3 text-slate-600 truncate">{item.party_name||item.beneficiary_name||'—'}</div>
         <div className="px-3 py-3 font-mono font-bold text-slate-800">{fmt(item.amount,3)}</div>
         <div className="px-3 py-3"><StatusBadge status={item.status}/></div>
+        {/* عمود التسوية البنكية — فقط للمُرحَّل */}
+        <div className="px-2 py-3 flex items-center justify-center" onClick={e=>e.stopPropagation()}>
+          {isPosted ? (
+            <button
+              title={isReconciled?'تم التسوية — انقر للإلغاء':'ظهر في كشف البنك — انقر للتسوية'}
+              onClick={()=>onReconcile&&onReconcile(item.id)}
+              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all
+                ${isReconciled
+                  ?'bg-emerald-500 border-emerald-500 text-white shadow-sm'
+                  :'border-slate-300 hover:border-emerald-400 hover:bg-emerald-50'}`}>
+              {isReconciled&&<span className="text-[11px] font-bold">✓</span>}
+            </button>
+          ) : (
+            <span className="text-slate-200 text-[10px]">—</span>
+          )}
+        </div>
       </div>
     })}
     <div className="px-4 py-2.5 bg-slate-50 border-t flex justify-between text-xs text-slate-500">
       <span><strong>{items.length}</strong> من <strong>{total}</strong> مستند</span>
-      <span>إجمالي: <strong>{fmt(items.reduce((s,i)=>s+parseFloat(i.amount||0),0),3)} ر.س</strong></span>
+      <div className="flex gap-4">
+        {reconciledCount>0&&(
+          <span className="text-emerald-600 font-semibold">
+            ✅ مُسوَّى: {fmt(items.filter(i=>reconciledIds.has(i.id)).reduce((s,i)=>s+parseFloat(i.amount||0),0),3)} ر.س
+          </span>
+        )}
+        <span>إجمالي: <strong>{fmt(items.reduce((s,i)=>s+parseFloat(i.amount||0),0),3)} ر.س</strong></span>
+      </div>
     </div>
   </div>
 }
@@ -4942,9 +5207,16 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
     {account_code:fromAcc.gl_account_code, account_name:fromAcc.account_name, debit:0,   credit:amt, currency_code:'SAR'},
   ]:[]
 
+  const [fieldErrorsIT,setFieldErrorsIT]=useState({})
   const save=async()=>{
-    if(!form.from_account_id||!form.to_account_id||!form.amount||!form.description){
-      showToast('يرجى تعبئة: الحساب من، الحساب إلى، المبلغ، البيان','error'); return
+    const errs={}
+    if(!form.from_account_id) errs.from_account_id=true
+    if(!form.to_account_id)   errs.to_account_id=true
+    if(!form.amount||parseFloat(form.amount)<=0) errs.amount=true
+    if(!form.description?.trim()) errs.description=true
+    setFieldErrorsIT(errs)
+    if(Object.keys(errs).length>0){
+      showToast('يرجى تعبئة الحقول المطلوبة المُحدَّدة بالأحمر','error'); return
     }
     if(form.from_account_id===form.to_account_id){
       showToast('لا يمكن التحويل لنفس الحساب','error'); return
@@ -4957,7 +5229,10 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
       await api.treasury.createInternalTransfer(form)
       onSaved('تم إنشاء التحويل الداخلي ✅')
     }
-    catch(e){showToast(e.message,'error')}
+    catch(e){
+      const msg = e?.response?.data?.detail || e?.message || 'حدث خطأ غير متوقع'
+      showToast(msg,'error')
+    }
     finally{setSaving(false)}
   }
 
