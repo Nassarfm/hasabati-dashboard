@@ -71,6 +71,7 @@ const PAGE_LABELS = {
   treasury_petty:        'العهدة النثرية',
   treasury_reports:      'تقارير الخزينة',
   treasury_recurring:    'المعاملات المتكررة',
+  treasury_gl_import:    'استيراد من GL',
   sales:              'المبيعات',
   purchases:          'المشتريات',
   inventory:          'المخزون',
@@ -150,6 +151,9 @@ function AppContent() {
       default:                   return <DashboardPage/>
     }
   }
+
+    case 'treasury_gl_import':
+      return <TreasuryPage section="bank" sub="gl-import"/>
 
   const getBreadcrumb = () => {
     if (page === 'ledger' && ledgerAccount.code) return (
