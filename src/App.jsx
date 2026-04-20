@@ -72,6 +72,7 @@ const PAGE_LABELS = {
   treasury_reports:      'تقارير الخزينة',
   treasury_recurring:    'المعاملات المتكررة',
   treasury_gl_import:    'استيراد من GL',
+  treasury_smart_import: 'المعاملات البنكية الذكية',
   sales:              'المبيعات',
   purchases:          'المشتريات',
   inventory:          'المخزون',
@@ -143,6 +144,8 @@ function AppContent() {
       case 'treasury_petty':       return <TreasuryPage section="petty"/>
       case 'treasury_reports':     return <TreasuryPage section="reports"/>
       case 'treasury_recurring':   return <TreasuryPage section="operations" sub="recurring"/>
+      case 'treasury_gl_import':   return <TreasuryPage section="bank" sub="gl-import"/>
+      case 'treasury_smart_import':return <TreasuryPage section="bank" sub="smart-import"/>
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
       case 'inventory':          return <InventoryPage/>
@@ -152,8 +155,6 @@ function AppContent() {
     }
   }
 
-    case 'treasury_gl_import':
-      return <TreasuryPage section="bank" sub="gl-import"/>
 
   const getBreadcrumb = () => {
     if (page === 'ledger' && ledgerAccount.code) return (
