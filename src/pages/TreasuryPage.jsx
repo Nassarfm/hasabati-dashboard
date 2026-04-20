@@ -4147,27 +4147,32 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   }
 
   // التوجيه المحاسبي مع دعم الضريبة
-  const vatRate = parseFloat(form.vat_rate)||0
-  const vatAmt  = parseFloat((amt * vatRate / 100).toFixed(3))
-  const totalAmt = parseFloat((amt + vatAmt).toFixed(3))
-  const vatAcc  = form.vat_account_code
+  const vatRate  = parseFloat(form.vat_rate)||0
+  // المبلغ المُدخل = شامل الضريبة → نعكس الضريبة منه
+  // أساس = المبلغ ÷ (1 + نسبة/100)
+  const baseAmt  = vatRate > 0
+    ? parseFloat((amt / (1 + vatRate/100)).toFixed(3))
+    : amt
+  const vatAmt   = parseFloat((amt - baseAmt).toFixed(3))
+  const totalAmt = amt  // الإجمالي = المبلغ المُدخل مباشرة
+  const vatAcc   = form.vat_account_code
   const cur  = form.currency_code||'SAR'
   const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
   const vatLabel = vatRate>0 ? `VAT ${vatRate}%` : null
   const vatLine  = vatAmt>0&&vatAcc ? (isPV
-    ? {account_code:vatAcc, account_name:`ضريبة القيمة المضافة (${vatRate}%)`, debit:vatAmt, credit:0, is_vat_line:true, currency_code:cur}
-    : {account_code:vatAcc, account_name:`ضريبة القيمة المضافة (${vatRate}%)`, debit:0, credit:vatAmt, is_vat_line:true, currency_code:cur}
+    ? {account_code:vatAcc, account_name:`ضريبة القيمة المضافة — ${vatRate}% (معكوسة)`, debit:vatAmt, credit:0, is_vat_line:true, currency_code:cur}
+    : {account_code:vatAcc, account_name:`ضريبة القيمة المضافة — ${vatRate}% (معكوسة)`, debit:0, credit:vatAmt, is_vat_line:true, currency_code:cur}
   ) : null
   const je_lines = selectedBank && form.counterpart_account && amt>0 ? (isPV?[
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:amt,      credit:0,        currency_code:cur, vat_label:vatLabel, ...dims},
+    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:baseAmt,   credit:0,        currency_code:cur, vat_label:vatLabel, ...dims},
     ...(vatLine?[vatLine]:[]),
-    {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,              debit:0,        credit:totalAmt, currency_code:cur},
+    {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,             debit:0,        credit:totalAmt, currency_code:cur},
   ]:[
-    {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,              debit:totalAmt, credit:0,        currency_code:cur},
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:0,        credit:amt,      currency_code:cur, vat_label:vatLabel, ...dims},
+    {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,             debit:totalAmt, credit:0,        currency_code:cur},
+    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:0,         credit:baseAmt,  currency_code:cur, vat_label:vatLabel, ...dims},
     ...(vatLine?[vatLine]:[]),
   ]) : []
-  const vatSummary = vatRate>0 ? {vat_rate:vatRate, base_amt:amt, vat_amt:vatAmt, total_amt:totalAmt} : null
+  const vatSummary = vatRate>0 ? {vat_rate:vatRate, base_amt:baseAmt, vat_amt:vatAmt, total_amt:totalAmt} : null
 
   // التحقق من الأبعاد الإلزامية
   const validateDims=()=>{
@@ -4323,34 +4328,28 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
         {fieldErrors.description&&<p className="text-xs text-red-500 mt-0.5">⚠️ البيان مطلوب</p>}
       </div>
 
-      {/* ضريبة القيمة المضافة */}
-      <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 space-y-3">
+      {/* ضريبة القيمة المضافة — مدمجة في القيد تلقائياً */}
+      <div className="border border-slate-200 rounded-xl p-3 bg-slate-50">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-amber-800">🧾 ضريبة القيمة المضافة (VAT)</span>
-          {vatAmt>0&&<span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-bold">ضريبة: {fmt(vatAmt,3)} ر.س | الإجمالي: {fmt(totalAmt,3)} ر.س</span>}
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-amber-700 block mb-1">معدل الضريبة</label>
-            <div className="flex gap-2">
-              {['0','5','15'].map(r=>(
-                <button key={r} onClick={()=>s('vat_rate',r)}
-                  className={`flex-1 py-2 rounded-xl text-sm font-bold border-2 transition-all
-                    ${form.vat_rate===r?'bg-amber-500 text-white border-amber-500':'border-amber-200 text-amber-700 hover:bg-amber-100'}`}>
-                  {r}%
-                </button>
-              ))}
-            </div>
+          <span className="text-sm font-semibold text-slate-700">🧾 ضريبة القيمة المضافة</span>
+          <div className="flex gap-1">
+            {['0','5','15'].map(r=>(
+              <button key={r} onClick={()=>s('vat_rate',r)}
+                className={`px-3 py-1.5 rounded-xl text-sm font-bold border-2 transition-all
+                  ${form.vat_rate===r?'bg-blue-600 text-white border-blue-600':'border-slate-200 text-slate-600 hover:border-blue-300'}`}>
+                {r}%
+              </button>
+            ))}
           </div>
-          {vatRate>0&&<div>
-            <label className="text-xs font-semibold text-amber-700 block mb-1">حساب الضريبة <span className="text-red-500">*</span></label>
-            <div className="flex gap-2 items-center">
-              <input className="flex-1 border-2 border-amber-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-400 bg-white" placeholder="كود حساب الضريبة" value={form.vat_account_code} onChange={e=>s('vat_account_code',e.target.value)}/>
-              {!form.vat_account_code&&<span className="text-xs text-amber-600">⚠️ مطلوب</span>}
-            </div>
-            <p className="text-[10px] text-amber-600 mt-1">مثال: ضريبة مدخلات 1510101 · ضريبة مخرجات 2110101</p>
-          </div>}
         </div>
+        {vatRate>0&&(
+          <div className="mt-2 text-xs text-slate-500 bg-white rounded-lg p-2 border border-slate-200 space-y-1">
+            <div className="flex justify-between"><span>المبلغ المُدخل (شامل {vatRate}%)</span><span className="font-mono font-bold text-blue-700">{fmt(amt,3)} ر.س</span></div>
+            <div className="flex justify-between"><span>الأساس (بدون ضريبة)</span><span className="font-mono">{fmt(baseAmt,3)} ر.س</span></div>
+            <div className="flex justify-between text-amber-700"><span>الضريبة المعكوسة</span><span className="font-mono font-bold">{fmt(vatAmt,3)} ر.س</span></div>
+            <div className="text-[10px] text-slate-400">سطر الضريبة يظهر تلقائياً في جدول القيد ↓</div>
+          </div>
+        )}
       </div>
 
       {/* الأبعاد المحاسبية */}
@@ -4462,10 +4461,14 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
 
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
-  const vatRate = parseFloat(form.vat_rate)||0
-  const vatAmt  = parseFloat((amt * vatRate / 100).toFixed(3))
-  const totalAmt = parseFloat((amt + vatAmt).toFixed(3))
-  const vatAcc  = form.vat_account_code
+  const vatRate  = parseFloat(form.vat_rate)||0
+  // المبلغ المُدخل = شامل الضريبة → نعكس الضريبة منه
+  const baseAmt  = vatRate > 0
+    ? parseFloat((amt / (1 + vatRate/100)).toFixed(3))
+    : amt
+  const vatAmt   = parseFloat((amt - baseAmt).toFixed(3))
+  const totalAmt = amt  // الإجمالي = المبلغ المُدخل مباشرة
+  const vatAcc   = form.vat_account_code
   const curBT = form.currency_code||'SAR'
   const dims  = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
   const vatLabelBT = vatRate>0 ? `VAT ${vatRate}%` : null
@@ -4475,10 +4478,10 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   ) : null
   const je_lines = selectedBank&&form.counterpart_account&&amt>0 ? (type==='BR'?[
     {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:totalAmt, credit:0,   currency_code:curBT},
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:0, credit:amt, currency_code:curBT, vat_label:vatLabelBT, ...dims},
+    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:0, credit:baseAmt, currency_code:curBT, vat_label:vatLabelBT, ...dims},
     ...(vatLineBT?[vatLineBT]:[]),
   ]:[
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:amt, credit:0, currency_code:curBT, vat_label:vatLabelBT, ...dims},
+    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:baseAmt, credit:0, currency_code:curBT, vat_label:vatLabelBT, ...dims},
     ...(vatLineBT?[vatLineBT]:[]),
     {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:0, credit:totalAmt, currency_code:curBT},
   ]) : []
@@ -4628,12 +4631,29 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
         <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)}/>
       </div>
 
-      {/* ضريبة القيمة المضافة */}
-      <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 space-y-3">
+            {/* ضريبة القيمة المضافة */}
+      <div className="border border-slate-200 rounded-xl p-3 bg-slate-50">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-amber-800">🧾 ضريبة القيمة المضافة (VAT)</span>
-          {vatAmt>0&&<span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-bold">ضريبة: {fmt(vatAmt,3)} ر.س | الإجمالي: {fmt(totalAmt,3)} ر.س</span>}
+          <span className="text-sm font-semibold text-slate-700">🧾 ضريبة القيمة المضافة</span>
+          <div className="flex gap-1">
+            {['0','5','15'].map(r=>(
+              <button key={r} onClick={()=>s('vat_rate',r)}
+                className={`px-3 py-1.5 rounded-xl text-sm font-bold border-2 transition-all
+                  ${form.vat_rate===r?'bg-blue-600 text-white border-blue-600':'border-slate-200 text-slate-600 hover:border-blue-300'}`}>
+                {r}%
+              </button>
+            ))}
+          </div>
         </div>
+        {vatRate>0&&(
+          <div className="mt-2 text-xs text-slate-500 bg-white rounded-lg p-2 border border-slate-200 space-y-1">
+            <div className="flex justify-between"><span>المبلغ المُدخل (شامل {vatRate}%)</span><span className="font-mono font-bold text-blue-700">{fmt(amt,3)} ر.س</span></div>
+            <div className="flex justify-between"><span>الأساس (بدون ضريبة)</span><span className="font-mono">{fmt(baseAmt,3)} ر.س</span></div>
+            <div className="flex justify-between text-amber-700"><span>الضريبة المعكوسة</span><span className="font-mono font-bold">{fmt(vatAmt,3)} ر.س</span></div>
+            <div className="text-[10px] text-slate-400">سطر الضريبة يظهر تلقائياً في جدول القيد ↓</div>
+          </div>
+        )}
+      </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-semibold text-amber-700 block mb-1">معدل الضريبة</label>
