@@ -1140,6 +1140,7 @@ export default function TreasuryPage({ section: initSection='dashboard', sub: in
       {activePage==='recurring'      && <RecurringTab showToast={showToast} openView={openView}/>}
       {activePage==='activity'       && <ActivityLogTab showToast={showToast}/>}
       {activePage==='operations'     && <CashFocusedPage showToast={showToast} openView={openView}/>}
+      {activePage==='gl-import'      && <GLImportPage showToast={showToast}/>}
     </div>
   )
 }
@@ -5980,6 +5981,182 @@ function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
     </div>
   )
 }
+
+// ══════════════════════════════════════════════════════════
+// GLImportPage — استيراد القيود اليومية إلى الخزينة
+// يحل مشكلة: قيود JV/REV/REC على حسابات البنك غير مرئية في الخزينة
+// ══════════════════════════════════════════════════════════
+function GLImportPage({showToast}) {
+  const [entries,  setEntries]  = useState([])
+  const [loading,  setLoading]  = useState(false)
+  const [importing,setImporting]= useState(false)
+  const [selected, setSelected] = useState(new Set())
+  const [filters,  setFilters]  = useState({date_from:'',date_to:''})
+  const [done,     setDone]     = useState([])
+
+  const load = async () => {
+    setLoading(true); setEntries([]); setSelected(new Set()); setDone([])
+    try {
+      const r = await api.treasury.getUnlinkedGLEntries(
+        Object.fromEntries(Object.entries(filters).filter(([,v])=>v))
+      )
+      setEntries(r?.data||[])
+      if((r?.data||[]).length===0) showToast('لا توجد قيود غير مُستورَدة في هذه الفترة','info')
+    } catch(e){ showToast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+
+  const handleImport = async () => {
+    if(selected.size===0){ showToast('حدد قيداً واحداً على الأقل','error'); return }
+    setImporting(true)
+    try {
+      const r = await api.treasury.importGLEntries({je_ids: [...selected]})
+      const imported = r?.data?.imported||[]
+      const errors   = r?.data?.errors||[]
+      setDone(imported.map(i=>i.je_id))
+      setSelected(new Set())
+      showToast(r?.message||`تم استيراد ${imported.length} قيد ✅`)
+      // نعيد التحميل لإزالة المُستورَدة
+      await load()
+    } catch(e){ showToast(e.message,'error') }
+    finally { setImporting(false) }
+  }
+
+  const toggleAll = () => {
+    if(selected.size===entries.length) setSelected(new Set())
+    else setSelected(new Set(entries.map(e=>e.je_id)))
+  }
+
+  const toggle = (id) => setSelected(prev=>{
+    const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n
+  })
+
+  const TYPE_LABELS = {JV:'قيد يومي',REV:'قيد عكسي',REC:'قيد تسوية',CLO:'إقفال',ALO:'توزيع',DEP:'إهلاك'}
+
+  return (
+    <div className="space-y-5" dir="rtl">
+      {/* Header */}
+      <div className="bg-gradient-to-l from-blue-700 to-indigo-800 rounded-2xl p-5 text-white">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-xl font-bold">📥 استيراد القيود اليومية إلى الخزينة</h2>
+            <p className="text-blue-100 text-sm mt-1">
+              قيود JV / REV / REC / ALO على حسابات البنك — غير مرئية في الخزينة حتى الاستيراد
+            </p>
+          </div>
+          <div className="bg-white/10 rounded-xl px-4 py-2 text-sm text-blue-100 max-w-xs text-right leading-relaxed">
+            💡 هذه الميزة تُحل الفجوة بين الأستاذ العام وموديول الخزينة — القيود المُستورَدة تصبح مُرحَّلة تلقائياً
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4">
+        <div className="flex gap-3 flex-wrap items-end">
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">من تاريخ</label>
+            <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-sm"
+              value={filters.date_from} onChange={e=>setFilters(p=>({...p,date_from:e.target.value}))}/>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 block mb-1">إلى تاريخ</label>
+            <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-sm"
+              value={filters.date_to} onChange={e=>setFilters(p=>({...p,date_to:e.target.value}))}/>
+          </div>
+          <button onClick={load} disabled={loading}
+            className="px-5 py-2 bg-blue-700 text-white rounded-xl text-sm font-semibold hover:bg-blue-800 disabled:opacity-50">
+            {loading?'⏳ جارٍ البحث...':'🔍 بحث عن قيود غير مُستورَدة'}
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      {entries.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          {/* Action bar */}
+          <div className="flex items-center justify-between px-5 py-3 border-b bg-slate-50">
+            <div className="flex items-center gap-3">
+              <input type="checkbox" className="w-4 h-4 accent-blue-600"
+                checked={selected.size===entries.length && entries.length>0}
+                onChange={toggleAll}/>
+              <span className="text-sm text-slate-600">
+                {selected.size > 0
+                  ? <span className="font-semibold text-blue-700">{selected.size} قيد محدد</span>
+                  : <span>{entries.length} قيد غير مُستورَد</span>}
+              </span>
+            </div>
+            {selected.size > 0 && (
+              <button onClick={handleImport} disabled={importing}
+                className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50">
+                {importing?'⏳ جارٍ الاستيراد...':`📥 استيراد ${selected.size} قيد محدد`}
+              </button>
+            )}
+          </div>
+
+          {/* Headers */}
+          <div className="grid text-white text-xs font-semibold"
+            style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',
+              gridTemplateColumns:'2rem 1.5fr 5rem 1fr 2fr 2fr 5rem 5rem'}}>
+            <div className="px-3 py-3"/>
+            {['رقم القيد','النوع','التاريخ','الحساب البنكي','البيان','مدين','دائن'].map(h=>(
+              <div key={h} className="px-3 py-3">{h}</div>
+            ))}
+          </div>
+
+          {/* Rows */}
+          {entries.map((e,i)=>{
+            const isSelected = selected.has(e.je_id)
+            return (
+              <div key={e.je_id}
+                className={`grid items-center border-b border-slate-100 text-xs cursor-pointer hover:bg-blue-50/40
+                  ${isSelected?'bg-blue-50':''}${!isSelected&&i%2===0?' bg-white':' bg-slate-50/30'}`}
+                style={{gridTemplateColumns:'2rem 1.5fr 5rem 1fr 2fr 2fr 5rem 5rem'}}
+                onClick={()=>toggle(e.je_id)}>
+                <div className="px-3 py-3 flex items-center" onClick={ev=>ev.stopPropagation()}>
+                  <input type="checkbox" className="w-3.5 h-3.5 accent-blue-600"
+                    checked={isSelected} onChange={()=>toggle(e.je_id)}/>
+                </div>
+                <div className="px-3 py-3 font-mono font-bold text-blue-700">{e.je_serial}</div>
+                <div className="px-3 py-3">
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">
+                    {TYPE_LABELS[e.je_type]||e.je_type}
+                  </span>
+                </div>
+                <div className="px-3 py-3 text-slate-500">{fmtDate(e.tx_date)}</div>
+                <div className="px-3 py-3 text-slate-700 font-medium truncate">{e.bank_account_name}</div>
+                <div className="px-3 py-3 text-slate-500 truncate">{e.description||'—'}</div>
+                <div className="px-3 py-3 font-mono font-bold text-slate-800">
+                  {e.debit>0?fmt(e.debit,3):<span className="text-slate-200">—</span>}
+                </div>
+                <div className="px-3 py-3 font-mono font-bold text-slate-800">
+                  {e.credit>0?fmt(e.credit,3):<span className="text-slate-200">—</span>}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Footer */}
+          <div className="px-5 py-3 bg-slate-50 border-t flex justify-between text-xs text-slate-500">
+            <span>إجمالي {entries.length} قيد</span>
+            <div className="flex gap-4">
+              <span>DR: <strong className="font-mono">{fmt(entries.reduce((s,e)=>s+e.debit,0),3)}</strong> ر.س</span>
+              <span>CR: <strong className="font-mono">{fmt(entries.reduce((s,e)=>s+e.credit,0),3)}</strong> ر.س</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {entries.length===0&&!loading&&(
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 py-16 text-center text-slate-400">
+          <div className="text-4xl mb-3">📭</div>
+          <p className="font-semibold">اضغط "بحث" لعرض القيود غير المُستورَدة</p>
+          <p className="text-xs mt-1">يبحث في جميع قيود الأستاذ العام التي تؤثر على حسابات البنك/الصندوق</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 
 function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
   const [form,setForm]=useState({fund_id:'',expense_date:today(),description:'',reference:'',notes:''})
