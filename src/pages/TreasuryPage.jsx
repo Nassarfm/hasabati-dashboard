@@ -4870,7 +4870,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
 
       <div>
         <label className="text-sm font-semibold text-slate-600 block mb-1.5">البيان *</label>
-        <input className={`w-full border-2 rounded-xl ${fieldErrorsBT?.description?'border-red-400 bg-red-50':'border-slate-200'}` px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)}/>
+            <input className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 ${fieldErrorsBT?.description?'border-red-400 bg-red-50':'border-slate-200'}`} value={form.description} onChange={e=>s('description',e.target.value)}/>
             {fieldErrorsBT?.description&&<p className="text-xs text-red-500 mt-0.5">⚠️ البيان مطلوب</p>}
       </div>
 
