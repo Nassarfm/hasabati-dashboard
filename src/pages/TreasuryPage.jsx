@@ -486,7 +486,7 @@ function useFiscalPeriod(date) {
       .finally(() => setChecking(false))
   }, [date])
 
-  const isOpen     = status === 'open'
+  const isOpen     = status === 'open' || status === 'idle'  // idle = لم يُحدَّد تاريخ بعد
   const isClosed   = status === 'closed'
   const periodName = period?.period_name || ''
 
@@ -4589,7 +4589,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
         {isFormOpen&&<button onClick={handlePrint} className="px-6 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold hover:bg-blue-50">🖨️ طباعة</button>}
-        <button onClick={save} disabled={saving||!isFormOpen}
+        <button onClick={save} disabled={saving||isBlocked}
           className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${!isFormOpen?'bg-slate-100 text-slate-400 border-2 border-slate-200 cursor-not-allowed':isPV?'bg-red-600 hover:bg-red-700 text-white':'bg-emerald-600 hover:bg-emerald-700 text-white'}`}>
           {saving?'⏳ جارٍ الحفظ...':!isFormOpen?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
@@ -4873,7 +4873,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       {/* أزرار — دائماً مرئية */}
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
-        <button onClick={save} disabled={saving||!isFormOpenBT}
+        <button onClick={save} disabled={saving||isBlockedBT}
           className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${!isFormOpenBT?'bg-slate-100 text-slate-400 border-2 border-slate-200 cursor-not-allowed':'bg-blue-700 text-white hover:bg-blue-800'}`}>
           {saving?'⏳ جارٍ الحفظ...':!isFormOpenBT?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
@@ -4903,11 +4903,22 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
   ]:[]
 
   const save=async()=>{
-    if(!form.from_account_id||!form.to_account_id||!form.amount||!form.description){showToast('جميع الحقول مطلوبة','error');return}
-    if(form.from_account_id===form.to_account_id){showToast('لا يمكن التحويل لنفس الحساب','error');return}
+    if(!form.from_account_id||!form.to_account_id||!form.amount||!form.description){
+      showToast('يرجى تعبئة: الحساب من، الحساب إلى، المبلغ، البيان','error'); return
+    }
+    if(form.from_account_id===form.to_account_id){
+      showToast('لا يمكن التحويل لنفس الحساب','error'); return
+    }
+    if(isBlockedIT){
+      showToast('الفترة المالية مغلقة أو غير موجودة — تحقق من إعدادات الفترات المالية','error'); return
+    }
     setSaving(true)
-    try{await api.treasury.createInternalTransfer(form);onSaved('تم إنشاء التحويل الداخلي ✅')}
-    catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+    try{
+      await api.treasury.createInternalTransfer(form)
+      onSaved('تم إنشاء التحويل الداخلي ✅')
+    }
+    catch(e){showToast(e.message,'error')}
+    finally{setSaving(false)}
   }
 
   return <div className="max-w-4xl" dir="rtl">
@@ -4990,7 +5001,7 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
       {/* أزرار — دائماً مرئية */}
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
-        <button onClick={save} disabled={saving||!isFormOpenIT}
+        <button onClick={save} disabled={saving||isBlockedIT}
           className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${!isFormOpenIT?'bg-slate-100 text-slate-400 border-2 border-slate-200 cursor-not-allowed':'bg-purple-700 text-white hover:bg-purple-800'}`}>
           {saving?'⏳ جارٍ الحفظ...':!isFormOpenIT?'🔒 الفترة مغلقة':'💾 حفظ كمسودة'}
         </button>
@@ -5125,7 +5136,7 @@ function CheckModal({accounts,onClose,onSaved,showToast}) {
       </div>
       <div className="flex gap-3 mt-5">
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
-        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk} title={periodClosed?'الفترة المحاسبية مغلقة':''} className="flex-1 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':periodClosed?'🔒 مغلقة':'💾 حفظ'}</button>
+        <button onClick={save} disabled={saving||periodClosed} title={periodClosed?'الفترة المحاسبية مغلقة':''} className="flex-1 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':periodClosed?'🔒 مغلقة':'💾 حفظ'}</button>
       </div>
     </div>
   </div>
@@ -5708,7 +5719,7 @@ function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
       <AccountingTable lines={je_lines}/>
       <div className="flex gap-3 mt-4">
         <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
-        <button onClick={save} disabled={saving||periodClosed||periodChecking||!periodOk} title={periodClosed?'الفترة مغلقة':''} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':periodClosed?'🔒 مغلقة':'💾 حفظ'}</button>
+        <button onClick={save} disabled={saving||periodClosed} title={periodClosed?'الفترة مغلقة':''} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':periodClosed?'🔒 مغلقة':'💾 حفظ'}</button>
       </div>
     </div>
   </div>
