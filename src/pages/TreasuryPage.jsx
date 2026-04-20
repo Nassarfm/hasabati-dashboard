@@ -4258,7 +4258,9 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
 
   const [fieldErrors,setFieldErrors]=useState({})
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
-  const amt=parseFloat(form.amount)||0
+  const amt         = parseFloat(form.amount)||0
+  const vatInputAmt = parseFloat(form.vat_amount_input)||0
+  const totalAmt    = parseFloat((amt + vatInputAmt).toFixed(3))
 
   const selectVendor = async (v) => {
     s('counterpart_account', v.ap_account_code || v.gl_account_code || '210101')
@@ -4682,6 +4684,8 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
 
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
+  const vatInputAmt = parseFloat(form.vat_amount_input)||0
+  const totalAmt    = parseFloat((amt + vatInputAmt).toFixed(3))
   // الضريبة تُختار من عمود الضريبة في جدول القيد
   const curBT = form.currency_code||'SAR'
   const dims  = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
