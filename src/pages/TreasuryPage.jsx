@@ -4718,8 +4718,24 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
     return true
   }
 
+  const [fieldErrorsBT,setFieldErrorsBT]=useState({})
   const save=async()=>{
-    if(!form.bank_account_id||!form.amount||!form.description){showToast('تأكد من الحساب والمبلغ والبيان','error');return}
+    // تحقق من الحقول المطلوبة مع تمييز الأخطاء
+    const errs={}
+    if(!form.bank_account_id)       errs.bank_account_id=true
+    if(!form.amount||parseFloat(form.amount)<=0) errs.amount=true
+    if(!form.counterpart_account)   errs.counterpart_account=true
+    if(!form.description?.trim())   errs.description=true
+    setFieldErrorsBT(errs)
+    if(Object.keys(errs).length>0){
+      const missing=[]
+      if(errs.bank_account_id)     missing.push('الحساب البنكي')
+      if(errs.amount)              missing.push('المبلغ')
+      if(errs.counterpart_account) missing.push('الحساب المقابل')
+      if(errs.description)         missing.push('البيان')
+      showToast(`الحقول المطلوبة: ${missing.join(' ، ')}`, 'error')
+      return
+    }
     if(!validateDims()) return
     setSaving(true)
     const vatLineBT = je_lines.find(l=>l.is_tax_line)
@@ -4836,7 +4852,9 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
         <AccountPicker
           label={type==='BR'?'الحساب المقابل — ذمم عملاء / إيراد':type==='BP'&&payType==='vendor'?'حساب ذمم الموردين':'الحساب المقابل — مصروف / حساب'}
           required value={form.counterpart_account}
-          onChange={(code,name)=>{s('counterpart_account',code);s('counterpart_name',name)}}/>
+          onChange={(code,name)=>{s('counterpart_account',code);s('counterpart_name',name)}}
+          errorMsg={fieldErrorsBT?.counterpart_account?"⚠️ الحساب المقابل مطلوب":null}
+          />
       </div>
 
       {(type==='BP'||type==='BT')&&<div className="grid grid-cols-2 gap-5">
@@ -4852,7 +4870,8 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
 
       <div>
         <label className="text-sm font-semibold text-slate-600 block mb-1.5">البيان *</label>
-        <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)}/>
+        <input className={`w-full border-2 rounded-xl ${fieldErrorsBT?.description?'border-red-400 bg-red-50':'border-slate-200'}` px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)}/>
+            {fieldErrorsBT?.description&&<p className="text-xs text-red-500 mt-0.5">⚠️ البيان مطلوب</p>}
       </div>
 
       
