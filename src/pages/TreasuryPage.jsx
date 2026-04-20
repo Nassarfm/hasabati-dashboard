@@ -4613,11 +4613,6 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   // الضريبة تُختار من عمود الضريبة في جدول القيد
   const curBT = form.currency_code||'SAR'
   const dims  = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
-  const vatLabelBT = vatRate>0 ? `VAT ${vatRate}%` : null
-  const vatLineBT  = vatAmt>0&&vatAcc ? (type==='BR'
-    ? {account_code:vatAcc, account_name:`ضريبة القيمة المضافة (${vatRate}%)`, debit:0, credit:vatAmt, is_vat_line:true, currency_code:curBT}
-    : {account_code:vatAcc, account_name:`ضريبة القيمة المضافة (${vatRate}%)`, debit:vatAmt, credit:0, is_vat_line:true, currency_code:curBT}
-  ) : null
   // je_lines في BankTxPage — state تفاعلية
   useEffect(()=>{
     if(!selectedBank||!form.counterpart_account||amt<=0){setJeLinesState([]);return}
