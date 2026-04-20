@@ -4115,64 +4115,92 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
 }
 
 // ── حساب سطر الضريبة — نفس منطق القيود اليومية ──────────────────────────
+// ══════════════════════════════════════════════════════════
+// applyTaxToLines
+// المبلغ المُدخل = شامل الضريبة
+// النظام يعكس الضريبة: أساس = إجمالي ÷ (1 + نسبة%)
+// مثال: 150,000 شامل 15% → أساس=130,435 + ضريبة=19,565
+// سطر الصندوق/البنك يبقى بالإجمالي الأصلي (150,000)
+// ══════════════════════════════════════════════════════════
 function applyTaxToLines(lines, lineId, taxCode, taxTypes) {
-  // 1. احذف السطر الضريبي القديم
+  // 1. احذف السطر الضريبي القديم لهذا السطر
   const filtered = lines.filter(l => l.parent_line_id !== lineId)
 
-  // 2. أضف السطر الضريبي الجديد إذا وُجد taxCode
-  let result = [...filtered]
-  if (taxCode) {
-    const tx = taxTypes.find(t => t.code === taxCode)
-    const parent = filtered.find(l => l.id === lineId)
-    if (tx && parent) {
-      const baseDebit  = parseFloat(parent.debit  || 0)
-      const baseCredit = parseFloat(parent.credit || 0)
-      const base = baseDebit || baseCredit
-      if (base > 0) {
-        const vatAmt     = parseFloat((base * tx.rate / 100).toFixed(3))
-        const isDebit    = baseDebit > 0
-        const taxAccCode = isDebit
-          ? (tx.input_account_code  || '')
-          : (tx.output_account_code || '')
-        const taxLine = {
-          id:             `tax_${lineId}`,
-          parent_line_id: lineId,
-          is_tax_line:    true,
-          account_code:   taxAccCode,
-          account_name:   isDebit
-            ? `ضريبة المدخلات ${tx.name_ar||tx.code} (${tx.rate}%)`
-            : `ضريبة المخرجات ${tx.name_ar||tx.code} (${tx.rate}%)`,
-          description:    `ضريبة ${tx.name_ar||tx.code} ${tx.rate}% — تلقائي`,
-          debit:          isDebit  ? vatAmt : 0,
-          credit:         !isDebit ? vatAmt : 0,
-          currency_code:  parent.currency_code || 'SAR',
-          tax_type_code:  '',
-          is_auto:        true,
+  // إذا حُذف الاختيار → نُعيد السطر الأصلي لقيمته الكاملة
+  if (!taxCode) {
+    // استعادة المبلغ الأصلي = قيمة سطر GL
+    const glLine = filtered.find(l => l.id === 'gl')
+    if (glLine) {
+      const originalAmt = parseFloat(glLine.credit || glLine.debit || 0)
+      return filtered.map(l => {
+        if (l.id === lineId) {
+          const isDebit = parseFloat(l.debit || 0) > 0
+          return isDebit
+            ? {...l, debit:  originalAmt, tax_type_code: ''}
+            : {...l, credit: originalAmt, tax_type_code: ''}
         }
-        const parentIdx = result.findIndex(l => l.id === lineId)
-        result.splice(parentIdx + 1, 0, taxLine)
-      }
+        return l
+      })
     }
+    return filtered
   }
 
-  // 3. ★ الأهم: نُحدّث سطر الصندوق/البنك (id='gl') ليعكس الإجمالي الجديد
-  //    مثال: DR مصاريف 180 + DR ضريبة 27 → CR صندوق يصبح 207
-  const totalDR = result.filter(l => l.id !== 'gl').reduce((s,l) => s + parseFloat(l.debit  || 0), 0)
-  const totalCR = result.filter(l => l.id !== 'gl').reduce((s,l) => s + parseFloat(l.credit || 0), 0)
-  result = result.map(l => {
-    if (l.id === 'gl') {
-      // سطر الصندوق/البنك — نعدّل الجانب المعاكس
-      if (parseFloat(l.credit || 0) > 0) {
-        // سطر دائن (صرف) → يساوي مجموع المدينة
-        return {...l, credit: totalDR > 0 ? totalDR : parseFloat(l.credit||0)}
-      } else if (parseFloat(l.debit || 0) > 0) {
-        // سطر مدين (قبض) → يساوي مجموع الدائنة
-        return {...l, debit: totalCR > 0 ? totalCR : parseFloat(l.debit||0)}
-      }
-    }
-    return l
-  })
+  // 2. نجد الـ tx و السطر الأصلي
+  const tx     = taxTypes.find(t => t.code === taxCode)
+  const parent = filtered.find(l => l.id === lineId)
+  if (!tx || !parent) return filtered
 
+  // 3. الإجمالي = قيمة سطر GL (ما دخله المستخدم في حقل المبلغ)
+  const glLine     = filtered.find(l => l.id === 'gl')
+  const totalAmt   = parseFloat(glLine?.credit || glLine?.debit || 0)
+  const isDebit    = parseFloat(parent.debit || 0) > 0
+
+  // 4. استخراج الأساس والضريبة من الإجمالي
+  // أساس = إجمالي ÷ (1 + نسبة/100)
+  const baseAmt  = parseFloat((totalAmt / (1 + tx.rate / 100)).toFixed(3))
+  const vatAmt   = parseFloat((totalAmt - baseAmt).toFixed(3))
+
+  if (vatAmt <= 0) return filtered
+
+  // 5. نُحدّث سطر المصروف/الإيراد بالأساس فقط
+  const updatedParent = {
+    ...parent,
+    debit:  isDebit  ? baseAmt : 0,
+    credit: !isDebit ? baseAmt : 0,
+    tax_type_code: taxCode,
+  }
+
+  // 6. سطر الضريبة التلقائي
+  const taxAccCode = isDebit
+    ? (tx.input_account_code  || '')
+    : (tx.output_account_code || '')
+  const taxLine = {
+    id:             `tax_${lineId}`,
+    parent_line_id: lineId,
+    is_tax_line:    true,
+    account_code:   taxAccCode,
+    account_name:   isDebit
+      ? `ضريبة المدخلات — ${tx.name_ar||tx.code} (${tx.rate}%)`
+      : `ضريبة المخرجات — ${tx.name_ar||tx.code} (${tx.rate}%)`,
+    description:    `ضريبة ${tx.name_ar||tx.code} ${tx.rate}% — معكوسة تلقائياً`,
+    debit:          isDebit  ? vatAmt : 0,
+    credit:         !isDebit ? vatAmt : 0,
+    currency_code:  parent.currency_code || 'SAR',
+    tax_type_code:  '',
+    is_auto:        true,
+    _vat_rate:      tx.rate,
+    _base_amt:      baseAmt,
+    _vat_amt:       vatAmt,
+    _total_amt:     totalAmt,
+  }
+
+  // 7. نبني النتيجة: نُحدّث السطر الأصلي + نضيف سطر الضريبة
+  const result = filtered.map(l => l.id === lineId ? updatedParent : l)
+  const parentIdx = result.findIndex(l => l.id === lineId)
+  result.splice(parentIdx + 1, 0, taxLine)
+
+  // 8. سطر GL (الصندوق/البنك) يبقى بالإجمالي الأصلي — لا تغيير
+  // (ما أدخله المستخدم هو الإجمالي الذي سيُسحب من الصندوق)
   return result
 }
 
@@ -4384,7 +4412,18 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
           {fieldErrors.bank_account_id&&<p className="text-xs text-red-500 mt-0.5">⚠️ مطلوب</p>}
         </div>
         <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">المبلغ <span className="text-red-500">*</span></label>
+          <label className="text-sm font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                المبلغ <span className="text-red-500">*</span>
+                <span className="relative group cursor-help">
+                  <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold inline-flex items-center justify-center">?</span>
+                  <span className="absolute bottom-full right-0 mb-1 w-64 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 z-50 leading-relaxed shadow-xl hidden group-hover:block text-right">
+                    أدخل المبلغ <strong className="text-yellow-300">شاملاً الضريبة</strong><br/>
+                    مثال: إذا دفعت 150,000 من الصندوق → أدخل 150,000<br/>
+                    إذا اخترت ضريبة في الجدول أدناه:<br/>
+                    النظام يستخرج الأساس والضريبة تلقائياً ✅
+                  </span>
+                </span>
+              </label>
           <input type="number" step="0.001" onChange={e=>{s('amount',e.target.value);setFieldErrors(p=>({...p,amount:false}))}}
             className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-500 text-center ${fieldErrors.amount?'border-red-400 bg-red-50':'border-slate-200'}`}
             value={form.amount} placeholder="0.000"/>
