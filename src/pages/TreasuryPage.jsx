@@ -4654,29 +4654,6 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
           </div>
         )}
       </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-amber-700 block mb-1">معدل الضريبة</label>
-            <div className="flex gap-2">
-              {['0','5','15'].map(r=>(
-                <button key={r} onClick={()=>s('vat_rate',r)}
-                  className={`flex-1 py-2 rounded-xl text-sm font-bold border-2 transition-all
-                    ${form.vat_rate===r?'bg-amber-500 text-white border-amber-500':'border-amber-200 text-amber-700 hover:bg-amber-100'}`}>
-                  {r}%
-                </button>
-              ))}
-            </div>
-          </div>
-          {vatRate>0&&<div>
-            <label className="text-xs font-semibold text-amber-700 block mb-1">حساب الضريبة <span className="text-red-500">*</span></label>
-            <div className="flex gap-2 items-center">
-              <input className="flex-1 border-2 border-amber-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-amber-400 bg-white" placeholder="كود حساب الضريبة" value={form.vat_account_code} onChange={e=>s('vat_account_code',e.target.value)}/>
-              {!form.vat_account_code&&<span className="text-xs text-amber-600">⚠️ مطلوب</span>}
-            </div>
-            <p className="text-[10px] text-amber-600 mt-1">مثال: ضريبة مدخلات 1510101 · ضريبة مخرجات 2110101</p>
-          </div>}
-        </div>
-      </div>
 
       <div className="grid grid-cols-3 gap-5">
         <div>
