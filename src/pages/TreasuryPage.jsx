@@ -390,9 +390,16 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
     <div class="watermark ${tx.status==='posted'?'watermark-posted':tx.status==='reversed'?'watermark-reversed':tx.status==='pending_approval'?'watermark-pending':'watermark-draft'}">
       ${tx.status==='posted'?'POSTED':tx.status==='reversed'?'REVERSED':tx.status==='pending_approval'?'PENDING':'DRAFT'}
     </div>
-    <div class="lbl">إجمالي المبلغ</div>
-    <div class="val">${fmt(tx.amount,3)} <span style="font-size:16px;color:#3b82f6">${tx.currency_code||'ر.س'}</span></div>
+    <div class="lbl">إجمالي المبلغ${parseFloat(tx.vat_amount||0)>0?` (شامل ضريبة ${fmt(tx.vat_amount,3)} ر.س)`:''}</div>
+    <div class="val">${fmt(parseFloat(tx.amount||0),3)} <span style="font-size:16px;color:#3b82f6">${tx.currency_code||'ر.س'}</span></div>
     <div class="words">${amountToWords(parseFloat(tx.amount||0))}</div>
+    ${parseFloat(tx.vat_amount||0)>0?`
+    <div style="margin-top:4px;font-size:12px;color:#92400e;background:#fef3c7;padding:4px 8px;border-radius:6px;">
+      صافي المصروف: ${fmt(parseFloat(tx.amount||0)-parseFloat(tx.vat_amount||0),3)} ر.س
+      | ضريبة القيمة المضافة: ${fmt(tx.vat_amount,3)} ر.س
+      | الإجمالي: ${fmt(parseFloat(tx.amount||0),3)} ر.س
+    </div>
+    `:''}
     ${tx.je_serial?`<div class="je">رقم القيد المحاسبي: ${tx.je_serial}</div>`:''}
   </div>
 
@@ -612,13 +619,20 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
   const cpLabel = cpName ? `${tx.counterpart_account} — ${cpName}` : (tx.counterpart_account||'—')
   const accLabel = acc?.account_name || tx.bank_account_name || '—'
 
+  // إعادة بناء القيد مع سطر الضريبة إذا وُجد
+  const vatAmt    = parseFloat(tx.vat_amount || 0)
+  const vatAcc    = tx.vat_account_code || ''
+  const netAmt    = parseFloat((amt - vatAmt).toFixed(3))
+  const hasVat    = vatAmt > 0 && vatAcc
+  const dims      = {branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code}
+
   const je_lines = isReceipt ? [
-    {account_code:acc?.gl_account_code||'—', account_name:accLabel, debit:amt, credit:0,
-     branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code},
-    {account_code:tx.counterpart_account||'—', account_name:cpName||'الحساب المقابل', debit:0, credit:amt},
+    {account_code:acc?.gl_account_code||'—', account_name:accLabel, debit:amt, credit:0, ...dims},
+    ...(hasVat?[{account_code:vatAcc, account_name:'ضريبة المخرجات', debit:0, credit:vatAmt, is_vat_line:true}]:[]),
+    {account_code:tx.counterpart_account||'—', account_name:cpName||'الحساب المقابل', debit:0, credit:hasVat?netAmt:amt},
   ] : [
-    {account_code:tx.counterpart_account||'—', account_name:cpName||'الحساب المقابل', debit:amt, credit:0,
-     branch_code:tx.branch_code, cost_center:tx.cost_center, project_code:tx.project_code, expense_classification_code:tx.expense_classification_code},
+    {account_code:tx.counterpart_account||'—', account_name:cpName||'الحساب المقابل', debit:hasVat?netAmt:amt, credit:0, ...dims},
+    ...(hasVat?[{account_code:vatAcc, account_name:'ضريبة المدخلات', debit:vatAmt, credit:0, is_vat_line:true}]:[]),
     {account_code:acc?.gl_account_code||'—', account_name:accLabel, debit:0, credit:amt},
   ]
 
