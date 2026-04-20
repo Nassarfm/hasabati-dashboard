@@ -121,6 +121,7 @@ function AccountPicker({value,onChange,label,required=false}) {
 // AccountingRow — سطر واحد معزول (نصيحة: component منفصل)
 // ══════════════════════════════════════════════════════════
 function AccountingRow({line, idx, taxTypes, onTaxChange, COLS}) {
+  const effectiveTaxTypes = (taxTypes&&taxTypes.length>0) ? taxTypes : DEFAULT_TAX_TYPES
   const l = line
   const i = idx
   return (
@@ -226,6 +227,7 @@ function AccountingRow({line, idx, taxTypes, onTaxChange, COLS}) {
 // AccountingTable — جدول القيد المحاسبي
 // ══════════════════════════════════════════════════════════
 function AccountingTable({lines=[], taxTypes=[], onTaxChange=null}) {
+  const effectiveTaxTypes = (taxTypes&&taxTypes.length>0) ? taxTypes : DEFAULT_TAX_TYPES
   const totalDR  = lines.reduce((s,l) => s + (parseFloat(l.debit)||0),  0)
   const totalCR  = lines.reduce((s,l) => s + (parseFloat(l.credit)||0), 0)
   const balanced = Math.abs(totalDR - totalCR) < 0.01
@@ -249,7 +251,7 @@ function AccountingTable({lines=[], taxTypes=[], onTaxChange=null}) {
             key={line.id || idx}
             line={line}
             idx={idx}
-            taxTypes={taxTypes}
+            taxTypes={effectiveTaxTypes}
             onTaxChange={onTaxChange}
             COLS={COLS}
           />
@@ -4122,86 +4124,82 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
 // مثال: 150,000 شامل 15% → أساس=130,435 + ضريبة=19,565
 // سطر الصندوق/البنك يبقى بالإجمالي الأصلي (150,000)
 // ══════════════════════════════════════════════════════════
-function applyTaxToLines(lines, lineId, taxCode, taxTypes) {
-  // 1. احذف السطر الضريبي القديم لهذا السطر
+// ══════════════════════════════════════════════════════════
+// DEFAULT_TAX_TYPES — fallback مؤقت فقط
+// النظام يجلب الأنواع من /accounting/tax-types (إعدادات الضريبة)
+// هذه القيم تظهر فقط إذا لم تُعيَّن أنواع ضريبة في إعدادات النظام
+// حسابات ضريبة المدخلات/المخرجات تأتي من جدول tax_types في قاعدة البيانات
+// ══════════════════════════════════════════════════════════
+const DEFAULT_TAX_TYPES = [
+  {code:'VAT15', name_ar:'ضريبة القيمة المضافة 15%', rate:15,
+   input_account_code:'1510101', output_account_code:'2110101'},
+  {code:'VAT5',  name_ar:'ضريبة مخفضة 5%',           rate:5,
+   input_account_code:'1510101', output_account_code:'2110101'},
+  {code:'VAT0',  name_ar:'إعفاء / صفري 0%',           rate:0,
+   input_account_code:'',        output_account_code:''},
+]
+
+function applyTaxToLines(lines, lineId, taxCode, taxTypesParam) {
+  // نستخدم taxTypes المُمررة أو الافتراضية
+  const taxTypes = (taxTypesParam && taxTypesParam.length > 0) ? taxTypesParam : DEFAULT_TAX_TYPES
+
+  // 1. احذف السطر الضريبي القديم
   const filtered = lines.filter(l => l.parent_line_id !== lineId)
 
-  // إذا حُذف الاختيار → نُعيد السطر الأصلي لقيمته الكاملة
+  // إذا حُذف الاختيار → نُعيد السطر بقيمته الأصلية (المبلغ الصافي)
   if (!taxCode) {
-    // استعادة المبلغ الأصلي = قيمة سطر GL
-    const glLine = filtered.find(l => l.id === 'gl')
-    if (glLine) {
-      const originalAmt = parseFloat(glLine.credit || glLine.debit || 0)
-      return filtered.map(l => {
-        if (l.id === lineId) {
-          const isDebit = parseFloat(l.debit || 0) > 0
-          return isDebit
-            ? {...l, debit:  originalAmt, tax_type_code: ''}
-            : {...l, credit: originalAmt, tax_type_code: ''}
-        }
-        return l
-      })
-    }
-    return filtered
+    return filtered.map(l =>
+      l.id === lineId ? {...l, tax_type_code: ''} : l
+    )
   }
 
-  // 2. نجد الـ tx و السطر الأصلي
+  // 2. نجد نوع الضريبة والسطر الأصلي
   const tx     = taxTypes.find(t => t.code === taxCode)
   const parent = filtered.find(l => l.id === lineId)
   if (!tx || !parent) return filtered
+  if (tx.rate === 0) return filtered.map(l => l.id===lineId ? {...l,tax_type_code:taxCode} : l)
 
-  // 3. الإجمالي = قيمة سطر GL (ما دخله المستخدم في حقل المبلغ)
-  const glLine     = filtered.find(l => l.id === 'gl')
-  const totalAmt   = parseFloat(glLine?.credit || glLine?.debit || 0)
-  const isDebit    = parseFloat(parent.debit || 0) > 0
+  const isDebit  = parseFloat(parent.debit || 0) > 0
+  const netAmt   = parseFloat(isDebit ? (parent.debit||0) : (parent.credit||0))
 
-  // 4. استخراج الأساس والضريبة من الإجمالي
-  // أساس = إجمالي ÷ (1 + نسبة/100)
-  const baseAmt  = parseFloat((totalAmt / (1 + tx.rate / 100)).toFixed(3))
-  const vatAmt   = parseFloat((totalAmt - baseAmt).toFixed(3))
-
+  // 3. الضريبة = الصافي × النسبة% (إضافة فوق الصافي)
+  const vatAmt   = parseFloat((netAmt * tx.rate / 100).toFixed(3))
   if (vatAmt <= 0) return filtered
 
-  // 5. نُحدّث سطر المصروف/الإيراد بالأساس فقط
-  const updatedParent = {
-    ...parent,
-    debit:  isDebit  ? baseAmt : 0,
-    credit: !isDebit ? baseAmt : 0,
-    tax_type_code: taxCode,
-  }
-
-  // 6. سطر الضريبة التلقائي
+  // 4. سطر الضريبة
   const taxAccCode = isDebit
     ? (tx.input_account_code  || '')
     : (tx.output_account_code || '')
+
   const taxLine = {
     id:             `tax_${lineId}`,
     parent_line_id: lineId,
     is_tax_line:    true,
     account_code:   taxAccCode,
     account_name:   isDebit
-      ? `ضريبة المدخلات — ${tx.name_ar||tx.code} (${tx.rate}%)`
-      : `ضريبة المخرجات — ${tx.name_ar||tx.code} (${tx.rate}%)`,
-    description:    `ضريبة ${tx.name_ar||tx.code} ${tx.rate}% — معكوسة تلقائياً`,
+      ? `ضريبة مدخلات — ${tx.name_ar} (${tx.rate}%)`
+      : `ضريبة مخرجات — ${tx.name_ar} (${tx.rate}%)`,
+    description:    `ضريبة ${tx.name_ar} ${tx.rate}% — تلقائي`,
     debit:          isDebit  ? vatAmt : 0,
     credit:         !isDebit ? vatAmt : 0,
     currency_code:  parent.currency_code || 'SAR',
     tax_type_code:  '',
     is_auto:        true,
-    _vat_rate:      tx.rate,
-    _base_amt:      baseAmt,
-    _vat_amt:       vatAmt,
-    _total_amt:     totalAmt,
   }
 
-  // 7. نبني النتيجة: نُحدّث السطر الأصلي + نضيف سطر الضريبة
-  const result = filtered.map(l => l.id === lineId ? updatedParent : l)
+  // 5. نضيف سطر الضريبة بعد السطر الأصلي
+  const result = filtered.map(l => l.id===lineId ? {...l,tax_type_code:taxCode} : l)
   const parentIdx = result.findIndex(l => l.id === lineId)
   result.splice(parentIdx + 1, 0, taxLine)
 
-  // 8. سطر GL (الصندوق/البنك) يبقى بالإجمالي الأصلي — لا تغيير
-  // (ما أدخله المستخدم هو الإجمالي الذي سيُسحب من الصندوق)
-  return result
+  // 6. نُحدّث سطر GL (الصندوق/البنك) ليصبح = صافي + ضريبة
+  return result.map(l => {
+    if (l.id === 'gl') {
+      if (parseFloat(l.credit||0) > 0) return {...l, credit: parseFloat((netAmt + vatAmt).toFixed(3))}
+      if (parseFloat(l.debit||0)  > 0) return {...l, debit:  parseFloat((netAmt + vatAmt).toFixed(3))}
+    }
+    return l
+  })
 }
 
 function CashVoucherPage({type,onBack,onSaved,showToast}) {
@@ -4237,7 +4235,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
 
   useEffect(()=>{
     Promise.all([
-      api.accounting?.listTaxTypes?.().catch(()=>({data:[]})),
+      api.accounting.listTaxTypes().catch(()=>({data:[]})),
       api.treasury.listBankAccounts({account_type:'cash_fund'}),
       api.ap?.listVendors({limit:200}).catch(()=>({data:{items:[]}})),
       api.settings.listBranches().catch(()=>({data:[]})),
@@ -4667,7 +4665,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       api.settings.listCostCenters().catch(()=>({data:[]})),
       api.settings.listProjects().catch(()=>({data:[]})),
       api.dimensions?.list?.().catch(()=>({data:[]})) ?? Promise.resolve({data:[]}),
-      api.accounting?.listTaxTypes?.().catch(()=>({data:[]})),
+      api.accounting.listTaxTypes().catch(()=>({data:[]})),
     ]).then(([a,v,b,cc,p,dims,tt])=>{
       setAccounts(a?.data||[])
       setVendors(v?.data?.items||[])

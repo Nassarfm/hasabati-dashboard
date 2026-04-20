@@ -37,6 +37,7 @@ export const api = {
   // 📊 المحاسبة
   // ══════════════════════════════════════════════════════
   accounting: {
+    listTaxTypes:    ()      => get('/accounting/tax-types'),
     getDashboard:      ()              => get('/accounting/dashboard'),
     getCOA:            (p={})          => get('/accounting/coa', p),
     createAccount:     (b)             => post('/accounting/coa', b),
