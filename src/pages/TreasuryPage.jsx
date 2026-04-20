@@ -117,125 +117,145 @@ function AccountPicker({value,onChange,label,required=false}) {
 
 // ── AccountingTable — جدول القيد المحاسبي ─────────────────
 // ── جدول القيد المحاسبي الموحد — نفس تصميم قيد اليومية ──
+// ══════════════════════════════════════════════════════════
+// AccountingRow — سطر واحد معزول (نصيحة: component منفصل)
+// ══════════════════════════════════════════════════════════
+function AccountingRow({line, idx, taxTypes, onTaxChange, COLS}) {
+  const l = line
+  const i = idx
+  return (
+    <div
+      className={`grid border-b border-slate-100 items-center
+        ${l.is_tax_line ? 'bg-blue-50/70 border-r-4 border-r-blue-400' : ''}
+        ${!l.is_tax_line && i%2===0 ? 'bg-white' : ''}
+        ${!l.is_tax_line && i%2!==0 ? 'bg-slate-50/40' : ''}`}
+      style={{gridTemplateColumns: COLS}}>
+
+      {/* # */}
+      <div className="px-2 py-2.5 text-center text-slate-400 text-xs">{i+1}</div>
+
+      {/* كود / اسم الحساب */}
+      <div className="px-3 py-2 min-w-0 overflow-hidden">
+        {l.is_tax_line ? (
+          <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-xl px-2 py-1.5">
+            <span className="text-sm">🧾</span>
+            <span className="font-mono text-blue-700 font-bold text-xs shrink-0">{l.account_code||'—'}</span>
+            <span className="text-blue-500 text-xs truncate">{l.account_name}</span>
+            <span className="text-[10px] bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded-full font-bold mr-auto shrink-0">تلقائي</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-mono text-blue-700 font-bold text-sm shrink-0">{l.account_code||'—'}</span>
+            <span className="text-slate-600 text-xs truncate">{l.account_name||'—'}</span>
+          </div>
+        )}
+      </div>
+
+      {/* البيان */}
+      <div className="px-3 py-2.5 text-xs truncate">
+        {l.is_tax_line
+          ? <span className="text-blue-400 italic">سطر ضريبي تلقائي</span>
+          : <span className="text-slate-500">{l.description||'—'}</span>}
+      </div>
+
+      {/* مدين */}
+      <div className="px-3 py-2.5 text-center font-mono font-bold text-sm">
+        {(parseFloat(l.debit)||0) > 0
+          ? <span className={l.is_tax_line ? 'text-blue-600' : 'text-slate-800'}>{fmt(l.debit,3)}</span>
+          : <span className="text-slate-200">—</span>}
+      </div>
+
+      {/* دائن */}
+      <div className="px-3 py-2.5 text-center font-mono font-bold text-sm">
+        {(parseFloat(l.credit)||0) > 0
+          ? <span className={l.is_tax_line ? 'text-blue-600' : 'text-slate-800'}>{fmt(l.credit,3)}</span>
+          : <span className="text-slate-200">—</span>}
+      </div>
+
+      {/* العملة */}
+      <div className="px-2 py-2.5 text-center">
+        <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-mono">{l.currency_code||'SAR'}</span>
+      </div>
+
+      {/* الفرع */}
+      <div className="px-2 py-2.5 text-center text-xs text-slate-500">
+        {l.branch_code || <span className="text-slate-200">—</span>}
+      </div>
+
+      {/* م. التكلفة */}
+      <div className="px-2 py-2.5 text-center text-xs text-slate-500">
+        {l.cost_center || <span className="text-slate-200">—</span>}
+      </div>
+
+      {/* تصنيف */}
+      <div className="px-2 py-2.5 text-center">
+        {l.expense_classification_code
+          ? <span className="text-[10px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full">{l.expense_classification_code}</span>
+          : <span className="text-slate-200 text-xs">—</span>}
+      </div>
+
+      {/* مشروع */}
+      <div className="px-2 py-2.5 text-center text-xs text-slate-500">
+        {l.project_code || <span className="text-slate-200">—</span>}
+      </div>
+
+      {/* الضريبة */}
+      <div className="px-2 py-2">
+        {l.is_tax_line ? (
+          <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">تلقائي ✅</span>
+        ) : onTaxChange && taxTypes.length > 0 ? (
+          <select
+            className={`text-xs w-full rounded-lg px-1 py-1.5 border focus:outline-none
+              ${l.tax_type_code ? 'border-blue-300 bg-blue-50 text-blue-700 font-bold' : 'border-slate-200 text-slate-400'}`}
+            value={l.tax_type_code||''}
+            onChange={e => onTaxChange(l.id, e.target.value)}>
+            <option value="">—</option>
+            {taxTypes.map(tx => (
+              <option key={tx.code} value={tx.code}>{tx.code} {tx.rate}%</option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-slate-200 text-xs">—</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════
+// AccountingTable — جدول القيد المحاسبي
+// ══════════════════════════════════════════════════════════
 function AccountingTable({lines=[], taxTypes=[], onTaxChange=null}) {
-  const totalDR  = lines.reduce((s,l)=>s+(parseFloat(l.debit)||0),0)
-  const totalCR  = lines.reduce((s,l)=>s+(parseFloat(l.credit)||0),0)
-  const balanced = Math.abs(totalDR-totalCR)<0.01
-  // نفس ترتيب أعمدة قيد اليومية: # | كود/اسم | بيان | مدين | دائن | عملة | فرع | م.تكلفة | تصنيف | مشروع | ضريبة
-  const COLS = '2rem 2fr 1fr 6.5rem 6.5rem 3.8rem 4rem 4rem 4rem 4rem 4.5rem'
+  const totalDR  = lines.reduce((s,l) => s + (parseFloat(l.debit)||0),  0)
+  const totalCR  = lines.reduce((s,l) => s + (parseFloat(l.credit)||0), 0)
+  const balanced = Math.abs(totalDR - totalCR) < 0.01
+  const COLS     = '2rem 2fr 1fr 6.5rem 6.5rem 3.8rem 4rem 4rem 4rem 4rem 4.5rem'
 
   return (
     <div className="border-2 border-blue-200 rounded-2xl overflow-hidden">
       <div className="overflow-x-auto">
-        {/* ── رأس الجدول — تدرج أزرق غامق مطابق لقيد اليومية ── */}
+
+        {/* رأس الجدول */}
         <div className="grid text-white text-xs font-semibold"
           style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)', gridTemplateColumns:COLS}}>
-          <div className="px-2 py-3.5 text-center text-slate-300">#</div>
-          <div className="px-3 py-3.5">كود / اسم الحساب</div>
-          <div className="px-3 py-3.5">البيان</div>
-          <div className="px-3 py-3.5 text-center">مدين</div>
-          <div className="px-3 py-3.5 text-center">دائن</div>
-          <div className="px-2 py-3.5 text-center">💱 العملة</div>
-          <div className="px-2 py-3.5 text-center">الفرع</div>
-          <div className="px-2 py-3.5 text-center">م. التكلفة</div>
-          <div className="px-2 py-3.5 text-center">تصنيف</div>
-          <div className="px-2 py-3.5 text-center">مشروع</div>
-          <div className="px-2 py-3.5 text-center">الضريبة</div>
+          {['#','كود / اسم الحساب','البيان','مدين','دائن','💱 العملة','الفرع','م. التكلفة','تصنيف','مشروع','الضريبة'].map((h,i) => (
+            <div key={i} className={`px-${i<2?'3':'2'} py-3.5 ${i>2&&i<5?'text-center':i>=5?'text-center':''}`}>{h}</div>
+          ))}
         </div>
 
-        {/* ── صفوف البيانات ── */}
-        {lines.map((l,i)=>(
-          <div key={i}
-            className={`grid border-b border-slate-100 items-center
-              ${l.is_vat_line?'bg-blue-50/70':''}
-              ${!l.is_vat_line&&i%2===0?'bg-white':''}
-              ${!l.is_vat_line&&i%2!==0?'bg-slate-50/40':''}`}
-            style={{gridTemplateColumns:COLS, borderRight: l.is_vat_line?'4px solid #60a5fa':'none'}}>
-
-            {/* # */}
-            <div className="px-2 py-2.5 text-center text-slate-400 text-xs">{i+1}</div>
-
-            {/* كود / اسم الحساب */}
-            <div className="px-3 py-2 min-w-0 overflow-hidden">
-              {l.is_vat_line ? (
-                <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-xl px-2 py-1.5">
-                  <span className="text-sm">🧾</span>
-                  <span className="font-mono text-blue-700 font-bold text-xs shrink-0">{l.account_code||'—'}</span>
-                  <span className="text-blue-500 text-xs truncate">{l.account_name}</span>
-                  <span className="text-[10px] bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded-full font-bold mr-auto shrink-0">تلقائي</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-mono text-blue-700 font-bold text-sm shrink-0">{l.account_code||'—'}</span>
-                  <span className="text-slate-600 text-xs truncate">{l.account_name||'—'}</span>
-                </div>
-              )}
-            </div>
-
-            {/* البيان */}
-            <div className="px-3 py-2.5 text-xs truncate">
-              {l.is_vat_line
-                ? <span className="text-blue-400 italic">سطر ضريبي تلقائي</span>
-                : <span className="text-slate-500">{l.description||'—'}</span>}
-            </div>
-
-            {/* مدين */}
-            <div className="px-3 py-2.5 text-center font-mono font-bold text-sm">
-              {(parseFloat(l.debit)||0)>0
-                ? <span className={l.is_vat_line?'text-blue-600':'text-slate-800'}>{fmt(l.debit,3)}</span>
-                : <span className="text-slate-200">—</span>}
-            </div>
-
-            {/* دائن */}
-            <div className="px-3 py-2.5 text-center font-mono font-bold text-sm">
-              {(parseFloat(l.credit)||0)>0
-                ? <span className={l.is_vat_line?'text-blue-600':'text-slate-800'}>{fmt(l.credit,3)}</span>
-                : <span className="text-slate-200">—</span>}
-            </div>
-
-            {/* العملة */}
-            <div className="px-2 py-2.5 text-center">
-              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-mono">{l.currency_code||'SAR'}</span>
-            </div>
-
-            {/* الفرع */}
-            <div className="px-2 py-2.5 text-center text-xs text-slate-500">{l.branch_code||<span className="text-slate-200">—</span>}</div>
-
-            {/* م. التكلفة */}
-            <div className="px-2 py-2.5 text-center text-xs text-slate-500">{l.cost_center||<span className="text-slate-200">—</span>}</div>
-
-            {/* تصنيف */}
-            <div className="px-2 py-2.5 text-center">
-              {l.expense_classification_code
-                ? <span className="text-[10px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full">{l.expense_classification_code}</span>
-                : <span className="text-slate-200 text-xs">—</span>}
-            </div>
-
-            {/* مشروع */}
-            <div className="px-2 py-2.5 text-center text-xs text-slate-500">{l.project_code||<span className="text-slate-200">—</span>}</div>
-
-            {/* الضريبة */}
-            <div className="px-2 py-2">
-              {l.is_tax_line ? (
-                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">تلقائي ✅</span>
-              ) : onTaxChange && taxTypes.length > 0 ? (
-                <select
-                  className={`text-xs w-full rounded-lg px-1 py-1.5 border focus:outline-none
-                    ${l.tax_type_code?'border-blue-300 bg-blue-50 text-blue-700 font-bold':'border-slate-200 text-slate-400'}`}
-                  value={l.tax_type_code||''}
-                  onChange={e=>onTaxChange(l.id, e.target.value)}>
-                  <option value="">—</option>
-                  {taxTypes.map(tx=>(
-                    <option key={tx.code} value={tx.code}>{tx.code} {tx.rate}%</option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-slate-200 text-xs">—</span>
-              )}
-            </div>
-
+        {/* صفوف البيانات — كل سطر component منفصل */}
+        {lines.map((line, idx) => (
+          <AccountingRow
+            key={line.id || idx}
+            line={line}
+            idx={idx}
+            taxTypes={taxTypes}
+            onTaxChange={onTaxChange}
+            COLS={COLS}
+          />
         ))}
-        {/* ── صف الإجماليات ── */}
+
+        {/* صف الإجماليات */}
         <div className="grid border-t-2 border-slate-200"
           style={{background:'#f8fafc', gridTemplateColumns:COLS}}>
           <div/>
@@ -245,24 +265,18 @@ function AccountingTable({lines=[], taxTypes=[], onTaxChange=null}) {
           <div className="px-3 py-3 flex items-center gap-2">
             {balanced
               ? <span className="text-emerald-600 text-xs font-semibold">✅ متوازن</span>
-              : <><span className="text-red-500 text-xs">⚠️ فرق: </span><span className="font-mono text-red-600 text-xs font-bold">{fmt(Math.abs(totalDR-totalCR),3)}</span></>}
+              : <span className="text-red-500 text-xs font-bold">⚠️ فرق: {fmt(Math.abs(totalDR-totalCR),3)}</span>}
           </div>
           <div className="px-3 py-3 text-center font-mono font-bold text-blue-700">{fmt(totalDR,3)}</div>
           <div className="px-3 py-3 text-center font-mono font-bold text-emerald-700">{fmt(totalCR,3)}</div>
-          <div className="col-span-6 px-3 py-3">
-            {vatSummary&&vatSummary.vat_rate>0&&(
-              <span className="text-xs text-amber-700 flex gap-4">
-                <span>الأساس: <strong className="font-mono">{fmt(vatSummary.base_amt,3)}</strong></span>
-                <span>ضريبة {vatSummary.vat_rate}%: <strong className="font-mono">{fmt(vatSummary.vat_amt,3)}</strong></span>
-                <span>الإجمالي: <strong className="font-mono text-blue-700">{fmt(vatSummary.total_amt,3)}</strong></span>
-              </span>
-            )}
-          </div>
+          <div className="col-span-6"/>
         </div>
+
       </div>
     </div>
   )
 }
+
 
 // ── تفقيط المبلغ ─────────────────────────────────────────
 function amountToWords(n) {
