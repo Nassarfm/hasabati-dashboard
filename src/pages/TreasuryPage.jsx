@@ -117,7 +117,7 @@ function AccountPicker({value,onChange,label,required=false}) {
 
 // ── AccountingTable — جدول القيد المحاسبي ─────────────────
 // ── جدول القيد المحاسبي الموحد — نفس تصميم قيد اليومية ──
-function AccountingTable({lines=[], vatSummary=null}) {
+function AccountingTable({lines=[], taxTypes=[], onTaxChange=null}) {
   const totalDR  = lines.reduce((s,l)=>s+(parseFloat(l.debit)||0),0)
   const totalCR  = lines.reduce((s,l)=>s+(parseFloat(l.credit)||0),0)
   const balanced = Math.abs(totalDR-totalCR)<0.01
@@ -215,15 +215,24 @@ function AccountingTable({lines=[], vatSummary=null}) {
             <div className="px-2 py-2.5 text-center text-xs text-slate-500">{l.project_code||<span className="text-slate-200">—</span>}</div>
 
             {/* الضريبة */}
-            <div className="px-2 py-2.5 text-center">
-              {l.vat_label
-                ? <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap">{l.vat_label}</span>
-                : l.is_vat_line
-                  ? <span className="text-xs text-blue-400">🔒</span>
-                  : <span className="text-slate-200 text-xs">—</span>}
+            <div className="px-2 py-2">
+              {l.is_tax_line ? (
+                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">تلقائي ✅</span>
+              ) : onTaxChange && taxTypes.length > 0 ? (
+                <select
+                  className={`text-xs w-full rounded-lg px-1 py-1.5 border focus:outline-none
+                    ${l.tax_type_code?'border-blue-300 bg-blue-50 text-blue-700 font-bold':'border-slate-200 text-slate-400'}`}
+                  value={l.tax_type_code||''}
+                  onChange={e=>onTaxChange(l.id, e.target.value)}>
+                  <option value="">—</option>
+                  {taxTypes.map(tx=>(
+                    <option key={tx.code} value={tx.code}>{tx.code} {tx.rate}%</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-slate-200 text-xs">—</span>
+              )}
             </div>
-          </div>
-        ))}
 
         {/* ── صف الإجماليات ── */}
         <div className="grid border-t-2 border-slate-200"
@@ -4090,6 +4099,43 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
   )
 }
 
+// ── حساب سطر الضريبة — نفس منطق القيود اليومية ──────────────────────────
+function applyTaxToLines(lines, lineId, taxCode, taxTypes) {
+  // احذف السطر الضريبي القديم المرتبط بهذا السطر
+  const filtered = lines.filter(l => l.parent_line_id !== lineId)
+  if (!taxCode) return filtered
+  const tx = taxTypes.find(t => t.code === taxCode)
+  if (!tx) return filtered
+  const parent = filtered.find(l => l.id === lineId)
+  if (!parent) return filtered
+  const baseDebit  = parseFloat(parent.debit  || 0)
+  const baseCredit = parseFloat(parent.credit || 0)
+  const base = baseDebit || baseCredit
+  if (base === 0) return filtered
+  const vatAmt   = parseFloat((base * tx.rate / 100).toFixed(3))
+  const isDebit  = baseDebit > 0
+  const taxAccCode = isDebit
+    ? (tx.input_account_code  || '')
+    : (tx.output_account_code || '')
+  const taxLine = {
+    id:             Math.random(),
+    parent_line_id: lineId,
+    is_tax_line:    true,
+    account_code:   taxAccCode,
+    account_name:   isDebit ? `ضريبة المدخلات (${tx.rate}%)` : `ضريبة المخرجات (${tx.rate}%)`,
+    description:    `ضريبة ${tx.name_ar||tx.code} ${tx.rate}% — تلقائي`,
+    debit:          isDebit  ? vatAmt : 0,
+    credit:         !isDebit ? vatAmt : 0,
+    currency_code:  parent.currency_code || 'SAR',
+    tax_type_code:  '',
+    is_auto:        true,
+  }
+  const parentIdx = filtered.findIndex(l => l.id === lineId)
+  const result = [...filtered]
+  result.splice(parentIdx + 1, 0, taxLine)
+  return result
+}
+
 function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const isPV=type==='PV'
   const typeLabel=isPV?'سند صرف نقدي':'سند قبض نقدي'
@@ -4100,13 +4146,15 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const [projects,setProjects]=useState([])
   const [expClass,setExpClass]=useState([])
   const [dimDefs,setDimDefs]=useState([])
+  const [taxTypes,setTaxTypes]=useState([])
+  const [jeLines,setJeLines]=useState([])  // سطور القيد قابلة للتعديل
   const [payType,setPayType]=useState('expense')
   const [form,setForm]=useState({
     tx_type:type, tx_date:today(), bank_account_id:'', amount:'',
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
     description:'', party_name:'', reference:'',
     payment_method:'cash', branch_code:'', cost_center:'', project_code:'',
-    expense_classification_code:'', vat_rate:'0', vat_account_code:'', notes:''
+    expense_classification_code:'', notes:''
   })
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
@@ -4117,6 +4165,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
 
   useEffect(()=>{
     Promise.all([
+      api.accounting?.listTaxTypes?.().catch(()=>({data:[]})),
       api.treasury.listBankAccounts({account_type:'cash_fund'}),
       api.ap?.listVendors({limit:200}).catch(()=>({data:{items:[]}})),
       api.settings.listBranches().catch(()=>({data:[]})),
@@ -4124,6 +4173,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       api.settings.listProjects().catch(()=>({data:[]})),
       api.dimensions?.list?.().catch(()=>({data:[]})) ?? Promise.resolve({data:[]}),
     ]).then(([a,v,b,cc,p,dims])=>{
+      setTaxTypes(tt?.data||[])
       setAccounts(a?.data||[])
       setVendors(v?.data?.items||[])
       setBranches(b?.data||[])
@@ -4147,32 +4197,38 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   }
 
   // التوجيه المحاسبي مع دعم الضريبة
-  const vatRate  = parseFloat(form.vat_rate)||0
-  // المبلغ المُدخل = شامل الضريبة → نعكس الضريبة منه
-  // أساس = المبلغ ÷ (1 + نسبة/100)
-  const baseAmt  = vatRate > 0
-    ? parseFloat((amt / (1 + vatRate/100)).toFixed(3))
-    : amt
-  const vatAmt   = parseFloat((amt - baseAmt).toFixed(3))
-  const totalAmt = amt  // الإجمالي = المبلغ المُدخل مباشرة
-  const vatAcc   = form.vat_account_code
   const cur  = form.currency_code||'SAR'
   const dims = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
-  const vatLabel = vatRate>0 ? `VAT ${vatRate}%` : null
-  const vatLine  = vatAmt>0&&vatAcc ? (isPV
-    ? {account_code:vatAcc, account_name:`ضريبة القيمة المضافة — ${vatRate}% (معكوسة)`, debit:vatAmt, credit:0, is_vat_line:true, currency_code:cur}
-    : {account_code:vatAcc, account_name:`ضريبة القيمة المضافة — ${vatRate}% (معكوسة)`, debit:0, credit:vatAmt, is_vat_line:true, currency_code:cur}
-  ) : null
-  const je_lines = selectedBank && form.counterpart_account && amt>0 ? (isPV?[
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:baseAmt,   credit:0,        currency_code:cur, vat_label:vatLabel, ...dims},
-    ...(vatLine?[vatLine]:[]),
-    {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,             debit:0,        credit:totalAmt, currency_code:cur},
-  ]:[
-    {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name,             debit:totalAmt, credit:0,        currency_code:cur},
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:0,         credit:baseAmt,  currency_code:cur, vat_label:vatLabel, ...dims},
-    ...(vatLine?[vatLine]:[]),
-  ]) : []
-  const vatSummary = vatRate>0 ? {vat_rate:vatRate, base_amt:baseAmt, vat_amt:vatAmt, total_amt:totalAmt} : null
+  // نُحدّث jeLines state عند تغيير المدخلات الأساسية
+  useEffect(()=>{
+    if(!selectedBank||!form.counterpart_account||amt<=0){setJeLines([]);return}
+    const baseLines = isPV ? [
+      {id:'cp', account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:amt, credit:0, currency_code:cur, tax_type_code:'', ...dims},
+      {id:'gl', account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:0, credit:amt, currency_code:cur, tax_type_code:''},
+    ] : [
+      {id:'gl', account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:amt, credit:0, currency_code:cur, tax_type_code:''},
+      {id:'cp', account_code:form.counterpart_account, account_name:form.counterpart_name||'الحساب المقابل', debit:0, credit:amt, currency_code:cur, tax_type_code:'', ...dims},
+    ]
+    // نبقي الضريبة إذا كانت محددة مسبقاً
+    setJeLines(prev=>{
+      if(prev.length===0) return baseLines
+      // نحافظ على tax_type_code لكل سطر موجود
+      return baseLines.map(bl=>{
+        const old = prev.find(p=>p.id===bl.id)
+        return old ? {...bl, tax_type_code:old.tax_type_code||''} : bl
+      })
+    })
+  },[selectedBank?.id, form.counterpart_account, amt, cur, isPV])
+
+  // دالة تغيير الضريبة في سطر
+  const handleTaxChange = (lineId, taxCode) => {
+    setJeLines(prev=>{
+      const updated = prev.map(l=>l.id===lineId?{...l,tax_type_code:taxCode}:l)
+      return applyTaxToLines(updated, lineId, taxCode, taxTypes)
+    })
+  }
+
+  const je_lines = jeLines  // للتوافق مع AccountingTable
 
   // التحقق من الأبعاد الإلزامية
   const validateDims=()=>{
@@ -4196,7 +4252,15 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
     if(Object.keys(errs).length>0){showToast('يرجى تعبئة الحقول المطلوبة','error');return}
     if(!validateDims()) return
     setSaving(true)
-    try{await api.treasury.createCashTransaction(form);onSaved(`تم إنشاء ${typeLabel} ✅`)}
+    // استخراج بيانات الضريبة من سطور القيد
+    const vatLine  = je_lines.find(l=>l.is_tax_line)
+    const formData = {
+      ...form,
+      vat_amount:       vatLine ? Math.abs(parseFloat(vatLine.debit||vatLine.credit||0)) : 0,
+      vat_account_code: vatLine ? vatLine.account_code : '',
+      vat_rate:         vatLine ? (je_lines.find(l=>l.tax_type_code)?.tax_type_code||'') : '',
+    }
+    try{await api.treasury.createCashTransaction(formData);onSaved(`تم إنشاء ${typeLabel} ✅`)}
     catch(e){showToast(e.message,'error')}finally{setSaving(false)}
   }
 
@@ -4327,31 +4391,6 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
           value={form.description} placeholder="وصف العملية..."/>
         {fieldErrors.description&&<p className="text-xs text-red-500 mt-0.5">⚠️ البيان مطلوب</p>}
       </div>
-
-      {/* ضريبة القيمة المضافة — مدمجة في القيد تلقائياً */}
-      <div className="border border-slate-200 rounded-xl p-3 bg-slate-50">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-700">🧾 ضريبة القيمة المضافة</span>
-          <div className="flex gap-1">
-            {['0','5','15'].map(r=>(
-              <button key={r} onClick={()=>s('vat_rate',r)}
-                className={`px-3 py-1.5 rounded-xl text-sm font-bold border-2 transition-all
-                  ${form.vat_rate===r?'bg-blue-600 text-white border-blue-600':'border-slate-200 text-slate-600 hover:border-blue-300'}`}>
-                {r}%
-              </button>
-            ))}
-          </div>
-        </div>
-        {vatRate>0&&(
-          <div className="mt-2 text-xs text-slate-500 bg-white rounded-lg p-2 border border-slate-200 space-y-1">
-            <div className="flex justify-between"><span>المبلغ المُدخل (شامل {vatRate}%)</span><span className="font-mono font-bold text-blue-700">{fmt(amt,3)} ر.س</span></div>
-            <div className="flex justify-between"><span>الأساس (بدون ضريبة)</span><span className="font-mono">{fmt(baseAmt,3)} ر.س</span></div>
-            <div className="flex justify-between text-amber-700"><span>الضريبة المعكوسة</span><span className="font-mono font-bold">{fmt(vatAmt,3)} ر.س</span></div>
-            <div className="text-[10px] text-slate-400">سطر الضريبة يظهر تلقائياً في جدول القيد ↓</div>
-          </div>
-        )}
-      </div>
-
       {/* الأبعاد المحاسبية */}
       <div className="grid grid-cols-2 gap-5">
         <div>
@@ -4392,7 +4431,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
 
       {/* جدول القيد المحاسبي */}
       <div>
-        <AccountingTable lines={je_lines} vatSummary={vatSummary}/>
+        <AccountingTable lines={je_lines} taxTypes={taxTypes} onTaxChange={handleTaxChange}/>
         {je_lines.length===0&&<div className="border-2 border-dashed border-blue-200 rounded-2xl p-6 text-center text-slate-400 text-sm bg-blue-50/30">
           📒 اختر الصندوق والحساب المقابل وأدخل المبلغ لعرض التوجيه المحاسبي
         </div>}
@@ -4446,7 +4485,8 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       api.settings.listCostCenters().catch(()=>({data:[]})),
       api.settings.listProjects().catch(()=>({data:[]})),
       api.dimensions?.list?.().catch(()=>({data:[]})) ?? Promise.resolve({data:[]}),
-    ]).then(([a,v,b,cc,p,dims])=>{
+      api.accounting?.listTaxTypes?.().catch(()=>({data:[]})),
+    ]).then(([a,v,b,cc,p,dims,tt])=>{
       setAccounts(a?.data||[])
       setVendors(v?.data?.items||[])
       setBranches(b?.data||[])
@@ -4456,19 +4496,13 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       setDimDefs(allDims)
       const expDim=allDims.find(d=>d.code==='expense_classification')
       setExpClass(expDim?.values||[])
+      setTaxTypes(tt?.data||[])
     })
   },[])
 
   const selectedBank=accounts.find(a=>a.id===form.bank_account_id)
   const amt=parseFloat(form.amount)||0
-  const vatRate  = parseFloat(form.vat_rate)||0
-  // المبلغ المُدخل = شامل الضريبة → نعكس الضريبة منه
-  const baseAmt  = vatRate > 0
-    ? parseFloat((amt / (1 + vatRate/100)).toFixed(3))
-    : amt
-  const vatAmt   = parseFloat((amt - baseAmt).toFixed(3))
-  const totalAmt = amt  // الإجمالي = المبلغ المُدخل مباشرة
-  const vatAcc   = form.vat_account_code
+  // الضريبة تُختار من عمود الضريبة في جدول القيد
   const curBT = form.currency_code||'SAR'
   const dims  = {branch_code:form.branch_code||null, cost_center:form.cost_center||null, project_code:form.project_code||null, expense_classification_code:form.expense_classification_code||null}
   const vatLabelBT = vatRate>0 ? `VAT ${vatRate}%` : null
@@ -4476,16 +4510,35 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
     ? {account_code:vatAcc, account_name:`ضريبة القيمة المضافة (${vatRate}%)`, debit:0, credit:vatAmt, is_vat_line:true, currency_code:curBT}
     : {account_code:vatAcc, account_name:`ضريبة القيمة المضافة (${vatRate}%)`, debit:vatAmt, credit:0, is_vat_line:true, currency_code:curBT}
   ) : null
-  const je_lines = selectedBank&&form.counterpart_account&&amt>0 ? (type==='BR'?[
-    {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:totalAmt, credit:0,   currency_code:curBT},
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:0, credit:baseAmt, currency_code:curBT, vat_label:vatLabelBT, ...dims},
-    ...(vatLineBT?[vatLineBT]:[]),
-  ]:[
-    {account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:baseAmt, credit:0, currency_code:curBT, vat_label:vatLabelBT, ...dims},
-    ...(vatLineBT?[vatLineBT]:[]),
-    {account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:0, credit:totalAmt, currency_code:curBT},
-  ]) : []
-  const vatSummaryBT = vatRate>0 ? {vat_rate:vatRate, base_amt:amt, vat_amt:vatAmt, total_amt:totalAmt} : null
+  // je_lines في BankTxPage — state تفاعلية
+  useEffect(()=>{
+    if(!selectedBank||!form.counterpart_account||amt<=0){setJeLinesState([]);return}
+    const dims={branch_code:form.branch_code||null,cost_center:form.cost_center||null,
+      project_code:form.project_code||null,expense_classification_code:form.expense_classification_code||null}
+    const isBP = type==='BP'||type==='BT'
+    const baseLines = isBP ? [
+      {id:'cp', account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:amt, credit:0, currency_code:curBT, tax_type_code:'', ...dims},
+      {id:'gl', account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:0, credit:amt, currency_code:curBT, tax_type_code:''},
+    ] : [
+      {id:'gl', account_code:selectedBank.gl_account_code, account_name:selectedBank.account_name, debit:amt, credit:0, currency_code:curBT, tax_type_code:''},
+      {id:'cp', account_code:form.counterpart_account, account_name:form.counterpart_name||'الطرف المقابل', debit:0, credit:amt, currency_code:curBT, tax_type_code:'', ...dims},
+    ]
+    setJeLinesState(prev=>{
+      if(prev.length===0) return baseLines
+      return baseLines.map(bl=>{
+        const old = prev.find(p=>p.id===bl.id)
+        return old ? {...bl, tax_type_code:old.tax_type_code||''} : bl
+      })
+    })
+  },[selectedBank?.id, form.counterpart_account, amt, curBT, type, form.branch_code, form.cost_center])
+
+  const je_lines = jeLinesState
+  const handleTaxChangeBT = (lineId, taxCode) => {
+    setJeLinesState(prev=>{
+      const upd = prev.map(l=>l.id===lineId?{...l,tax_type_code:taxCode}:l)
+      return applyTaxToLines(upd, lineId, taxCode, taxTypes)
+    })
+  }
 
   const selectVendor=(v)=>{s('beneficiary_name',v.vendor_name);s('counterpart_account',v.gl_account_code||'210101');s('counterpart_name',v.vendor_name)}
 
@@ -4504,7 +4557,13 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
     if(!form.bank_account_id||!form.amount||!form.description){showToast('تأكد من الحساب والمبلغ والبيان','error');return}
     if(!validateDims()) return
     setSaving(true)
-    try{await api.treasury.createBankTransaction(form);onSaved(`تم إنشاء ${labels[type]} ✅`)}
+    const vatLineBT = je_lines.find(l=>l.is_tax_line)
+    const formDataBT = {
+      ...form,
+      vat_amount:       vatLineBT ? Math.abs(parseFloat(vatLineBT.debit||vatLineBT.credit||0)) : 0,
+      vat_account_code: vatLineBT ? vatLineBT.account_code : '',
+    }
+    try{await api.treasury.createBankTransaction(formDataBT);onSaved(`تم إنشاء ${labels[type]} ✅`)}
     catch(e){showToast(e.message,'error')}finally{setSaving(false)}
   }
 
@@ -4631,29 +4690,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
         <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.description} onChange={e=>s('description',e.target.value)}/>
       </div>
 
-            {/* ضريبة القيمة المضافة */}
-      <div className="border border-slate-200 rounded-xl p-3 bg-slate-50">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-700">🧾 ضريبة القيمة المضافة</span>
-          <div className="flex gap-1">
-            {['0','5','15'].map(r=>(
-              <button key={r} onClick={()=>s('vat_rate',r)}
-                className={`px-3 py-1.5 rounded-xl text-sm font-bold border-2 transition-all
-                  ${form.vat_rate===r?'bg-blue-600 text-white border-blue-600':'border-slate-200 text-slate-600 hover:border-blue-300'}`}>
-                {r}%
-              </button>
-            ))}
-          </div>
-        </div>
-        {vatRate>0&&(
-          <div className="mt-2 text-xs text-slate-500 bg-white rounded-lg p-2 border border-slate-200 space-y-1">
-            <div className="flex justify-between"><span>المبلغ المُدخل (شامل {vatRate}%)</span><span className="font-mono font-bold text-blue-700">{fmt(amt,3)} ر.س</span></div>
-            <div className="flex justify-between"><span>الأساس (بدون ضريبة)</span><span className="font-mono">{fmt(baseAmt,3)} ر.س</span></div>
-            <div className="flex justify-between text-amber-700"><span>الضريبة المعكوسة</span><span className="font-mono font-bold">{fmt(vatAmt,3)} ر.س</span></div>
-            <div className="text-[10px] text-slate-400">سطر الضريبة يظهر تلقائياً في جدول القيد ↓</div>
-          </div>
-        )}
-      </div>
+      
 
       <div className="grid grid-cols-3 gap-5">
         <div>
@@ -4686,7 +4723,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
         </select>
       </div>}
 
-      <AccountingTable lines={je_lines} vatSummary={vatSummaryBT}/>
+      <AccountingTable lines={je_lines} taxTypes={taxTypes} onTaxChange={handleTaxChangeBT}/>
       </>)}
 
       {/* أزرار — دائماً مرئية */}
