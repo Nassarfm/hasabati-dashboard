@@ -4795,6 +4795,8 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   })
   const [saving,setSaving]=useState(false)
   const [saveError,setSaveError]=useState('')
+  const s=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const {isOpen:periodOk,isClosed:periodClosed,checking:periodChecking,status:periodStatus,periodName:periodName_} = useFiscalPeriod(form.tx_date)
   const isFormOpen = periodOk
   const isBlocked  = ['closed','not_found','error'].includes(periodStatus)
   const isIdle     = periodStatus==='idle'
@@ -5255,6 +5257,8 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   })
   const [saving,setSaving]=useState(false)
   const [saveError,setSaveError]=useState('')
+  const s=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const {isOpen:periodOk,isClosed:periodClosed,checking:periodChecking,status:periodStatusBT,periodName:periodNameBT} = useFiscalPeriod(form.tx_date)
   const isFormOpenBT = periodOk
   const isBlockedBT  = ['closed','not_found','error'].includes(periodStatusBT)
   const isIdleBT     = periodStatusBT==='idle'
