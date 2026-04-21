@@ -521,6 +521,23 @@ export const api = {
     pendingDelivery:   ()         => get('/ap/reports/pending-delivery'),
     vendorPerformance: ()         => get('/ap/reports/vendor-performance'),
   },
+
+  // ══════════════════════════════════════════════════════
+  // 🤝 المتعاملون الماليون — Financial Parties
+  // ══════════════════════════════════════════════════════
+  parties: {
+    list:          (p={})   => get('/parties', p),
+    create:        (b)      => post('/parties', b),
+    get:           (id)     => get(`/parties/${id}`),
+    update:        (id, b)  => put(`/parties/${id}`, b),
+
+    // كشف الحساب الموحد
+    statement:     (id, p={}) => get(`/parties/${id}/statement`, p),
+    balance:       (id)       => get(`/parties/${id}/balance`),
+
+    // تقارير
+    openBalances:  (p={})   => get('/parties/reports/open-balances', p),
+  },
 }
 
 export default api
