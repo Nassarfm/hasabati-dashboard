@@ -307,10 +307,15 @@ function amountToWords(n) {
 }
 
 // ── Print ─────────────────────────────────────────────────
-function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
+function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimNames={}) {
   const types={RV:'سند قبض نقدي',PV:'سند صرف نقدي',BR:'قبض بنكي',BP:'دفعة بنكية',BT:'تحويل بنكي',IT:'تحويل داخلي'}
   const title=types[tx.tx_type]||'سند خزينة'
   const isPosted = tx.status==='posted'
+  // أسماء الأبعاد — يُعطى dimNames = {branch:'اسم الفرع', cost_center:'اسم المركز', project:'اسم المشروع'}
+  const branchLabel      = dimNames.branch      || tx.branch_name      || tx.branch_code      || '—'
+  const costCenterLabel  = dimNames.cost_center || tx.cost_center_name || tx.cost_center      || '—'
+  const projectLabel     = dimNames.project     || tx.project_name     || tx.project_code     || '—'
+  const counterpartLabel = tx.counterpart_name  || tx.party_name       || tx.beneficiary_name || '—'
   const w=window.open('','_blank','width=900,height=650')
   w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${title}</title>
   <style>
@@ -405,14 +410,14 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP') {
 
   <div class="info-grid">
     <div class="info-item"><div class="lbl">الحساب / الصندوق</div><div class="val">${bankName||'—'}</div></div>
-    <div class="info-item"><div class="lbl">الطرف المقابل</div><div class="val">${tx.party_name||tx.beneficiary_name||'—'}</div></div>
+    <div class="info-item"><div class="lbl">الحساب المقابل</div><div class="val">${counterpartLabel}</div></div>
     <div class="info-item"><div class="lbl">البيان</div><div class="val">${tx.description||'—'}</div></div>
     <div class="info-item"><div class="lbl">المرجع</div><div class="val">${tx.reference||'—'}</div></div>
     <div class="info-item"><div class="lbl">طريقة الدفع</div><div class="val">${tx.payment_method||'—'}</div></div>
     <div class="info-item"><div class="lbl">تاريخ السند</div><div class="val">${fmtDate(tx.tx_date)}</div></div>
-    ${tx.branch_code?`<div class="info-item"><div class="lbl">الفرع</div><div class="val">${tx.branch_code}</div></div>`:''}
-    ${tx.cost_center?`<div class="info-item"><div class="lbl">مركز التكلفة</div><div class="val">${tx.cost_center}</div></div>`:''}
-    ${tx.project_code?`<div class="info-item"><div class="lbl">المشروع</div><div class="val">${tx.project_code}</div></div>`:''}
+    ${tx.branch_code?`<div class="info-item"><div class="lbl">الفرع</div><div class="val">${branchLabel}</div></div>`:''}
+    ${tx.cost_center?`<div class="info-item"><div class="lbl">مركز التكلفة</div><div class="val">${costCenterLabel}</div></div>`:''}
+    ${tx.project_code?`<div class="info-item"><div class="lbl">المشروع</div><div class="val">${projectLabel}</div></div>`:''}
   </div>
 
   ${(()=>{
@@ -607,10 +612,10 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
   const apiPost  = isCashTx ? ()=>api.treasury.postCashTransaction(tx.id) : ()=>api.treasury.postBankTransaction(tx.id)
   const se=(k,v)=>setEditForm(p=>({...p,[k]:v}))
 
-  // دوال البحث عن الأسماء
-  const branchName  = code => branches.find(b=>b.code===code)?.name_ar || code || '—'
-  const ccName      = code => costCenters.find(c=>c.code===code)?.name_ar || code || '—'
-  const projName    = code => projects.find(p=>p.code===code)?.name_ar || code || '—'
+  // دوال البحث عن الأسماء — تبحث في code و branch_code و id
+  const branchName  = code => branches.find(b=>b.branch_code===code||b.code===code||b.id===code)?.branch_name||branches.find(b=>b.branch_code===code||b.code===code||b.id===code)?.name_ar||code||'—'
+  const ccName      = code => costCenters.find(c=>c.code===code||c.id===code)?.name_ar||costCenters.find(c=>c.code===code||c.id===code)?.name||code||'—'
+  const projName    = code => projects.find(p=>p.code===code||p.id===code)?.name_ar||projects.find(p=>p.code===code||p.id===code)?.name||code||'—'
   const expClsName  = code => {
     const found = expClass.find(e=>(e.code||e.id)===code)
     return found ? (found.name_ar||found.name||code) : (code||'—')
@@ -702,7 +707,14 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
     catch(e){showToast(e.message,'error')}
     finally{setLoading(false)}
   }
-  const doPrint=()=>printVoucher({...tx},je_lines,accLabel)
+  const doPrint=()=>{
+    const dimNames = {
+      branch:      branchName(tx.branch_code),
+      cost_center: ccName(tx.cost_center),
+      project:     projName(tx.project_code),
+    }
+    printVoucher({...tx},je_lines,accLabel,'حساباتي ERP',dimNames)
+  }
 
   // حساب توازن القيد
   const totalDR = je_lines.reduce((s,l)=>s+(parseFloat(l.debit)||0),0)
@@ -3816,17 +3828,33 @@ function TransfersListTab({showToast,openView}) {
   const [items,setItems]=useState([])
   const [accounts,setAccounts]=useState([])
   const [loading,setLoading]=useState(true)
+  const [error,setError]=useState(null)
   const [selected,setSelected]=useState(null)
 
   const load=useCallback(async()=>{
-    setLoading(true)
+    setLoading(true); setError(null)
     try{
       const [r,a]=await Promise.all([api.treasury.listInternalTransfers(),api.treasury.listBankAccounts()])
       setItems(r?.data?.items||[])
       setAccounts(a?.data||[])
-    }catch(e){showToast(e.message,'error')}finally{setLoading(false)}
+    }catch(e){
+      setError(e.message)
+      showToast('خطأ في التحويلات: '+e.message,'error')
+    }finally{setLoading(false)}
   },[])
   useEffect(()=>{load()},[load])
+
+  if(error && !loading) return (
+    <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center space-y-3">
+      <div className="text-3xl">❌</div>
+      <p className="font-semibold text-red-700">تعذّر تحميل التحويلات الداخلية</p>
+      <p className="text-xs font-mono text-red-500 bg-red-100 px-3 py-1.5 rounded-lg inline-block max-w-full break-all">{error}</p>
+      <div className="flex gap-3 justify-center">
+        <button onClick={load} className="px-5 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700">🔄 إعادة المحاولة</button>
+        <button onClick={()=>openView('new-transfer')} className="px-5 py-2 rounded-xl bg-purple-700 text-white text-sm font-semibold hover:bg-purple-800">🔄 تحويل جديد</button>
+      </div>
+    </div>
+  )
 
   return <div className="space-y-4">
     <div className="flex justify-end">
@@ -4736,14 +4764,21 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
 
   const je_lines = jeLines  // للتوافق مع AccountingTable
 
-  // التحقق من الأبعاد الإلزامية
+  // التحقق من الأبعاد الإلزامية مع تحديد الحقول المطلوبة
   const validateDims=()=>{
     const req=dimDefs.filter(d=>d.is_required)
+    const missing=[]
+    const errs={}
     for(const d of req){
-      if(d.code==='branch'         && !form.branch_code)                  {showToast('الفرع إلزامي','error');return false}
-      if(d.code==='cost_center'    && !form.cost_center)                  {showToast('مركز التكلفة إلزامي','error');return false}
-      if(d.code==='project'        && !form.project_code)                 {showToast('المشروع إلزامي','error');return false}
-      if(d.code==='expense_classification'&&!form.expense_classification_code){showToast('تصنيف المصروف إلزامي','error');return false}
+      if(d.code==='branch'                  && !form.branch_code)                  {missing.push('الفرع');              errs.branch_code=true}
+      if(d.code==='cost_center'             && !form.cost_center)                  {missing.push('مركز التكلفة');       errs.cost_center=true}
+      if(d.code==='project'                 && !form.project_code)                 {missing.push('المشروع');            errs.project_code=true}
+      if(d.code==='expense_classification'  && !form.expense_classification_code)  {missing.push('تصنيف المصروف');     errs.expense_classification_code=true}
+    }
+    if(missing.length>0){
+      setFieldErrors(prev=>({...prev,...errs}))
+      showToast(`الأبعاد التالية إلزامية: ${missing.join(' — ')}`, 'error')
+      return false
     }
     return true
   }
@@ -4772,7 +4807,12 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
 
   const handlePrint=()=>{
     if(!form.amount||!form.bank_account_id){showToast('أكمل البيانات أولاً','error');return}
-    printVoucher({...form,serial:'مسودة'},je_lines,selectedBank?.account_name||'—')
+    const dimNames = {
+      branch:      branches.find(b=>b.branch_code===form.branch_code||b.id===form.branch_code)?.branch_name||'',
+      cost_center: costCenters.find(c=>c.code===form.cost_center||c.id===form.cost_center)?.name||'',
+      project:     projects.find(p=>p.code===form.project_code||p.id===form.project_code)?.name||'',
+    }
+    printVoucher({...form,serial:'مسودة'},je_lines,selectedBank?.account_name||'—','حساباتي ERP',dimNames)
   }
 
   return <div className="max-w-4xl" dir="rtl">
