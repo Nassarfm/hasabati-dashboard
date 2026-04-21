@@ -124,7 +124,91 @@ function AccountPicker({value,onChange,label,required=false}) {
   </div>
 }
 
-// ── AccountingTable — جدول القيد المحاسبي ─────────────────
+// ── PartyPicker — بحث وتحديد المتعامل ──────────────────────
+function PartyPicker({value, onChange, label, role, required=false, placeholder}) {
+  const [search,  setSearch]  = useState('')
+  const [results, setResults] = useState([])
+  const [open,    setOpen]    = useState(false)
+  const [display, setDisplay] = useState('')
+  const [loading, setLoading] = useState(false)
+  const ref = useRef(null)
+
+  const ROLE_LABELS = {
+    employee_loan:'سلفة موظف', petty_cash_keeper:'أمين عهدة',
+    fund_keeper:'أمين صندوق', customer:'عميل', vendor:'مورد', other:'أخرى'
+  }
+  const TYPE_ICONS = { employee:'👤', customer:'🛍️', vendor:'🏢', other:'📋' }
+
+  useEffect(()=>{
+    const h=(e)=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)}
+    document.addEventListener('mousedown',h)
+    return()=>document.removeEventListener('mousedown',h)
+  },[])
+
+  const doSearch=useCallback(async(q)=>{
+    setLoading(true)
+    try{
+      const r = await api.parties.list({search:q||undefined, limit:40})
+      setResults(r?.data||[])
+    }catch{setResults([])}finally{setLoading(false)}
+  },[])
+
+  useEffect(()=>{if(!open)return;const t=setTimeout(()=>doSearch(search),200);return()=>clearTimeout(t)},[search,open])
+
+  const handleOpen=()=>{ setOpen(true); if(results.length===0) doSearch('') }
+
+  const select=(p)=>{
+    onChange(p.id, p.party_name_ar, p.party_code)
+    setDisplay(`${p.party_code} — ${p.party_name_ar}`)
+    setOpen(false); setSearch('')
+  }
+
+  const clear=()=>{ onChange('','',''); setDisplay('') }
+
+  return (
+    <div ref={ref} className="relative">
+      {label&&<label className="text-sm font-semibold text-slate-600 block mb-1.5 flex items-center gap-1.5">
+        🤝 {label}
+        {role&&<span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-medium">{ROLE_LABELS[role]||role}</span>}
+        {required&&<span className="text-red-500">*</span>}
+        <span className="text-xs text-slate-400 font-normal">/ Financial Party</span>
+      </label>}
+      <div className="flex gap-1">
+        <input readOnly value={display||(value||'')}
+          placeholder={placeholder||'اضغط للبحث في المتعاملين... / Search parties...'}
+          className="flex-1 border-2 border-teal-200 rounded-xl px-4 py-2.5 text-sm bg-teal-50/50 cursor-pointer hover:border-teal-400 focus:outline-none focus:border-teal-500 transition-colors"
+          onClick={handleOpen}/>
+        {value&&<button onClick={e=>{e.stopPropagation();clear()}}
+          className="px-3 border-2 border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-300">✕</button>}
+      </div>
+      {open&&<div className="absolute z-[400] top-full mt-1 right-0 left-0 bg-white border-2 border-teal-300 rounded-2xl shadow-2xl overflow-hidden" style={{minWidth:'100%',maxHeight:'320px',overflowY:'auto'}}>
+        <div className="p-3 border-b bg-teal-50 sticky top-0">
+          <input autoFocus className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-teal-400"
+            placeholder="ابحث بالاسم أو الكود أو رقم الهوية..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        {loading&&<div className="py-4 text-center text-sm text-slate-400">🔍 جارٍ البحث...</div>}
+        {!loading&&results.length===0&&<div className="py-6 text-center text-sm text-slate-400">{search?'لا توجد نتائج':'ابدأ الكتابة للبحث'}</div>}
+        {!loading&&results.map((p,i)=>(
+          <button key={p.id} onClick={()=>select(p)}
+            className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-teal-50 text-right border-b border-slate-50 last:border-0 transition-colors">
+            <span className="text-xl shrink-0">{TYPE_ICONS[p.party_type]||'📋'}</span>
+            <div className="flex-1 text-right">
+              <div className="text-slate-800 text-sm font-semibold">{p.party_name_ar}</div>
+              {p.party_name_en&&<div className="text-slate-400 text-xs">{p.party_name_en}</div>}
+            </div>
+            <span className="font-mono text-teal-700 font-bold text-xs bg-teal-100 px-2 py-1 rounded-lg shrink-0">{p.party_code}</span>
+          </button>
+        ))}
+        <div className="p-2 border-t bg-slate-50 text-center">
+          <span className="text-xs text-slate-400">لا تجد المتعامل؟ أضفه من </span>
+          <span className="text-xs text-teal-600 font-semibold">المتعاملون / Financial Parties</span>
+        </div>
+      </div>}
+    </div>
+  )
+}
+
+
 // ── جدول القيد المحاسبي الموحد — نفس تصميم قيد اليومية ──
 // ══════════════════════════════════════════════════════════
 // AccountingRow — سطر واحد معزول (نصيحة: component منفصل)
@@ -4706,7 +4790,8 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
     currency_code:'SAR', counterpart_account:'', counterpart_name:'',
     description:'', party_name:'', reference:'',
     payment_method:'cash', branch_code:'', cost_center:'', project_code:'',
-    expense_classification_code:'', notes:''
+    expense_classification_code:'', notes:'',
+    party_id:'', party_role: isPV ? 'vendor' : 'customer',
   })
   const [saving,setSaving]=useState(false)
   const [saveError,setSaveError]=useState('')
@@ -4943,9 +5028,42 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
           </select>
         </div>
         <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم الطرف</label>
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم الطرف / Party Name</label>
           <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.party_name} onChange={e=>s('party_name',e.target.value)} placeholder="اسم الشخص أو الجهة"/>
         </div>
+      </div>
+
+      {/* المتعامل المالي — Party Picker */}
+      <div className="bg-teal-50/40 rounded-2xl border border-teal-200 p-4 space-y-3">
+        <PartyPicker
+          label={isPV ? 'المتعامل / Paying Party' : 'المتعامل / Receiving Party'}
+          role={form.party_role}
+          value={form.party_id}
+          onChange={(id, name, code) => {
+            s('party_id', id)
+            if(name && !form.party_name) s('party_name', name)
+          }}
+          placeholder={isPV ? 'مورد أو موظف... Vendor / Employee' : 'عميل أو مورد... Customer / Vendor'}
+        />
+        {form.party_id && (
+          <div>
+            <label className="text-xs font-semibold text-slate-500 block mb-1.5">
+              دور المتعامل في هذا السند / Party Role
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {(isPV
+                ? [['vendor','مورد / Vendor'],['employee_loan','سلفة موظف / Employee Loan'],['other','أخرى / Other']]
+                : [['customer','عميل / Customer'],['vendor','مورد / Vendor'],['other','أخرى / Other']]
+              ).map(([val,lbl])=>(
+                <button key={val} type="button" onClick={()=>s('party_role',val)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all
+                    ${form.party_role===val?'bg-teal-700 text-white border-teal-700':'border-teal-200 text-teal-700 hover:bg-teal-50'}`}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* نوع الدفعة — PV فقط */}
@@ -5132,7 +5250,8 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
     beneficiary_name:'', beneficiary_iban:'', beneficiary_bank:'',
     description:'', reference:'', payment_method:'wire', check_number:'',
     branch_code:'', cost_center:'', project_code:'', expense_classification_code:'',
-    vat_rate:'0', vat_account_code:'', notes:''
+    vat_rate:'0', vat_account_code:'', notes:'',
+    party_id:'', party_role: type==='BR' ? 'customer' : 'vendor',
   })
   const [saving,setSaving]=useState(false)
   const [saveError,setSaveError]=useState('')
@@ -5313,9 +5432,37 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
           </select>
         </div>
         <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم المستفيد</label>
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم المستفيد / Beneficiary Name</label>
           <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.beneficiary_name} onChange={e=>s('beneficiary_name',e.target.value)}/>
         </div>
+      </div>
+
+      {/* المتعامل المالي / Financial Party */}
+      <div className="bg-teal-50/40 rounded-2xl border border-teal-200 p-4 space-y-3">
+        <PartyPicker
+          label={type==='BR' ? 'المتعامل / Paying Party' : 'المتعامل / Receiving Party'}
+          role={form.party_role}
+          value={form.party_id}
+          onChange={(id, name, code) => {
+            s('party_id', id)
+            if(name && !form.beneficiary_name) s('beneficiary_name', name)
+          }}
+          placeholder={type==='BR' ? 'عميل... Customer' : 'مورد أو موظف... Vendor / Employee'}
+        />
+        {form.party_id && (
+          <div className="flex gap-2 flex-wrap">
+            {(type==='BR'
+              ? [['customer','عميل / Customer'],['other','أخرى / Other']]
+              : [['vendor','مورد / Vendor'],['employee_loan','سلفة موظف / Employee Loan'],['other','أخرى / Other']]
+            ).map(([val,lbl])=>(
+              <button key={val} type="button" onClick={()=>s('party_role',val)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all
+                  ${form.party_role===val?'bg-teal-700 text-white border-teal-700':'border-teal-200 text-teal-700 hover:bg-teal-50'}`}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* مرجع بنكي ورقم شيك */}
@@ -5917,6 +6064,7 @@ function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
     custodian_name:      fund?.custodian_name      || '',
     custodian_email:     fund?.custodian_email     || '',
     custodian_phone:     fund?.custodian_phone     || '',
+    custodian_party_id:  fund?.custodian_party_id  || '',
     currency_code:       fund?.currency_code       || 'SAR',
     limit_amount:        fund?.limit_amount        || '',
     gl_account_code:     fund?.gl_account_code     || '',
@@ -5925,7 +6073,6 @@ function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
     replenish_threshold: fund?.replenish_threshold || 20,
     require_daily_close: fund?.require_daily_close ?? false,
     notes:               fund?.notes               || '',
-    // إغلاق / تعطيل
     is_active:           fund?.is_active           ?? true,
   })
   const [saving, setSaving] = useState(false)
@@ -6102,25 +6249,38 @@ function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
             </div>
           )}
 
-          {/* ── القسم 3: بيانات أمين الصندوق ── */}
-          <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-3">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">👤 بيانات المسؤول</div>
+          {/* ── القسم 3: بيانات أمين الصندوق / Custodian ── */}
+          <div className="bg-teal-50/40 rounded-2xl border border-teal-200 p-4 space-y-3">
+            <div className="text-xs font-bold text-teal-700 uppercase tracking-wider">👤 أمين الصندوق / Custodian</div>
+
+            {/* PartyPicker — ربط بالمتعاملين */}
+            <PartyPicker
+              label="المتعامل المسؤول / Responsible Party"
+              role="petty_cash_keeper"
+              value={form.custodian_party_id}
+              onChange={(id, name, code) => {
+                s('custodian_party_id', id)
+                if(name && !form.custodian_name) s('custodian_name', name)
+              }}
+              placeholder="ابحث عن أمين الصندوق... Search custodian..."
+            />
+
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">
-                  أمين الصندوق
+                  اسم الأمين / Custodian Name
                   <FieldTooltip text="الشخص المسؤول عن إدارة هذا الصندوق والمحاسب عليه"/>
                 </label>
                 <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   value={form.custodian_name} onChange={e=>s('custodian_name',e.target.value)} placeholder="اسم أمين الصندوق"/>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1.5">البريد الإلكتروني</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">البريد / Email</label>
                 <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   value={form.custodian_email} onChange={e=>s('custodian_email',e.target.value)} placeholder="email@example.com" dir="ltr"/>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1.5">رقم الجوال</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">الجوال / Phone</label>
                 <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   value={form.custodian_phone||''} onChange={e=>s('custodian_phone',e.target.value)} placeholder="05xxxxxxxx" dir="ltr"/>
               </div>
@@ -7435,7 +7595,7 @@ function CashFlowPage({showToast}) {
 
 
 function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
-  const [form,setForm]=useState({fund_id:'',expense_date:today(),description:'',reference:'',notes:''})
+  const [form,setForm]=useState({fund_id:'',expense_date:today(),description:'',reference:'',notes:'',party_id:'',party_role:'petty_cash_keeper'})
   const [lines,setLines]=useState([{id:1,expense_account:'',expense_account_name:'',description:'',amount:'',vat_amount:'',vendor_name:''}])
   const [saving,setSaving]=useState(false)
   const s=(k,v)=>setForm(p=>({...p,[k]:v}))
@@ -7457,12 +7617,24 @@ function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
   return <div className="fixed inset-0 z-[100] flex items-center justify-center" dir="rtl">
     <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}/>
     <div className="relative bg-white rounded-2xl shadow-2xl w-[900px] max-h-[92vh] overflow-y-auto p-6">
-      <div className="flex justify-between mb-5"><h3 className="font-bold text-xl">💸 مصروف نثري جديد</h3><button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">✕</button></div>
+      <div className="flex justify-between mb-5"><h3 className="font-bold text-xl">💸 مصروف نثري جديد / Petty Cash Expense</h3><button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">✕</button></div>
       <div className="grid grid-cols-3 gap-4 mb-4">
-        <div><label className="text-xs font-semibold text-slate-600 block mb-1">الصندوق *</label><select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.fund_id} onChange={e=>s('fund_id',e.target.value)}><option value="">— اختر —</option>{funds.map(f=><option key={f.id} value={f.id}>{f.fund_name}</option>)}</select></div>
-        <div><label className="text-xs font-semibold text-slate-600 block mb-1">التاريخ *</label><input type="date" className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.expense_date} onChange={e=>s('expense_date',e.target.value)}/><FiscalPeriodBadge date={form.expense_date}/></div>
-        <div><label className="text-xs font-semibold text-slate-600 block mb-1">المرجع</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.reference} onChange={e=>s('reference',e.target.value)}/></div>
-        <div className="col-span-3"><label className="text-xs font-semibold text-slate-600 block mb-1">البيان *</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.description} onChange={e=>s('description',e.target.value)}/></div>
+        <div><label className="text-xs font-semibold text-slate-600 block mb-1">الصندوق / Fund *</label><select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.fund_id} onChange={e=>s('fund_id',e.target.value)}><option value="">— اختر —</option>{funds.map(f=><option key={f.id} value={f.id}>{f.fund_name}</option>)}</select></div>
+        <div><label className="text-xs font-semibold text-slate-600 block mb-1">التاريخ / Date *</label><input type="date" className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.expense_date} onChange={e=>s('expense_date',e.target.value)}/><FiscalPeriodBadge date={form.expense_date}/></div>
+        <div><label className="text-xs font-semibold text-slate-600 block mb-1">المرجع / Reference</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.reference} onChange={e=>s('reference',e.target.value)}/></div>
+        <div className="col-span-2">
+          <label className="text-xs font-semibold text-slate-600 block mb-1">البيان / Description *</label>
+          <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.description} onChange={e=>s('description',e.target.value)}/>
+        </div>
+        <div>
+          <PartyPicker
+            label="المتعامل / Party"
+            role="petty_cash_keeper"
+            value={form.party_id}
+            onChange={(id)=>s('party_id',id)}
+            placeholder="أمين العهدة... Custodian"
+          />
+        </div>
       </div>
       <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mb-4">
         <div className="grid text-white text-xs font-semibold" style={{background:'#1e3a5f',gridTemplateColumns:'1.5fr 2fr 1.5fr 1fr 1fr 1.5fr 28px'}}>
