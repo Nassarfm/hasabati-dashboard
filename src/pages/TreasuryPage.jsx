@@ -28,12 +28,21 @@ function exportXLS(rows, headers, filename) {
 
 // ── Toast ─────────────────────────────────────────────────
 function Toast({msg,type,onClose}) {
-  useEffect(()=>{const t=setTimeout(onClose,5000);return()=>clearTimeout(t)},[])
-  return <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[300] px-6 py-3 rounded-2xl shadow-2xl text-sm font-semibold flex items-center gap-2
-    ${type==='error'?'bg-red-500 text-white':'bg-emerald-500 text-white'}`}>
-    {type==='error'?'❌':'✅'} {msg}
-    <button onClick={onClose} className="mr-2 opacity-70 hover:opacity-100">✕</button>
-  </div>
+  const duration = type==='error' ? 8000 : 4000  // الأخطاء تبقى أطول
+  useEffect(()=>{const t=setTimeout(onClose,duration);return()=>clearTimeout(t)},[])
+  return (
+    <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] max-w-xl w-full mx-4 px-5 py-4 rounded-2xl shadow-2xl text-sm font-semibold flex items-start gap-3
+      ${type==='error'
+        ? 'bg-red-600 text-white border-2 border-red-400'
+        : type==='warning'
+        ? 'bg-amber-500 text-white border-2 border-amber-300'
+        : 'bg-emerald-500 text-white border-2 border-emerald-300'}`}
+      dir="rtl">
+      <span className="text-xl shrink-0">{type==='error'?'❌':type==='warning'?'⚠️':'✅'}</span>
+      <span className="flex-1 leading-relaxed">{msg}</span>
+      <button onClick={onClose} className="shrink-0 opacity-70 hover:opacity-100 text-lg font-bold">✕</button>
+    </div>
+  )
 }
 
 // ── AccountPicker ────────────────────────────────────────
@@ -1112,15 +1121,17 @@ export default function TreasuryPage({ section: initSection='dashboard', sub: in
   const closeView = () => { setView('main'); setViewData(null) }
   const onSaved   = (msg) => { closeView(); showToast(msg||'تم الحفظ ✅') }
 
-  // صفحات الإدخال الكاملة
+  // صفحات الإدخال الكاملة — مع Toast دائماً
+  const ToastEl = toast ? <Toast msg={toast.msg} type={toast.type} onClose={()=>setToast(null)}/> : null
+
   if(view==='new-cash')
-    return <CashVoucherPage type={viewData||'PV'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+    return <>{ToastEl}<CashVoucherPage type={viewData||'PV'} onBack={closeView} onSaved={onSaved} showToast={showToast}/></>
   if(view==='new-bank-tx')
-    return <BankTxPage type={viewData||'BP'} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+    return <>{ToastEl}<BankTxPage type={viewData||'BP'} onBack={closeView} onSaved={onSaved} showToast={showToast}/></>
   if(view==='new-transfer')
-    return <InternalTransferPage onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+    return <>{ToastEl}<InternalTransferPage onBack={closeView} onSaved={onSaved} showToast={showToast}/></>
   if(view==='new-bank-account')
-    return <BankAccountPage account={viewData} onBack={closeView} onSaved={onSaved} showToast={showToast}/>
+    return <>{ToastEl}<BankAccountPage account={viewData} onBack={closeView} onSaved={onSaved} showToast={showToast}/></>
 
   const meta = SECTION_META[activePage] || SECTION_META.dashboard
 
@@ -4283,6 +4294,7 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
     require_daily_close: account?.require_daily_close||false,
     is_active:           account?.is_active!==false,
   })
+  const [saveError, setSaveError] = useState('')
   const [saving,setSaving]=useState(false)
   const [deactivateModal,setDeactivateModal]=useState(false)
   const [deactivateReason,setDeactivateReason]=useState('')
@@ -4333,15 +4345,16 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
 
   const save=async()=>{
     if(!validate()) return
+    setSaveError('')
     setSaving(true)
     try{
       if(isEdit) await api.treasury.updateBankAccount(account.id, form)
       else       await api.treasury.createBankAccount(form)
       onSaved('تم الحفظ ✅')
     }catch(e){
-      // نعرض رسالة الخطأ التفصيلية من الـ server
       const msg = e.message||'خطأ غير معروف'
-      showToast(`❌ فشل الحفظ: ${msg}`, 'error')
+      setSaveError(msg)                             // يُعرض inline في الصفحة
+      showToast(`❌ فشل الحفظ: ${msg}`, 'error')   // toast أيضاً
       console.error('[BankAccountPage save]', e)
     }
     finally{setSaving(false)}
@@ -4524,6 +4537,18 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
           <textarea rows={2} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none" value={form.notes} onChange={e=>s('notes',e.target.value)} placeholder="أي معلومات إضافية..."/>
         </div>
 
+        {/* رسالة خطأ الحفظ — تبقى حتى يُحل الخطأ */}
+        {saveError&&(
+          <div className="bg-red-50 border-2 border-red-400 rounded-2xl px-5 py-4 flex items-start gap-3" dir="rtl">
+            <span className="text-2xl shrink-0">❌</span>
+            <div>
+              <div className="font-bold text-red-700 text-sm mb-1">فشل الحفظ — يرجى مراجعة البيانات</div>
+              <div className="text-red-600 text-sm leading-relaxed">{saveError}</div>
+            </div>
+            <button onClick={()=>setSaveError('')} className="mr-auto text-red-400 hover:text-red-600 shrink-0 text-lg">✕</button>
+          </div>
+        )}
+
         {/* أزرار */}
         <div className="flex gap-3 pb-6">
           <button onClick={onBack} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
@@ -4684,8 +4709,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
     expense_classification_code:'', notes:''
   })
   const [saving,setSaving]=useState(false)
-  const s=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const {isOpen:periodOk,isClosed:periodClosed,checking:periodChecking,status:periodStatus,periodName:periodName_} = useFiscalPeriod(form.tx_date)
+  const [saveError,setSaveError]=useState('')
   const isFormOpen = periodOk
   const isBlocked  = ['closed','not_found','error'].includes(periodStatus)
   const isIdle     = periodStatus==='idle'
@@ -4811,7 +4835,9 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       onSaved(`تم إنشاء ${typeLabel} ✅`)
     }
     catch(e){
-      showToast(`❌ فشل الحفظ: ${e.message||'خطأ غير معروف'}`, 'error')
+      const msg = e.message||'خطأ غير معروف'
+      setSaveError(msg)
+      showToast(`❌ فشل الحفظ: ${msg}`, 'error')
       console.error('[CashVoucherPage save]', e)
     }
     finally{setSaving(false)}
@@ -5062,7 +5088,19 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       </div>
       </>)}
 
-      {/* أزرار — دائماً مرئية */}
+      {/* رسالة خطأ الحفظ inline — تبقى حتى يُحل الخطأ */}
+      {saveError&&(
+        <div className="bg-red-50 border-2 border-red-400 rounded-2xl px-5 py-4 flex items-start gap-3" dir="rtl">
+          <span className="text-2xl shrink-0">❌</span>
+          <div className="flex-1">
+            <div className="font-bold text-red-700 text-sm mb-1">فشل الحفظ — يرجى مراجعة البيانات</div>
+            <div className="text-red-600 text-sm leading-relaxed">{saveError}</div>
+          </div>
+          <button onClick={()=>setSaveError('')} className="text-red-400 hover:text-red-600 shrink-0 text-xl font-bold">✕</button>
+        </div>
+      )}
+
+      {/* أزرار — دائماً مرئية — CashVoucherPage */}
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
         {isFormOpen&&<button onClick={handlePrint} className="px-6 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold hover:bg-blue-50">🖨️ طباعة</button>}
@@ -5097,8 +5135,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
     vat_rate:'0', vat_account_code:'', notes:''
   })
   const [saving,setSaving]=useState(false)
-  const s=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const {isOpen:periodOk,isClosed:periodClosed,checking:periodChecking,status:periodStatusBT,periodName:periodNameBT} = useFiscalPeriod(form.tx_date)
+  const [saveError,setSaveError]=useState('')
   const isFormOpenBT = periodOk
   const isBlockedBT  = ['closed','not_found','error'].includes(periodStatusBT)
   const isIdleBT     = periodStatusBT==='idle'
@@ -5200,8 +5237,16 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       vat_amount:       vatLineBT ? Math.abs(parseFloat(vatLineBT.debit||vatLineBT.credit||0)) : 0,
       vat_account_code: vatLineBT ? vatLineBT.account_code : '',
     }
-    try{await api.treasury.createBankTransaction(formDataBT);onSaved(`تم إنشاء ${labels[type]} ✅`)}
-    catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+    try{
+      await api.treasury.createBankTransaction(formDataBT)
+      onSaved(`تم إنشاء ${labels[type]} ✅`)
+    }
+    catch(e){
+      const msg = e.message||'خطأ غير معروف'
+      setSaveError(msg)
+      showToast(`❌ فشل الحفظ: ${msg}`, 'error')
+    }
+    finally{setSaving(false)}
   }
 
   return <div className="max-w-4xl" dir="rtl">
@@ -5366,7 +5411,19 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       <AccountingTable lines={je_lines} taxTypes={taxTypes} onTaxChange={handleTaxChangeBT}/>
       </>)}
 
-      {/* أزرار — دائماً مرئية */}
+      {/* رسالة خطأ الحفظ inline */}
+      {saveError&&(
+        <div className="bg-red-50 border-2 border-red-400 rounded-2xl px-5 py-4 flex items-start gap-3" dir="rtl">
+          <span className="text-2xl shrink-0">❌</span>
+          <div className="flex-1">
+            <div className="font-bold text-red-700 text-sm mb-1">فشل الحفظ — يرجى مراجعة البيانات</div>
+            <div className="text-red-600 text-sm leading-relaxed">{saveError}</div>
+          </div>
+          <button onClick={()=>setSaveError('')} className="text-red-400 hover:text-red-600 shrink-0 text-xl font-bold">✕</button>
+        </div>
+      )}
+
+      {/* أزرار — دائماً مرئية — BankTxPage */}
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
         <button onClick={save} disabled={saving||isBlockedBT}
@@ -5399,6 +5456,7 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
   ]:[]
 
   const [fieldErrorsIT,setFieldErrorsIT]=useState({})
+  const [saveError,setSaveError]=useState('')
   const save=async()=>{
     const errs={}
     if(!form.from_account_id) errs.from_account_id=true
@@ -5415,14 +5473,16 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
     if(isBlockedIT){
       showToast('الفترة المالية مغلقة أو غير موجودة — تحقق من إعدادات الفترات المالية','error'); return
     }
+    setSaveError('')
     setSaving(true)
     try{
       await api.treasury.createInternalTransfer(form)
       onSaved('تم إنشاء التحويل الداخلي ✅')
     }
     catch(e){
-      const msg = e?.response?.data?.detail || e?.message || 'حدث خطأ غير متوقع'
-      showToast(msg,'error')
+      const msg = e.message || 'حدث خطأ غير متوقع'
+      setSaveError(msg)
+      showToast(`❌ فشل الحفظ: ${msg}`, 'error')
     }
     finally{setSaving(false)}
   }
@@ -5504,7 +5564,19 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
       <AccountingTable lines={je_lines}/>
       </>)}
 
-      {/* أزرار — دائماً مرئية */}
+      {/* رسالة خطأ الحفظ inline */}
+      {saveError&&(
+        <div className="bg-red-50 border-2 border-red-400 rounded-2xl px-5 py-4 flex items-start gap-3" dir="rtl">
+          <span className="text-2xl shrink-0">❌</span>
+          <div className="flex-1">
+            <div className="font-bold text-red-700 text-sm mb-1">فشل الحفظ — يرجى مراجعة البيانات</div>
+            <div className="text-red-600 text-sm leading-relaxed">{saveError}</div>
+          </div>
+          <button onClick={()=>setSaveError('')} className="text-red-400 hover:text-red-600 shrink-0 text-xl font-bold">✕</button>
+        </div>
+      )}
+
+      {/* أزرار — دائماً مرئية — InternalTransferPage */}
       <div className="flex gap-3 pt-2">
         <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">إلغاء</button>
         <button onClick={save} disabled={saving||isBlockedIT}
