@@ -2474,32 +2474,57 @@ function ReportsSection({showToast}) {
     setLoading(true); setData(null)
     try {
       let r
-      if(sub==='balances')           r = await api.treasury.cashPositionReport()
+      if(sub==='balances') {
+        r = await api.treasury.cashPositionReport()
+      }
       else if(sub==='account-statement') {
-        if(!filters.account_id){showToast('اختر حساباً أولاً','error');setLoading(false);return}
+        if(!filters.account_id){ showToast('يرجى اختيار حساب بنكي أولاً','error'); setLoading(false); return }
         r = await api.treasury.accountStatement({
           bank_account_id: filters.account_id,
-          date_from: filters.date_from,
-          date_to:   filters.date_to,
+          date_from: filters.date_from||undefined,
+          date_to:   filters.date_to||undefined,
         })
       }
       else if(sub==='monthly-flow') {
         r = await api.treasury.monthlyCashFlow({
           bank_account_id: filters.account_id||undefined,
-          year: filters.year||(new Date().getFullYear()),
-          month: filters.month||undefined,
+          year:  filters.year  || new Date().getFullYear(),
+          month: filters.month || undefined,
         })
       }
-      else if(sub==='check-aging')   r = await api.treasury.checkAging()
-      else if(sub==='cash-flow')     r = await api.treasury.listCashTransactions({status:'posted',date_from:filters.date_from,date_to:filters.date_to})
-      else if(sub==='bank-expenses') r = await api.treasury.listBankFees({
-          bank_account_id: filters.account_id||undefined,
-          date_from: filters.date_from, date_to: filters.date_to,
+      else if(sub==='check-aging') {
+        r = await api.treasury.checkAging()
+      }
+      else if(sub==='cash-flow') {
+        r = await api.treasury.listCashTransactions({
+          status: 'posted',
+          date_from: filters.date_from||undefined,
+          date_to:   filters.date_to||undefined,
         })
-      else if(sub==='inactive')      r = await api.treasury.inactiveAccounts()
-      else if(sub==='reconciliation') r = {data:{message:'استخدم التسوية في صفحة حركات البنك'}}
-      setData(r?.data||null)
-    } catch(e){ showToast(e.message,'error') }
+      }
+      else if(sub==='bank-expenses') {
+        r = await api.treasury.listBankFees({
+          bank_account_id: filters.account_id||undefined,
+          date_from: filters.date_from||undefined,
+          date_to:   filters.date_to||undefined,
+        })
+      }
+      else if(sub==='inactive') {
+        r = await api.treasury.inactiveAccounts()
+      }
+      else if(sub==='reconciliation') {
+        r = {data:{info:'يدوية من صفحة حركات البنك'}}
+      }
+
+      const raw = r?.data
+      // normalize: بعض الـ endpoints ترجع مباشرة array
+      if(Array.isArray(raw)) setData({items: raw})
+      else setData(raw || {})
+
+    } catch(e){
+      console.error('Report error:', e)
+      showToast(`خطأ في التقرير: ${e.message}`,'error')
+    }
     finally{ setLoading(false) }
   }
 
@@ -2793,37 +2818,77 @@ function ReportsSection({showToast}) {
       </div>
     })()}
 
-    {/* التدفقات النقدية / المصاريف البنكية */}
-    {(sub==='cash-flow'||sub==='bank-expenses') && data && <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div className="px-5 py-3 bg-blue-700 text-white font-bold text-sm">
-        {sub==='cash-flow'?'📈 تقرير التدفقات النقدية':'💸 تقرير المصاريف البنكية'}
+    {/* التدفقات النقدية */}
+    {sub==='cash-flow' && data && (
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-3 flex items-center justify-between" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+          <span className="text-white font-bold text-sm">📈 سندات القبض والصرف</span>
+          <span className="text-blue-200 text-xs">{(data.items||[]).length} سند</span>
+        </div>
+        {(data.items||[]).length===0
+          ? <div className="py-10 text-center text-slate-400 text-sm">لا توجد حركات في هذه الفترة</div>
+          : <><table className="w-full text-xs">
+            <thead><tr className="bg-slate-50 text-slate-500">
+              {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ','البيان'].map(h=>(
+                <th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {(data.items||[]).map((t,i)=>(
+                <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
+                  <td className="px-3 py-2.5 font-mono font-bold text-blue-700">{t.serial}</td>
+                  <td className="px-3 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${t.tx_type==='RV'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{t.tx_type==='RV'?'قبض':'صرف'}</span></td>
+                  <td className="px-3 py-2.5 text-slate-500">{fmtDate(t.tx_date)}</td>
+                  <td className="px-3 py-2.5 text-slate-600 truncate max-w-[120px]">{t.bank_account_name||'—'}</td>
+                  <td className="px-3 py-2.5 text-slate-600 truncate max-w-[100px]">{t.party_name||'—'}</td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-slate-800">{fmt(t.amount,3)}</td>
+                  <td className="px-3 py-2.5 text-slate-400 truncate max-w-[150px]">{t.description||'—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-5 py-3 bg-slate-50 border-t flex justify-between text-xs text-slate-500">
+            <span>{(data.items||[]).length} سند</span>
+            <span className="font-mono font-bold">{fmt((data.items||[]).reduce((s,t)=>s+parseFloat(t.amount||0),0),3)} ر.س</span>
+          </div></>}
       </div>
-      <table className="w-full text-xs">
-        <thead className="bg-slate-50 text-slate-500"><tr>
-          {['الرقم','التاريخ','النوع','الحساب','الطرف','المبلغ','البيان'].map(h=><th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>)}
-        </tr></thead>
-        <tbody>
-          {(data.items||[]).map((t,i)=>(
-            <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
-              <td className="px-3 py-2.5 font-mono text-blue-700 font-bold">{t.serial}</td>
-              <td className="px-3 py-2.5 text-slate-500">{fmtDate(t.tx_date)}</td>
-              <td className="px-3 py-2.5">{TX_META[t.tx_type]?.label||t.tx_type}</td>
-              <td className="px-3 py-2.5 text-slate-600 truncate">{t.bank_account_name||'—'}</td>
-              <td className="px-3 py-2.5 text-slate-600 truncate">{t.party_name||t.beneficiary_name||'—'}</td>
-              <td className="px-3 py-2.5 font-mono font-bold text-slate-800">{fmt(t.amount,3)}</td>
-              <td className="px-3 py-2.5 text-slate-500 truncate">{t.description}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
-          <tr><td colSpan={5} className="px-3 py-3 text-blue-800">الإجمالي</td>
-          <td className="px-3 py-3 font-mono text-blue-800">{fmt((data.items||[]).reduce((s,t)=>s+parseFloat(t.amount||0),0),3)}</td>
-          <td></td></tr>
-        </tfoot>
-      </table>
-    </div>}
+    )}
 
-    {/* الحسابات غير النشطة */}
+    {/* الرسوم والعمولات البنكية */}
+    {sub==='bank-expenses' && data && (
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-3 flex items-center justify-between" style={{background:'linear-gradient(135deg,#7c2d12,#b45309)'}}>
+          <span className="text-white font-bold text-sm">💸 الرسوم والعمولات البنكية</span>
+          <span className="text-amber-200 text-xs">{(data.items||[]).length} رسوم</span>
+        </div>
+        {(data.items||[]).length===0
+          ? <div className="py-10 text-center text-slate-400 text-sm">لا توجد رسوم بنكية مسجلة</div>
+          : <><table className="w-full text-xs">
+            <thead><tr className="bg-slate-50 text-slate-500">
+              {['التاريخ','الحساب البنكي','نوع الرسوم','المبلغ','البيان'].map(h=>(
+                <th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {(data.items||[]).map((t,i)=>(
+                <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
+                  <td className="px-3 py-2.5 text-slate-500">{fmtDate(t.fee_date||t.tx_date)}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{t.bank_account_name||'—'}</td>
+                  <td className="px-3 py-2.5"><span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold">{t.fee_type||'—'}</span></td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-red-700">{fmt(t.amount,3)}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{t.description||'—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-5 py-3 bg-amber-50 border-t flex justify-between text-xs">
+            <span className="text-slate-500">{(data.items||[]).length} رسوم</span>
+            <span className="font-mono font-bold text-red-700">إجمالي الرسوم: {fmt((data.items||[]).reduce((s,t)=>s+parseFloat(t.amount||0),0),3)} ر.س</span>
+          </div></>}
+      </div>
+    )}
+
+        {/* الحسابات غير النشطة */}
     {sub==='inactive' && data && <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-3 bg-slate-700 text-white font-bold text-sm">🔒 الحسابات غير النشطة</div>
       {(Array.isArray(data)?data:[]).length===0
@@ -2948,12 +3013,32 @@ function DashboardTab({showToast,setTab,openView}) {
     setLoading(true)
     try{
       const [d,f] = await Promise.all([
-        api.treasury.dashboard().catch(()=>null),
+        api.treasury.dashboard().catch(e=>{console.error('Dashboard API error:',e?.message||e);return null}),
         api.treasury.cashForecast({days:30}).catch(()=>null),
       ])
-      setData(d?.data)
-      setForecast(f?.data)
-    } catch(e){ showToast('تعذّر تحميل البيانات — تحقق من Railway logs','error') }
+      if(d?.data){
+        setData(d.data)
+      } else {
+        // نعرض بيانات فارغة بدلاً من رسالة خطأ
+        setData({
+          kpis:{total_balance:0,bank_balance:0,cash_balance:0,
+                bank_count:0,fund_count:0,petty_fund_count:0,
+                today_receipts:0,today_payments:0,
+                pending_vouchers:0,pending_bank_tx:0,
+                pending_expenses:0,pending_expense_amount:0,need_replenish:0},
+          accounts:[],alerts:[],
+          due_checks:{count:0,total:0},
+          cash_flow_chart:[],
+          reconciliation:{total_posted:0,reconciled:0,unreconciled:0,
+                          reconciled_amount:0,unreconciled_amount:0},
+          _empty:true,
+        })
+      }
+      setForecast(f?.data||null)
+    } catch(e){
+      console.error('Dashboard load error:',e)
+      showToast('تعذّر تحميل البيانات: '+e.message,'error')
+    }
     finally{ setLoading(false) }
   }
 
