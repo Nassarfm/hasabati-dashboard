@@ -3,17 +3,28 @@ import { useAuth } from '../AuthContext'
 import NotificationBell from './NotificationBell'
 
 const NAV_ITEMS = [
+  // ── الصفحة الرئيسية / Home ──────────────────────────────
+  {
+    id: 'dashboard',
+    icon: '🏠',
+    label: 'الرئيسية',
+    labelEn: 'Home',
+    color: 'blue',
+    sections: [],   // ينتقل مباشرة بدون قائمة
+  },
+  // ── المحاسبة / Accounting ────────────────────────────────
   {
     id: 'accounting',
     icon: '📊',
     label: 'المحاسبة',
+    labelEn: 'Accounting',
     color: 'blue',
     sections: [
       {
-        title: 'البيانات الأساسية',
+        title: 'البيانات الأساسية / Master Data',
         items: [
           { id:'coa',         icon:'📊', label:'دليل الحسابات',      sub:'Chart of Accounts' },
-          { id:'dimensions',  icon:'🏷️', label:'الأبعاد المحاسبية',  sub:'Dimensions' },
+          { id:'dimensions',  icon:'🏷️', label:'الأبعاد المحاسبية',  sub:'Accounting Dimensions' },
           { id:'branches',    icon:'🏢', label:'الفروع',              sub:'Branches' },
           { id:'costcenters', icon:'💰', label:'مراكز التكلفة',       sub:'Cost Centers' },
           { id:'projects',    icon:'📁', label:'المشاريع',            sub:'Projects' },
@@ -21,39 +32,40 @@ const NAV_ITEMS = [
         ]
       },
       {
-        title: 'القيود والمعاملات',
+        title: 'القيود والمعاملات / Journal Entries',
         items: [
-          { id:'journal',    icon:'📒', label:'القيود اليومية',      sub:'Journal Entries' },
+          { id:'journal',    icon:'📒', label:'القيود اليومية',      sub:'Daily Journal Entries' },
           { id:'reversing',  icon:'↩️', label:'القيود العكسية',      sub:'Reversing Entries' },
           { id:'recurring',  icon:'🔄', label:'القيود المتكررة',     sub:'Recurring Entries' },
           { id:'allocation', icon:'🔀', label:'قيد التوزيع',         sub:'Allocation Entry' },
         ]
       },
       {
-        title: 'التقارير المالية',
+        title: 'التقارير المالية / Financial Reports',
         items: [
           { id:'trialbal',           icon:'⚖️', label:'ميزان المراجعة',      sub:'Trial Balance' },
           { id:'ledger',             icon:'📋', label:'الأستاذ العام',       sub:'General Ledger' },
           { id:'income_report',      icon:'📈', label:'قائمة الدخل',         sub:'Income Statement' },
           { id:'balance_report',     icon:'🏛️', label:'الميزانية العمومية',  sub:'Balance Sheet' },
-          { id:'cashflow_report',    icon:'💵', label:'التدفقات النقدية',    sub:'Cash Flow' },
+          { id:'cashflow_report',    icon:'💵', label:'التدفقات النقدية',    sub:'Cash Flow Statement' },
           { id:'vat',                icon:'🧮', label:'ضريبة القيمة المضافة',sub:'VAT Return' },
           { id:'financial_analysis', icon:'📐', label:'التحليل المالي',      sub:'Financial Analysis' },
           { id:'compare_report',     icon:'🔀', label:'مقارنة الفترات',      sub:'Period Comparison' },
-          { id:'charts_report',      icon:'📉', label:'الرسوم البيانية',     sub:'Charts' },
+          { id:'charts_report',      icon:'📉', label:'الرسوم البيانية',     sub:'Financial Charts' },
         ]
       },
-
     ]
   },
+  // ── الخزينة والبنوك / Treasury & Banking ────────────────
   {
     id: 'treasury',
     icon: '🏦',
     label: 'الخزينة والبنوك',
+    labelEn: 'Treasury & Banking',
     color: 'emerald',
     sections: [
       {
-        title: 'البيانات الأساسية',
+        title: 'البيانات الأساسية / Master Data',
         items: [
           { id:'treasury',           icon:'📊', label:'لوحة تحكم الخزينة',   sub:'Treasury Dashboard' },
           { id:'treasury_accounts',  icon:'🏦', label:'الحسابات البنكية',     sub:'Bank Accounts & Cash Funds' },
@@ -62,166 +74,205 @@ const NAV_ITEMS = [
         ]
       },
       {
-        title: 'العمليات والمعاملات',
+        title: 'العمليات والمعاملات / Transactions',
         items: [
-          { id:'treasury_cash',       icon:'💵', label:'سندات القبض والصرف',  sub:'Cash Transactions PV/RV' },
-          { id:'treasury_bank',       icon:'🏛️', label:'حركات البنوك',         sub:'Bank Transactions BP/BR/BT' },
-          { id:'treasury_transfers',  icon:'🔄', label:'التحويلات الداخلية',   sub:'Internal Transfers IT' },
-          { id:'treasury_checks',     icon:'📝', label:'إدارة الشيكات',        sub:'Cheque Management' },
-          { id:'treasury_reconcile',  icon:'⚖️', label:'التسوية البنكية',      sub:'Bank Reconciliation' },
-          { id:'treasury_smart_import',icon:'🧠', label:'استيراد البنك الذكي', sub:'smart-import', section:'bank' },
-          { id:'treasury_gl_import',  icon:'📥', label:'استيراد من GL',         sub:'gl-import',    section:'bank' },
+          { id:'treasury_cash',        icon:'💵', label:'سندات القبض والصرف',  sub:'Cash Vouchers PV/RV' },
+          { id:'treasury_bank',        icon:'🏛️', label:'حركات البنوك',         sub:'Bank Transactions BP/BR/BT' },
+          { id:'treasury_transfers',   icon:'🔄', label:'التحويلات الداخلية',   sub:'Internal Transfers IT' },
+          { id:'treasury_checks',      icon:'📝', label:'إدارة الشيكات',        sub:'Cheque Management' },
+          { id:'treasury_reconcile',   icon:'⚖️', label:'التسوية البنكية',      sub:'Bank Reconciliation' },
+          { id:'treasury_smart_import',icon:'🧠', label:'استيراد البنك الذكي',  sub:'Smart Bank Import' },
+          { id:'treasury_gl_import',   icon:'📥', label:'استيراد من GL',         sub:'GL Import' },
         ]
       },
       {
-        title: 'التقارير والتحليل',
+        title: 'التقارير والتحليل / Reports & Analysis',
         items: [
-          { id:'treasury_reports',    icon:'📈', label:'تقارير الخزينة',        sub:'Treasury Reports' },
-          { id:'treasury_cash_flow',  icon:'💹', label:'التدفقات النقدية',      sub:'cash-flow',  section:'bank' },
-          { id:'treasury_activity',   icon:'🕐', label:'سجل الأحداث',           sub:'activity',   section:'cash' },
+          { id:'treasury_reports',   icon:'📈', label:'تقارير الخزينة',        sub:'Treasury Reports' },
+          { id:'treasury_cash_flow', icon:'💹', label:'التدفقات النقدية',      sub:'Cash Flow Report' },
+          { id:'treasury_activity',  icon:'🕐', label:'سجل الأحداث',           sub:'Activity Log' },
         ]
       },
     ]
   },
+  // ── المخزون / Inventory ──────────────────────────────────
   {
-    id: 'settings',
-    icon: '⚙️',
-    label: 'الإعدادات',
-    color: 'slate',
+    id: 'inventory',
+    icon: '📦',
+    label: 'المخزون',
+    labelEn: 'Inventory',
+    color: 'amber',
     sections: [
       {
-        title: 'المنشأة والمستخدمين',
+        title: 'الإعداد / Setup',
         items: [
-          { id:'company_settings',  icon:'🏢', label:'إعدادات المنشأة',         sub:'Company Settings' },
-          { id:'users',             icon:'👥', label:'إدارة المستخدمين',        sub:'User Management' },
-          { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات',      sub:'Roles & Permissions' },
-          { id:'audit_trail',       icon:'🔍', label:'سجل النشاط والتدقيق',    sub:'Audit Trail' },
+          { id:'inventory',       icon:'📊', label:'لوحة تحكم المخزون',   sub:'Inventory Dashboard' },
+          { id:'inv_items',       icon:'🏷️', label:'بطاقات الأصناف',      sub:'Item Master' },
+          { id:'warehouses',      icon:'🏭', label:'المستودعات',           sub:'Warehouses' },
         ]
       },
       {
-        title: 'الإعدادات المالية',
+        title: 'الحركات / Transactions',
         items: [
-          { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة (VAT)',   sub:'VAT Settings' },
-          { id:'currency_settings', icon:'💱', label:'العملات وأسعار الصرف',    sub:'Multi Currency' },
-          { id:'number_series',     icon:'🔢', label:'الترقيم التلقائي',        sub:'Number Series' },
-          { id:'localization',      icon:'🌍', label:'الإقليمية والتوطين',      sub:'Localization' },
+          { id:'inv_transactions',icon:'📋', label:'الحركات المخزنية',    sub:'Inventory Transactions' },
+          { id:'inv_count',       icon:'🔍', label:'الجرد الفعلي',         sub:'Physical Count' },
+          { id:'inv_inquiry',     icon:'🔎', label:'استعلام المخزون',      sub:'Stock Inquiry' },
+        ]
+      },
+      {
+        title: 'التقارير / Reports',
+        items: [
+          { id:'inv_balance',   icon:'⚖️', label:'رصيد المخزون',         sub:'Stock Balance Report' },
+          { id:'inv_valuation', icon:'💰', label:'تقييم المخزون',         sub:'Stock Valuation' },
+          { id:'inv_aging',     icon:'⏱️', label:'تقادم المخزون',         sub:'Aging Report' },
         ]
       },
     ]
   },
-  {
-    id: 'sales',
-    icon: '🧾',
-    label: 'المبيعات',
-    color: 'orange',
-    sections: [
-      {
-        title: 'إدارة العملاء',
-        items: [
-          { id:'sales',     icon:'📊', label:'لوحة تحكم المبيعات',    sub:'Sales Dashboard' },
-          { id:'customers', icon:'👤', label:'العملاء',                sub:'Customers' },
-          { id:'sales_reps',icon:'🤝', label:'مندوبو المبيعات',        sub:'Sales Representatives' },
-        ]
-      },
-      {
-        title: 'دورة المبيعات',
-        items: [
-          { id:'quotations', icon:'📋', label:'عروض الأسعار',          sub:'Quotations' },
-          { id:'sales_invoices',icon:'🧾',label:'فواتير المبيعات',     sub:'Sales Invoices' },
-          { id:'credit_notes', icon:'↩️', label:'الإشعارات الدائنة',   sub:'Credit Notes' },
-          { id:'sales_receipts',icon:'💵',label:'المقبوضات',           sub:'Receipts' },
-        ]
-      },
-      {
-        title: 'التقارير',
-        items: [
-          { id:'sales_aging',  icon:'⏱️', label:'أعمار الديون',        sub:'Aging Report' },
-          { id:'sales_report', icon:'📈', label:'تقارير المبيعات',     sub:'Sales Reports' },
-          { id:'vat_sales',    icon:'🧮', label:'تقرير ضريبة المبيعات',sub:'VAT Sales Report' },
-        ]
-      },
-    ]
-  },
+  // ── المشتريات / Purchases ────────────────────────────────
   {
     id: 'purchases',
     icon: '🛒',
     label: 'المشتريات',
+    labelEn: 'Purchases',
     color: 'purple',
     sections: [
       {
-        title: 'إدارة الموردين',
+        title: 'إدارة الموردين / Vendor Management',
         items: [
           { id:'purchases',  icon:'📊', label:'لوحة تحكم المشتريات',  sub:'Purchases Dashboard' },
           { id:'vendors',    icon:'🏢', label:'الموردون',              sub:'Vendors' },
         ]
       },
       {
-        title: 'دورة الشراء',
+        title: 'دورة الشراء / Purchase Cycle',
         items: [
-          { id:'purchase_requests', icon:'📝', label:'طلبات الشراء',   sub:'Purchase Requests' },
-          { id:'purchase_orders',   icon:'📋', label:'أوامر الشراء',   sub:'Purchase Orders' },
-          { id:'grn',               icon:'📥', label:'إشعارات الاستلام', sub:'Goods Receipt' },
-          { id:'ap_invoices',       icon:'🧾', label:'فواتير الموردين', sub:'AP Invoices' },
-          { id:'ap_payments',       icon:'💸', label:'دفعات الموردين', sub:'AP Payments' },
+          { id:'purchase_requests', icon:'📝', label:'طلبات الشراء',    sub:'Purchase Requests' },
+          { id:'purchase_orders',   icon:'📋', label:'أوامر الشراء',    sub:'Purchase Orders' },
+          { id:'grn',               icon:'📥', label:'إشعارات الاستلام', sub:'Goods Receipt (GRN)' },
+          { id:'ap_invoices',       icon:'🧾', label:'فواتير الموردين',  sub:'AP Invoices' },
+          { id:'ap_payments',       icon:'💸', label:'دفعات الموردين',   sub:'AP Payments' },
         ]
       },
       {
-        title: 'التقارير',
+        title: 'التقارير / Reports',
         items: [
-          { id:'ap_aging',     icon:'⏱️', label:'أعمار الديون',        sub:'AP Aging' },
-          { id:'pending_del',  icon:'🚚', label:'توريد معلق',          sub:'Pending Delivery' },
-          { id:'vendor_perf',  icon:'⭐', label:'أداء الموردين',       sub:'Vendor Performance' },
+          { id:'ap_aging',    icon:'⏱️', label:'أعمار الديون',          sub:'AP Aging Report' },
+          { id:'pending_del', icon:'🚚', label:'توريد معلق',             sub:'Pending Delivery' },
+          { id:'vendor_perf', icon:'⭐', label:'أداء الموردين',          sub:'Vendor Performance' },
         ]
       },
     ]
   },
+  // ── المبيعات / Sales ─────────────────────────────────────
   {
-    id: 'inventory',
-    icon: '📦',
-    label: 'المخزون',
-    color: 'amber',
+    id: 'sales',
+    icon: '🧾',
+    label: 'المبيعات',
+    labelEn: 'Sales',
+    color: 'orange',
     sections: [
       {
-        title: 'الإعداد',
+        title: 'إدارة العملاء / Customer Management',
         items: [
-          { id:'inventory',    icon:'📊', label:'لوحة تحكم المخزون',   sub:'Inventory Dashboard' },
-          { id:'inv_items',    icon:'🏷️', label:'بطاقات الأصناف',      sub:'Item Master' },
-          { id:'warehouses',   icon:'🏭', label:'المستودعات',           sub:'Warehouses' },
+          { id:'sales',      icon:'📊', label:'لوحة تحكم المبيعات',    sub:'Sales Dashboard' },
+          { id:'customers',  icon:'👤', label:'العملاء',                sub:'Customers' },
+          { id:'sales_reps', icon:'🤝', label:'مندوبو المبيعات',        sub:'Sales Representatives' },
         ]
       },
       {
-        title: 'الحركات',
+        title: 'دورة المبيعات / Sales Cycle',
         items: [
-          { id:'inv_transactions',icon:'📋',label:'الحركات المخزنية',  sub:'Inventory Transactions' },
-          { id:'inv_count',    icon:'🔍', label:'الجرد الفعلي',         sub:'Physical Count' },
-          { id:'inv_inquiry',  icon:'🔎', label:'استعلام المخزون',      sub:'Stock Inquiry' },
+          { id:'quotations',    icon:'📋', label:'عروض الأسعار',        sub:'Quotations' },
+          { id:'sales_invoices',icon:'🧾', label:'فواتير المبيعات',     sub:'Sales Invoices' },
+          { id:'credit_notes',  icon:'↩️', label:'الإشعارات الدائنة',   sub:'Credit Notes' },
+          { id:'sales_receipts',icon:'💵', label:'المقبوضات',           sub:'Customer Receipts' },
         ]
       },
       {
-        title: 'التقارير',
+        title: 'التقارير / Reports',
         items: [
-          { id:'inv_balance',   icon:'⚖️', label:'رصيد المخزون',       sub:'Stock Balance' },
-          { id:'inv_valuation', icon:'💰', label:'تقييم المخزون',      sub:'Valuation' },
-          { id:'inv_aging',     icon:'⏱️', label:'تقادم المخزون',      sub:'Aging Report' },
+          { id:'sales_aging',  icon:'⏱️', label:'أعمار الديون',         sub:'AR Aging Report' },
+          { id:'sales_report', icon:'📈', label:'تقارير المبيعات',      sub:'Sales Reports' },
+          { id:'vat_sales',    icon:'🧮', label:'تقرير ضريبة المبيعات', sub:'VAT Sales Report' },
         ]
       },
     ]
   },
-  {
-    id: 'hr',
-    icon: '👥',
-    label: 'الموارد البشرية',
-    color: 'pink',
-    soon: true,
-    sections: []
-  },
+  // ── الأصول الثابتة / Fixed Assets ───────────────────────
   {
     id: 'assets',
     icon: '🏗️',
     label: 'الأصول الثابتة',
+    labelEn: 'Fixed Assets',
     color: 'slate',
     soon: true,
     sections: []
+  },
+  // ── الموارد البشرية / Human Resources ───────────────────
+  {
+    id: 'hr',
+    icon: '👥',
+    label: 'الموارد البشرية',
+    labelEn: 'Human Resources',
+    color: 'pink',
+    soon: true,
+    sections: []
+  },
+  // ── الرواتب / Payroll ────────────────────────────────────
+  {
+    id: 'payroll',
+    icon: '💼',
+    label: 'الرواتب',
+    labelEn: 'Payroll',
+    color: 'pink',
+    soon: true,
+    sections: []
+  },
+  // ── المتعاملون / Financial Parties ──────────────────────
+  {
+    id: 'parties',
+    icon: '🤝',
+    label: 'المتعاملون',
+    labelEn: 'Financial Parties',
+    color: 'teal',
+    sections: [
+      {
+        title: 'إدارة المتعاملين / Party Management',
+        items: [
+          { id:'parties',          icon:'🤝', label:'قائمة المتعاملين',    sub:'Financial Parties List' },
+          { id:'parties_balances', icon:'💰', label:'الأرصدة المفتوحة',    sub:'Open Balances Report' },
+        ]
+      },
+    ]
+  },
+  // ── الإعدادات / Settings ─────────────────────────────────
+  {
+    id: 'settings',
+    icon: '⚙️',
+    label: 'الإعدادات',
+    labelEn: 'Settings',
+    color: 'slate',
+    sections: [
+      {
+        title: 'المنشأة والمستخدمين / Company & Users',
+        items: [
+          { id:'company_settings',  icon:'🏢', label:'إعدادات المنشأة',        sub:'Company Settings' },
+          { id:'users',             icon:'👥', label:'إدارة المستخدمين',       sub:'User Management' },
+          { id:'roles_permissions', icon:'🔐', label:'الأدوار والصلاحيات',     sub:'Roles & Permissions' },
+          { id:'audit_trail',       icon:'🔍', label:'سجل النشاط والتدقيق',   sub:'Audit Trail' },
+        ]
+      },
+      {
+        title: 'الإعدادات المالية / Financial Settings',
+        items: [
+          { id:'vat_settings',      icon:'🧾', label:'إعدادات الضريبة (VAT)',  sub:'VAT Settings' },
+          { id:'currency_settings', icon:'💱', label:'العملات وأسعار الصرف',   sub:'Multi Currency' },
+          { id:'number_series',     icon:'🔢', label:'الترقيم التلقائي',       sub:'Number Series' },
+          { id:'localization',      icon:'🌍', label:'الإقليمية والتوطين',     sub:'Localization' },
+        ]
+      },
+    ]
   },
 ]
 
@@ -233,6 +284,7 @@ const ACCENT = {
   amber:   'from-amber-700 to-amber-500',
   pink:    'from-pink-700 to-pink-500',
   slate:   'from-slate-700 to-slate-500',
+  teal:    'from-teal-700 to-teal-500',
 }
 
 export default function TopNav({ activePage, onNavigate }) {
@@ -258,12 +310,16 @@ export default function TopNav({ activePage, onNavigate }) {
 
   // تحديد الوحدة النشطة
   const getActiveModule = () => {
+    if (activePage === 'dashboard') return 'dashboard'
     if (activePage === 'treasury' || activePage?.startsWith('treasury_')) return 'treasury'
-    if (['sales'].includes(activePage)) return 'sales'
-    if (['purchases'].includes(activePage)) return 'purchases'
-    if (['inventory'].includes(activePage)) return 'inventory'
+    if (['sales','customers','quotations','sales_invoices','credit_notes','sales_receipts','sales_aging','sales_report','vat_sales','sales_reps'].includes(activePage)) return 'sales'
+    if (['purchases','vendors','purchase_requests','purchase_orders','grn','ap_invoices','ap_payments','ap_aging','pending_del','vendor_perf'].includes(activePage)) return 'purchases'
+    if (['inventory','inv_items','warehouses','inv_transactions','inv_count','inv_inquiry','inv_balance','inv_valuation','inv_aging'].includes(activePage)) return 'inventory'
     if (['hr'].includes(activePage)) return 'hr'
     if (['assets'].includes(activePage)) return 'assets'
+    if (['payroll'].includes(activePage)) return 'payroll'
+    if (activePage === 'parties' || activePage?.startsWith('parties_')) return 'parties'
+    if (['company_settings','users','roles_permissions','audit_trail','vat_settings','currency_settings','number_series','localization'].includes(activePage)) return 'settings'
     return 'accounting'
   }
   const activeModule = getActiveModule()
