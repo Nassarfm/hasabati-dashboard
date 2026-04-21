@@ -1160,8 +1160,6 @@ function CashFocusedPage({showToast, openView}) {
   const [filters,setFilters]   = useState({tx_type:'',status:'',date_from:'',date_to:''})
   const [selectedIds,setSelectedIds]     = useState(new Set())
   const [bulkPosting,setBulkPosting]     = useState(false)
-  const [reconciledIds,setReconciledIds] = useState(new Set())
-  const [showReconReport,setShowReconReport] = useState(false)
 
   const load = useCallback(async()=>{
     setLoading(true)
@@ -1187,14 +1185,6 @@ function CashFocusedPage({showToast, openView}) {
 
   const doPost   = async(id)=>{try{await api.treasury.postCashTransaction(id);load();showToast('تم الترحيل ✅')}catch(e){showToast(e.message,'error')}}
   const doCancel = async(id)=>{try{await api.treasury.cancelCashTransaction(id);load();showToast('تم الإلغاء')}catch(e){showToast(e.message,'error')}}
-
-  const handleReconcile = (id) => {
-    setReconciledIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
 
   const handleBulkPost = async()=>{
     if(!selectedIds.size) return
@@ -1281,43 +1271,12 @@ function CashFocusedPage({showToast, openView}) {
         </div>
       )}
 
-      {/* الجدول */}
-      {/* زر تقرير التسوية */}
-      {reconciledIds.size>0&&(
-        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3">
-          <div className="flex items-center gap-3">
-            <span className="text-emerald-700 font-semibold text-sm">✅ {reconciledIds.size} حركة مُسوَّاة مع كشف البنك</span>
-            <span className="text-emerald-600 text-xs">
-              إجمالي: {fmt(items.filter(i=>reconciledIds.has(i.id)).reduce((s,i)=>s+parseFloat(i.amount||0),0),3)} ر.س
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={()=>setShowReconReport(true)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700">
-              📋 تقرير التسوية
-            </button>
-            <button onClick={()=>setReconciledIds(new Set())}
-              className="px-3 py-2 rounded-xl text-xs text-emerald-600 border border-emerald-300 hover:bg-emerald-50">
-              مسح
-            </button>
-          </div>
-        </div>
-      )}
-
+      {/* الجدول — بدون عمود التسوية (التسوية فقط للمعاملات البنكية) */}
       <TxTable items={items} total={total} loading={loading} onView={setSelected}
         selectable selectedIds={selectedIds}
         onSelectAll={()=>setSelectedIds(s=>s.size===items.filter(i=>i.status==='draft').length?new Set():new Set(items.filter(i=>i.status==='draft').map(i=>i.id)))}
-        onSelectOne={(id)=>setSelectedIds(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}
-        onReconcile={handleReconcile}
-        reconciledIds={reconciledIds}/>
+        onSelectOne={(id)=>setSelectedIds(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}/>
 
-      {/* تقرير التسوية البنكية */}
-      {showReconReport&&(
-        <ReconciliationReport
-          items={items.filter(i=>reconciledIds.has(i.id))}
-          pendingItems={items.filter(i=>i.status==='posted'&&!reconciledIds.has(i.id))}
-          onClose={()=>setShowReconReport(false)}/>
-      )}
       <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
         onClose={()=>setSelected(null)}
         onPosted={()=>{setSelected(null);load()}}
@@ -4167,12 +4126,13 @@ ${pendingItems.length>0?`
 
 
 function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,onSelectOne,onReconcile,reconciledIds=new Set()}) {
+  const showRecon = !!onReconcile  // عمود التسوية فقط عند تمرير onReconcile
   const cols = selectable
-    ? '2rem 1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr 3rem'
-    : '1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr 3rem'
+    ? `2rem 1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr${showRecon?' 3rem':''}`
+    : `1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr${showRecon?' 3rem':''}`
   const draftItems = items.filter(x=>x.status==='draft')
   const allDraftSelected = draftItems.length>0 && draftItems.every(x=>selectedIds?.has(x.id))
-  const reconciledCount = items.filter(i=>reconciledIds.has(i.id)).length
+  const reconciledCount = showRecon ? items.filter(i=>reconciledIds.has(i.id)).length : 0
   return <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
     <div className="grid text-white text-xs font-semibold" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:cols}}>
       {selectable && (
@@ -4184,10 +4144,10 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
         </div>
       )}
       {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ','الحالة'].map(h=><div key={h} className="px-3 py-3">{h}</div>)}
-      <div className="px-2 py-3 text-center text-[11px] leading-tight">
+      {showRecon && <div className="px-2 py-3 text-center text-[11px] leading-tight">
         <div>تسوية</div>
         <div className="text-blue-300 font-normal">{reconciledCount>0?`${reconciledCount}✓`:''}</div>
-      </div>
+      </div>}
     </div>
     {loading?<div className="py-10 text-center text-slate-400">جارٍ التحميل...</div>:
     items.length===0?<div className="py-12 text-center text-slate-400">لا توجد مستندات</div>:
@@ -4196,7 +4156,7 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
       const isDraft    = item.status==='draft'
       const isPosted   = item.status==='posted'
       const isSelected = selectedIds?.has(item.id)
-      const isReconciled = reconciledIds.has(item.id)
+      const isReconciled = showRecon && reconciledIds.has(item.id)
       return <div key={item.id}
         onClick={()=>onView&&onView(item)}
         className={`grid items-center border-b border-slate-50 text-xs cursor-pointer hover:bg-blue-50/40 transition-colors
@@ -4222,12 +4182,12 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
         <div className="px-3 py-3 text-slate-600 truncate">{item.party_name||item.beneficiary_name||'—'}</div>
         <div className="px-3 py-3 font-mono font-bold text-slate-800">{fmt(item.amount,3)}</div>
         <div className="px-3 py-3"><StatusBadge status={item.status}/></div>
-        {/* عمود التسوية البنكية — فقط للمُرحَّل */}
-        <div className="px-2 py-3 flex items-center justify-center" onClick={e=>e.stopPropagation()}>
+        {/* عمود التسوية — فقط للمعاملات البنكية */}
+        {showRecon && <div className="px-2 py-3 flex items-center justify-center" onClick={e=>e.stopPropagation()}>
           {isPosted ? (
             <button
               title={isReconciled?'تم التسوية — انقر للإلغاء':'ظهر في كشف البنك — انقر للتسوية'}
-              onClick={()=>onReconcile&&onReconcile(item.id)}
+              onClick={()=>onReconcile(item.id)}
               className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all
                 ${isReconciled
                   ?'bg-emerald-500 border-emerald-500 text-white shadow-sm'
@@ -4237,7 +4197,7 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
           ) : (
             <span className="text-slate-200 text-[10px]">—</span>
           )}
-        </div>
+        </div>}
       </div>
     })}
     <div className="px-4 py-2.5 bg-slate-50 border-t flex justify-between text-xs text-slate-500">
@@ -4272,12 +4232,13 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
   const [fundType, setFundType] = useState(account?.account_sub_type||'main')
   const [isCashFund, setIsCashFund] = useState(initType === 'cash_fund')
   const DAILY_TYPES = ['sales','cashier']
+  const [errors, setErrors] = useState({})
 
   const [form,setForm]=useState({
     account_code:        account?.account_code||'',
     account_name:        account?.account_name||'',
     account_type:        initType,
-    account_sub_type:    account?.account_sub_type||'main',
+    account_sub_type:    account?.account_sub_type||'',
     bank_name:           account?.bank_name||'',
     bank_branch:         account?.bank_branch||'',
     account_number:      account?.account_number||'',
@@ -4297,7 +4258,7 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
   const [saving,setSaving]=useState(false)
   const [deactivateModal,setDeactivateModal]=useState(false)
   const [deactivateReason,setDeactivateReason]=useState('')
-  const s=(k,v)=>setForm(p=>({...p,[k]:v}))
+  const s=(k,v)=>{setForm(p=>({...p,[k]:v}));setErrors(e=>({...e,[k]:''}))}
 
   const FUND_TYPES_LIST = [
     {value:'main',      label:'🏛️ رئيسي',     desc:'الصندوق الرئيسي للمنشأة'},
@@ -4307,8 +4268,18 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
     {value:'custodian', label:'👤 أمين',       desc:'صندوق شخصي لموظف محدد'},
   ]
 
+  const BANK_SUB_TYPES = [
+    {value:'checking',   label:'🏦 جاري',       desc:'حساب جاري للعمليات اليومية'},
+    {value:'savings',    label:'💰 توفير',       desc:'حساب توفير'},
+    {value:'investment', label:'📈 استثمار',     desc:'حساب استثمار وودائع'},
+    {value:'payroll',    label:'👥 رواتب',       desc:'مخصص لصرف الرواتب'},
+    {value:'client',     label:'🤝 عميل',        desc:'حساب عميل أو ضمان'},
+    {value:'other',      label:'📋 أخرى',        desc:'أنواع أخرى'},
+  ]
+
   const onTypeChange=(val)=>{
     s('account_type',val)
+    s('account_sub_type','')
     setIsCashFund(val==='cash_fund')
   }
   const onFundTypeChange=(val)=>{
@@ -4319,10 +4290,21 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
   }
   const needsDailyClose = DAILY_TYPES.includes(form.account_sub_type) && isCashFund
 
-  const save=async()=>{
-    if(!form.account_code||!form.account_name||!form.gl_account_code){
-      showToast('الكود والاسم وحساب الأستاذ مطلوبة','error'); return
+  const validate = () => {
+    const errs = {}
+    if(!form.account_code.trim()) errs.account_code = 'كود الحساب مطلوب'
+    if(!form.account_name.trim()) errs.account_name = 'اسم الحساب مطلوب'
+    if(!form.gl_account_code)     errs.gl_account_code = 'حساب الأستاذ العام مطلوب'
+    setErrors(errs)
+    if(Object.keys(errs).length > 0) {
+      showToast('يرجى تعبئة الحقول المطلوبة المحددة بالأحمر', 'error')
+      return false
     }
+    return true
+  }
+
+  const save=async()=>{
+    if(!validate()) return
     setSaving(true)
     try{
       if(isEdit) await api.treasury.updateBankAccount(account.id,form)
@@ -4342,6 +4324,10 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
       </span>
     )
   }
+
+  const ErrMsg = ({field}) => errors[field]
+    ? <p className="text-red-500 text-[11px] mt-1 flex items-center gap-1"><span>⚠️</span>{errors[field]}</p>
+    : null
 
   return(
     <div className="max-w-3xl mx-auto" dir="rtl">
@@ -4373,7 +4359,9 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
             </div>
             <div>
               <label className="flex items-center text-xs font-semibold text-slate-600 mb-1.5">كود الحساب <span className="text-red-500">*</span><TT text="كود فريد. مثال: BANK1 أو CASH1"/></label>
-              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500" value={form.account_code} onChange={e=>s('account_code',e.target.value)} placeholder="BANK1"/>
+              <input className={`w-full border-2 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500 ${errors.account_code?'border-red-400 bg-red-50':'border-slate-200'}`}
+                value={form.account_code} onChange={e=>s('account_code',e.target.value)} placeholder="BANK1"/>
+              <ErrMsg field="account_code"/>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 block mb-1.5">العملة</label>
@@ -4384,11 +4372,31 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-600 block mb-1.5">اسم الحساب <span className="text-red-500">*</span></label>
-            <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={form.account_name} onChange={e=>s('account_name',e.target.value)} placeholder={isCashFund?'مثال: الصندوق الرئيسي':'مثال: مصرف الراجحي'}/>
+            <input className={`w-full border-2 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 ${errors.account_name?'border-red-400 bg-red-50':'border-slate-200'}`}
+              value={form.account_name} onChange={e=>s('account_name',e.target.value)} placeholder={isCashFund?'مثال: الصندوق الرئيسي':'مثال: مصرف الراجحي'}/>
+            <ErrMsg field="account_name"/>
           </div>
         </div>
 
-        {/* القسم 2: تصنيف الصندوق — فقط للصناديق */}
+        {/* القسم 2: نوع الحساب البنكي — فقط للبنوك */}
+        {!isCashFund&&<div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="text-xs font-bold text-slate-400 uppercase">🏷️ نوع الحساب البنكي</div>
+            <TT text="يحدد الغرض من الحساب ويساعد في تصنيف التقارير"/>
+          </div>
+          <div className="grid grid-cols-6 gap-2">
+            {BANK_SUB_TYPES.map(bt=>(
+              <button key={bt.value} type="button" onClick={()=>s('account_sub_type',bt.value)} title={bt.desc}
+                className={`py-2.5 px-1 rounded-xl text-xs font-semibold border-2 transition-all text-center
+                  ${form.account_sub_type===bt.value?'bg-blue-600 border-blue-600 text-white':'border-slate-200 text-slate-600 hover:border-blue-300'}`}>
+                {bt.label}
+              </button>
+            ))}
+          </div>
+          {form.account_sub_type&&<p className="text-xs text-slate-400 mt-2">ℹ️ {BANK_SUB_TYPES.find(t=>t.value===form.account_sub_type)?.desc}</p>}
+        </div>}
+
+        {/* القسم 3: تصنيف الصندوق — فقط للصناديق */}
         {isCashFund&&<div className="bg-white rounded-2xl border border-slate-200 p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="text-xs font-bold text-slate-400 uppercase">🏷️ تصنيف الصندوق</div>
@@ -4426,7 +4434,7 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
           </div>}
         </div>}
 
-        {/* القسم 3: بيانات البنك — فقط للبنوك */}
+        {/* القسم 4: بيانات البنك — فقط للبنوك */}
         {!isCashFund&&<div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
           <div className="text-xs font-bold text-slate-400 uppercase">🏦 بيانات البنك</div>
           <div className="grid grid-cols-2 gap-4">
@@ -4445,7 +4453,7 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
           </div>
         </div>}
 
-        {/* القسم 4: مسؤول التواصل */}
+        {/* القسم 5: مسؤول التواصل */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
           <div className="text-xs font-bold text-slate-400 uppercase mb-4">👤 مسؤول التواصل</div>
           <div className="grid grid-cols-2 gap-4">
@@ -4456,16 +4464,17 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
           </div>
         </div>
 
-        {/* القسم 5: الربط المحاسبي */}
-        <div className="bg-blue-50 rounded-2xl border border-blue-200 p-5">
+        {/* القسم 6: الربط المحاسبي */}
+        <div className={`rounded-2xl border p-5 ${errors.gl_account_code?'bg-red-50 border-red-300':'bg-blue-50 border-blue-200'}`}>
           <div className="flex items-center gap-2 mb-4">
-            <div className="text-xs font-bold text-blue-700 uppercase">🔗 الربط المحاسبي</div>
+            <div className={`text-xs font-bold uppercase ${errors.gl_account_code?'text-red-600':'text-blue-700'}`}>🔗 الربط المحاسبي</div>
             <TT text="يجب أن يكون حساباً مستقلاً لهذا الحساب فقط. يُستخدم في كل القيود."/>
           </div>
           <AccountPicker label="حساب الأستاذ العام" required value={form.gl_account_code} onChange={(code)=>s('gl_account_code',code)}/>
+          <ErrMsg field="gl_account_code"/>
         </div>
 
-        {/* القسم 6: الأرصدة */}
+        {/* القسم 7: الأرصدة */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
           <div className="text-xs font-bold text-slate-400 uppercase mb-4">💰 الأرصدة والتنبيهات</div>
           <div className="grid grid-cols-2 gap-4">
@@ -5811,8 +5820,14 @@ function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
   }
 
   const save = async() => {
-    if(!form.fund_code||!form.fund_name||!form.limit_amount||!form.gl_account_code) {
-      showToast('الكود والاسم والحد وحساب الأستاذ مطلوبة','error'); return
+    const errs = []
+    if(!form.fund_code.trim())    errs.push('كود الصندوق')
+    if(!form.fund_name.trim())    errs.push('اسم الصندوق')
+    if(!form.limit_amount||parseFloat(form.limit_amount)<=0) errs.push('الحد الأقصى (يجب أن يكون أكبر من صفر)')
+    if(!form.gl_account_code)     errs.push('حساب الأستاذ العام')
+    if(errs.length>0){
+      showToast(`الحقول التالية مطلوبة: ${errs.join(' — ')}`, 'error')
+      return
     }
     setSaving(true)
     try {
