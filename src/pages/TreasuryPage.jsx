@@ -1336,8 +1336,10 @@ function BankFocusedPage({showToast, openView}) {
   const [selected,setSelected] = useState(null)
   const [accounts,setAccounts] = useState([])
   const [filters,setFilters]   = useState({tx_type:'',status:'',date_from:'',date_to:''})
-  const [selectedIds,setSelectedIds] = useState(new Set())
-  const [bulkPosting,setBulkPosting] = useState(false)
+  const [selectedIds,setSelectedIds]       = useState(new Set())
+  const [bulkPosting,setBulkPosting]       = useState(false)
+  const [reconciledIds,setReconciledIds]   = useState(new Set())
+  const [showReconReport,setShowReconReport] = useState(false)
 
   const load = useCallback(async()=>{
     setLoading(true)
@@ -1359,6 +1361,14 @@ function BankFocusedPage({showToast, openView}) {
   const totalBR = items.filter(i=>i.tx_type==='BR').reduce((s,i)=>s+parseFloat(i.amount||0),0)
   const posted  = items.filter(i=>i.status==='posted').length
   const drafts  = items.filter(i=>i.status==='draft').length
+
+  const handleReconcile = (id) => {
+    setReconciledIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const handleBulkPost = async()=>{
     setBulkPosting(true)
@@ -1425,10 +1435,41 @@ function BankFocusedPage({showToast, openView}) {
         </div>
       )}
 
+      {/* تقرير التسوية */}
+      {reconciledIds.size>0&&(
+        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-emerald-700 font-semibold text-sm">✅ {reconciledIds.size} حركة مُسوَّاة</span>
+            <span className="text-emerald-600 text-xs font-mono">
+              {fmt(items.filter(i=>reconciledIds.has(i.id)).reduce((s,i)=>s+parseFloat(i.amount||0),0),3)} ر.س
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={()=>setShowReconReport(true)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700">
+              📋 تقرير التسوية
+            </button>
+            <button onClick={()=>setReconciledIds(new Set())}
+              className="px-3 py-2 rounded-xl text-xs text-emerald-600 border border-emerald-300 hover:bg-emerald-50">
+              مسح
+            </button>
+          </div>
+        </div>
+      )}
+
       <TxTable items={items} total={total} loading={loading} onView={setSelected}
         selectable selectedIds={selectedIds}
         onSelectAll={()=>setSelectedIds(s=>s.size===items.filter(i=>i.status==='draft').length?new Set():new Set(items.filter(i=>i.status==='draft').map(i=>i.id)))}
-        onSelectOne={(id)=>setSelectedIds(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}/>
+        onSelectOne={(id)=>setSelectedIds(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n})}
+        onReconcile={handleReconcile}
+        reconciledIds={reconciledIds}/>
+
+      {showReconReport&&(
+        <ReconciliationReport
+          items={items.filter(i=>reconciledIds.has(i.id))}
+          pendingItems={items.filter(i=>i.status==='posted'&&!reconciledIds.has(i.id))}
+          onClose={()=>setShowReconReport(false)}/>
+      )}
       <VoucherSlideOver tx={selected} accounts={accounts} showToast={showToast}
         onClose={()=>setSelected(null)}
         onPosted={()=>{setSelected(null);load()}}
@@ -2478,6 +2519,19 @@ function ReportsSection({showToast}) {
 
     {/* Filters */}
     <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
+      {/* حقل الحساب البنكي — يظهر لكشف الحساب والتدفق الشهري */}
+      {(sub==='account-statement'||sub==='monthly-flow'||sub==='bank-expenses')&&(
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">
+            الحساب البنكي {sub==='account-statement'&&<span className="text-red-500">*</span>}
+          </label>
+          <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 min-w-[180px]"
+            value={filters.account_id||''} onChange={e=>sf('account_id',e.target.value)}>
+            <option value="">— كل الحسابات —</option>
+            {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}
+          </select>
+        </div>
+      )}
       <div>
         <label className="text-xs text-slate-500 block mb-1">من تاريخ</label>
         <input type="date" className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
