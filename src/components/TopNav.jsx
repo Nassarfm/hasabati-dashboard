@@ -53,24 +53,32 @@ const NAV_ITEMS = [
     color: 'emerald',
     sections: [
       {
-        title: 'الخزينة والبنوك',
+        title: 'البيانات الأساسية',
         items: [
-          { id:'treasury',              icon:'📊', label:'لوحة تحكم الخزينة',    sub:'Treasury Dashboard' },
-          { id:'treasury_accounts',    icon:'🏦', label:'الحسابات البنكية',      sub:'Bank Accounts & Cash Funds' },
-          { id:'treasury_cash',        icon:'💵', label:'سندات القبض والصرف',   sub:'Cash Transactions PV/RV' },
-          { id:'treasury_bank',        icon:'🏛️', label:'حركات البنوك',          sub:'Bank Transactions BP/BR/BT' },
-          { id:'treasury_transfers',   icon:'🔄', label:'التحويلات الداخلية',    sub:'Internal Transfers IT' },
-          { id:'treasury_checks',      icon:'📝', label:'إدارة الشيكات',         sub:'Cheque Management' },
-          { id:'treasury_reconcile',   icon:'⚖️', label:'التسوية البنكية',       sub:'Bank Reconciliation' },
-          { id:'treasury_petty',       icon:'👜', label:'العهدة النثرية',         sub:'Petty Cash Management' },
-          { id:'treasury_reports',     icon:'📈', label:'تقارير الخزينة',         sub:'Treasury Reports' },
-          { id:'treasury_recurring',   icon:'🔁', label:'المعاملات المتكررة',     sub:'Recurring Transactions' },
-          { id:'treasury_cash_flow',    icon:'📊', label:'التدفقات النقدية',    sub:'cash-flow',    section:'bank', desc:'Cash Flow Statement تفاعلي ورسمي' },
-          { id:'treasury_activity',     icon:'🕐', label:'سجل الأحداث',         sub:'activity',     section:'cash', desc:'Audit Trail كامل للخزينة' },
-          { id:'treasury_cash_flow',    icon:'📊', label:'التدفقات النقدية',    sub:'cash-flow',    section:'bank', desc:'Cash Flow Statement تفاعلي ورسمي' },
-          { id:'treasury_activity',     icon:'🕐', label:'سجل الأحداث',         sub:'activity',     section:'cash', desc:'Audit Trail كامل للخزينة' },
-          { id:'treasury_smart_import', icon:'🧠', label:'استيراد البنك الذكي', sub:'smart-import', section:'bank', desc:'استيراد كشف البنك Excel → سندات ذكية' },
-          { id:'treasury_gl_import',  icon:'📥', label:'استيراد من GL',          sub:'gl-import',     section:'bank', desc:'استيراد قيود JV/REV لحسابات البنك' },
+          { id:'treasury',           icon:'📊', label:'لوحة تحكم الخزينة',   sub:'Treasury Dashboard' },
+          { id:'treasury_accounts',  icon:'🏦', label:'الحسابات البنكية',     sub:'Bank Accounts & Cash Funds' },
+          { id:'treasury_petty',     icon:'👜', label:'العهدة النثرية',        sub:'Petty Cash Management' },
+          { id:'treasury_recurring', icon:'🔁', label:'المعاملات المتكررة',    sub:'Recurring Transactions' },
+        ]
+      },
+      {
+        title: 'العمليات والمعاملات',
+        items: [
+          { id:'treasury_cash',       icon:'💵', label:'سندات القبض والصرف',  sub:'Cash Transactions PV/RV' },
+          { id:'treasury_bank',       icon:'🏛️', label:'حركات البنوك',         sub:'Bank Transactions BP/BR/BT' },
+          { id:'treasury_transfers',  icon:'🔄', label:'التحويلات الداخلية',   sub:'Internal Transfers IT' },
+          { id:'treasury_checks',     icon:'📝', label:'إدارة الشيكات',        sub:'Cheque Management' },
+          { id:'treasury_reconcile',  icon:'⚖️', label:'التسوية البنكية',      sub:'Bank Reconciliation' },
+          { id:'treasury_smart_import',icon:'🧠', label:'استيراد البنك الذكي', sub:'smart-import', section:'bank' },
+          { id:'treasury_gl_import',  icon:'📥', label:'استيراد من GL',         sub:'gl-import',    section:'bank' },
+        ]
+      },
+      {
+        title: 'التقارير والتحليل',
+        items: [
+          { id:'treasury_reports',    icon:'📈', label:'تقارير الخزينة',        sub:'Treasury Reports' },
+          { id:'treasury_cash_flow',  icon:'💹', label:'التدفقات النقدية',      sub:'cash-flow',  section:'bank' },
+          { id:'treasury_activity',   icon:'🕐', label:'سجل الأحداث',           sub:'activity',   section:'cash' },
         ]
       },
     ]
