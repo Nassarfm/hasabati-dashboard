@@ -2583,14 +2583,6 @@ function ReportsSection({showToast}) {
           {[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
         </select>
       </div>
-      {sub==='account-statement'&&<div>
-        <label className="text-xs text-slate-500 block mb-1">الحساب البنكي</label>
-        <select className="border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 min-w-[180px]"
-          value={filters.account_id||''} onChange={e=>sf('account_id',e.target.value)}>
-          <option value="">— اختر حساباً —</option>
-          {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}
-        </select>
-      </div>}
       <button onClick={load} disabled={loading}
         className="px-5 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800 disabled:opacity-50">
         {loading?'⏳ جارٍ التحميل...':'🔍 عرض التقرير'}
@@ -2604,69 +2596,61 @@ function ReportsSection({showToast}) {
     {/* التدفق الشهري — مخطط شريطي */}
     {sub==='monthly-flow' && data && (() => {
       const rows = data.rows || []
-      const totalRec = rows.reduce((s,r)=>s+r.total_receipts,0)
-      const totalPay = rows.reduce((s,r)=>s+r.total_payments,0)
-      const netTotal = totalRec - totalPay
+      const totalIn  = data.total_inflow  || rows.reduce((s,r)=>s+(r.inflow||0),0)
+      const totalOut = data.total_outflow || rows.reduce((s,r)=>s+(r.outflow||0),0)
+      const netTotal = data.net ?? (totalIn - totalOut)
       return <div className="space-y-4">
         <KPIBar cards={[
-          {icon:'📥', label:'إجمالي القبض (12 شهر)', value:`${fmt(totalRec,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
-          {icon:'📤', label:'إجمالي الصرف (12 شهر)', value:`${fmt(totalPay,2)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
+          {icon:'📥', label:'إجمالي التدفقات الداخلة', value:`${fmt(totalIn,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+          {icon:'📤', label:'إجمالي التدفقات الخارجة', value:`${fmt(totalOut,2)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
           {icon:'📊', label:'الصافي', value:`${netTotal>=0?'+':''}${fmt(netTotal,2)} ر.س`, iconBg:netTotal>=0?'bg-emerald-100':'bg-red-100', color:netTotal>=0?'text-emerald-700':'text-red-600', bg:netTotal>=0?'bg-emerald-50 border-emerald-200':'bg-red-50 border-red-200'},
         ]}/>
         <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <div className="flex items-center justify-between mb-4">
-            <span className="font-bold text-slate-700 text-sm">📊 التدفق النقدي الشهري — آخر 12 شهر</span>
+            <span className="font-bold text-slate-700 text-sm">📊 التدفق النقدي الشهري — {filters.year}</span>
             <div className="flex gap-3 text-xs text-slate-400">
-              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-emerald-500 inline-block"/>قبض</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-400 inline-block"/>صرف</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-emerald-500 inline-block"/>داخل</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-400 inline-block"/>خارج</span>
               <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-blue-400 inline-block"/>صافي</span>
             </div>
           </div>
           {rows.length===0
-            ?<div className="py-10 text-center text-slate-400 text-sm">لا توجد بيانات</div>
+            ?<div className="py-10 text-center text-slate-400 text-sm">لا توجد بيانات في هذه الفترة</div>
             :<ResponsiveContainer width="100%" height={260}>
               <BarChart data={rows} margin={{top:5,right:10,left:-10,bottom:5}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                <XAxis dataKey="month" tick={{fontSize:10}} tickFormatter={v=>v?.slice(2)||''}/>
+                <XAxis dataKey="period" tick={{fontSize:10}} tickFormatter={v=>v?.slice(5)||v||''}/>
                 <YAxis tick={{fontSize:10}}/>
                 <Tooltip
-                  formatter={(v,n)=>[fmt(v,0)+' ر.س', n==='total_receipts'?'قبض':n==='total_payments'?'صرف':'صافي']}
-                  labelFormatter={l=>`الشهر: ${l}`} contentStyle={{fontSize:11,direction:'rtl'}}/>
-                <Bar dataKey="total_receipts" fill="#10b981" radius={[3,3,0,0]} name="قبض"/>
-                <Bar dataKey="total_payments" fill="#ef4444" radius={[3,3,0,0]} name="صرف"/>
-                <Bar dataKey="net" fill="#3b82f6" radius={[3,3,0,0]} name="صافي"/>
+                  formatter={(v,n)=>[fmt(v,0)+' ر.س', n==='inflow'?'داخل':n==='outflow'?'خارج':'صافي']}
+                  labelFormatter={l=>`الفترة: ${l}`} contentStyle={{fontSize:11,direction:'rtl'}}/>
+                <Bar dataKey="inflow"  fill="#10b981" radius={[3,3,0,0]} name="داخل"/>
+                <Bar dataKey="outflow" fill="#ef4444" radius={[3,3,0,0]} name="خارج"/>
+                <Bar dataKey="net"     fill="#3b82f6" radius={[3,3,0,0]} name="صافي"/>
               </BarChart>
             </ResponsiveContainer>}
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-200"><tr>
-              {['الشهر','قبض نقدي','صرف نقدي','قبض بنكي','صرف بنكي','إجمالي القبض','إجمالي الصرف','الصافي'].map(h=><th key={h} className="px-3 py-2.5 text-right font-semibold text-slate-500">{h}</th>)}
+              {['الفترة','تدفقات داخلة','تدفقات خارجة','الصافي'].map(h=><th key={h} className="px-4 py-2.5 text-right font-semibold text-slate-500">{h}</th>)}
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r,i)=>(
                 <tr key={i} className="hover:bg-slate-50">
-                  <td className="px-3 py-2.5 font-mono font-bold text-slate-700">{r.month}</td>
-                  <td className="px-3 py-2.5 font-mono text-emerald-600">{fmt(r.cash_receipts,2)}</td>
-                  <td className="px-3 py-2.5 font-mono text-red-500">{fmt(r.cash_payments,2)}</td>
-                  <td className="px-3 py-2.5 font-mono text-emerald-600">{fmt(r.bank_receipts,2)}</td>
-                  <td className="px-3 py-2.5 font-mono text-red-500">{fmt(r.bank_payments,2)}</td>
-                  <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">{fmt(r.total_receipts,2)}</td>
-                  <td className="px-3 py-2.5 font-mono font-bold text-red-600">{fmt(r.total_payments,2)}</td>
-                  <td className={`px-3 py-2.5 font-mono font-bold ${r.net>=0?'text-emerald-700':'text-red-600'}`}>{r.net>=0?'+':''}{fmt(r.net,2)}</td>
+                  <td className="px-4 py-2.5 font-semibold text-slate-700">{r.period}</td>
+                  <td className="px-4 py-2.5 font-mono text-emerald-700">{fmt(r.inflow||0,3)}</td>
+                  <td className="px-4 py-2.5 font-mono text-red-600">{fmt(r.outflow||0,3)}</td>
+                  <td className={`px-4 py-2.5 font-mono font-bold ${(r.net||0)>=0?'text-blue-700':'text-red-700'}`}>{(r.net||0)>=0?'+':''}{fmt(r.net||0,3)}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot className="bg-blue-50 border-t-2 border-blue-200">
+            <tfoot className="bg-indigo-50 border-t-2 border-indigo-200">
               <tr>
-                <td className="px-3 py-2.5 font-bold text-blue-800 text-xs">الإجمالي</td>
-                <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">{fmt(rows.reduce((s,r)=>s+r.cash_receipts,0),2)}</td>
-                <td className="px-3 py-2.5 font-mono font-bold text-red-600">{fmt(rows.reduce((s,r)=>s+r.cash_payments,0),2)}</td>
-                <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">{fmt(rows.reduce((s,r)=>s+r.bank_receipts,0),2)}</td>
-                <td className="px-3 py-2.5 font-mono font-bold text-red-600">{fmt(rows.reduce((s,r)=>s+r.bank_payments,0),2)}</td>
-                <td className="px-3 py-2.5 font-mono font-bold text-emerald-700">{fmt(totalRec,2)}</td>
-                <td className="px-3 py-2.5 font-mono font-bold text-red-600">{fmt(totalPay,2)}</td>
-                <td className={`px-3 py-2.5 font-mono font-bold ${netTotal>=0?'text-emerald-700':'text-red-600'}`}>{netTotal>=0?'+':''}{fmt(netTotal,2)}</td>
+                <td className="px-4 py-2.5 font-bold text-indigo-800 text-xs">الإجمالي</td>
+                <td className="px-4 py-2.5 font-mono font-bold text-emerald-700">{fmt(totalIn,3)}</td>
+                <td className="px-4 py-2.5 font-mono font-bold text-red-600">{fmt(totalOut,3)}</td>
+                <td className={`px-4 py-2.5 font-mono font-bold ${netTotal>=0?'text-indigo-800':'text-red-700'}`}>{netTotal>=0?'+':''}{fmt(netTotal,3)}</td>
               </tr>
             </tfoot>
           </table>
@@ -2701,71 +2685,7 @@ function ReportsSection({showToast}) {
       </table>
     </div>}
 
-    {/* كشف حساب بنكي */}
-    {sub==='account-statement' && data && (()=>{
-      const rows = data.rows||[]
-      const acc = data.account||{}
-      return <div className="space-y-4">
-        <KPIBar cards={[
-          {icon:'🏦', label:acc.account_name||'الحساب', value:acc.account_code||'', iconBg:'bg-blue-100', color:'text-blue-700'},
-          {icon:'💰', label:'الرصيد الافتتاحي', value:`${fmt(data.opening_balance,2)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-700'},
-          {icon:'📥', label:'إجمالي المدين', value:`${fmt(data.total_debit,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
-          {icon:'📤', label:'إجمالي الدائن', value:`${fmt(data.total_credit,2)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
-          {icon:'🔵', label:'الرصيد الختامي', value:`${fmt(data.closing_balance,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-800', bg:'bg-blue-50 border-blue-200'},
-        ]}/>
-        <div className="flex justify-end gap-2">
-          <button onClick={()=>exportXLS(
-            rows.map(r=>[r.serial,r.tx_type,fmtDate(r.tx_date),r.party||'',r.description||'',r.reference||'',r.debit>0?r.debit:0,r.credit>0?r.credit:0,r.balance]),
-            ['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'],
-            `كشف_${acc.account_name||'حساب'}`
-          )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-3 text-white font-bold text-sm flex justify-between" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
-            <span>📄 كشف حساب: {acc.account_name}</span>
-            <span className="font-mono text-blue-200 text-xs">
-              {filters.date_from&&`من ${fmtDate(filters.date_from)}`} {filters.date_to&&`إلى ${fmtDate(filters.date_to)}`}
-            </span>
-          </div>
-          {/* رصيد افتتاحي */}
-          <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-xs font-bold text-slate-600">
-            <span>رصيد افتتاحي</span>
-            <span className="font-mono text-slate-800">{fmt(data.opening_balance,2)} ر.س</span>
-          </div>
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-500"><tr>
-              {['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'].map(h=>(
-                <th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {rows.length===0?<tr><td colSpan={9} className="text-center py-8 text-slate-400">لا توجد حركات</td></tr>:
-              rows.map((r,i)=>(
-                <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
-                  <td className="px-3 py-2 font-mono font-bold text-blue-700">{r.serial}</td>
-                  <td className="px-3 py-2"><span className={`font-semibold ${TX_META[r.tx_type]?.color||'text-slate-600'}`}>{TX_META[r.tx_type]?.label||r.tx_type}</span></td>
-                  <td className="px-3 py-2 text-slate-500">{fmtDate(r.tx_date)}</td>
-                  <td className="px-3 py-2 text-slate-600 max-w-[100px] truncate">{r.party||'—'}</td>
-                  <td className="px-3 py-2 text-slate-500 max-w-[140px] truncate">{r.description||'—'}</td>
-                  <td className="px-3 py-2 text-slate-400 font-mono text-[10px]">{r.reference||'—'}</td>
-                  <td className="px-3 py-2 font-mono font-bold text-emerald-700">{r.debit>0?fmt(r.debit,2):'—'}</td>
-                  <td className="px-3 py-2 font-mono font-bold text-red-600">{r.credit>0?fmt(r.credit,2):'—'}</td>
-                  <td className={`px-3 py-2 font-mono font-bold ${r.balance<0?'text-red-600':'text-slate-800'}`}>{fmt(r.balance,2)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-blue-50 border-t-2 border-blue-200 text-xs font-bold">
-              <tr>
-                <td colSpan={6} className="px-3 py-3 text-blue-800">الإجمالي</td>
-                <td className="px-3 py-3 font-mono text-emerald-700">{fmt(data.total_debit,2)}</td>
-                <td className="px-3 py-3 font-mono text-red-600">{fmt(data.total_credit,2)}</td>
-                <td className="px-3 py-3 font-mono font-bold text-blue-800">{fmt(data.closing_balance,2)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-    })()}
+
 
     {/* أعمار الديون */}
     {sub==='check-aging' && data && (()=>{
@@ -2911,69 +2831,72 @@ function ReportsSection({showToast}) {
     </div>}
 
     {/* كشف الحساب البنكي */}
-    {sub==='account-statement' && data && (
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-3 bg-blue-700 text-white text-sm font-bold flex justify-between">
-          <span>📄 كشف حساب — {data.account?.account_name}</span>
-          <span className="text-blue-200 text-xs">رصيد أول المدة: {fmt(data.opening||0,3)} | رصيد آخر المدة: {fmt(data.closing||0,3)}</span>
+    {sub==='account-statement' && data && (()=>{
+      const rows = data.rows||[]
+      const acc  = data.account||{}
+      return <div className="space-y-4">
+        <KPIBar cards={[
+          {icon:'🏦', label:acc.account_name||'الحساب', value:acc.account_code||'', iconBg:'bg-blue-100', color:'text-blue-700'},
+          {icon:'💰', label:'الرصيد الافتتاحي', value:`${fmt(data.opening||0,3)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-700'},
+          {icon:'📥', label:'إجمالي المدين', value:`${fmt(data.total_debit||0,3)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+          {icon:'📤', label:'إجمالي الدائن', value:`${fmt(data.total_credit||0,3)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
+          {icon:'🔵', label:'الرصيد الختامي', value:`${fmt(data.closing||0,3)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-800', bg:'bg-blue-50 border-blue-200'},
+        ]}/>
+        <div className="flex justify-end">
+          <button onClick={()=>exportXLS(
+            rows.map(r=>[r.serial,r.tx_type,fmtDate(r.tx_date),r.party||'',r.description||'',r.reference||'',r.debit>0?r.debit:0,r.credit>0?r.credit:0,r.running_balance]),
+            ['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'],
+            `كشف_${acc.account_name||'حساب'}`
+          )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
         </div>
-        <table className="w-full text-xs">
-          <thead className="bg-slate-50 text-slate-500"><tr>
-            {['الرقم','التاريخ','البيان','مدين','دائن','الرصيد'].map(h=><th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>)}
-          </tr></thead>
-          <tbody>
-            {(data.rows||[]).map((r,i)=>(
-              <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
-                <td className="px-3 py-2.5 font-mono text-blue-700 font-bold text-[11px]">{r.serial}</td>
-                <td className="px-3 py-2.5 text-slate-500">{fmtDate(r.tx_date)}</td>
-                <td className="px-3 py-2.5 text-slate-600 truncate max-w-[200px]">{r.description||'—'}</td>
-                <td className="px-3 py-2.5 font-mono text-emerald-700">{r.debit>0?fmt(r.debit,3):'—'}</td>
-                <td className="px-3 py-2.5 font-mono text-red-600">{r.credit>0?fmt(r.credit,3):'—'}</td>
-                <td className={`px-3 py-2.5 font-mono font-bold ${r.running_balance>=0?'text-blue-700':'text-red-700'}`}>{fmt(r.running_balance,3)}</td>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 text-white font-bold text-sm flex justify-between" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+            <span>📄 كشف حساب: {acc.account_name}</span>
+            <span className="font-mono text-blue-200 text-xs">
+              {filters.date_from&&`من ${fmtDate(filters.date_from)}`} {filters.date_to&&`إلى ${fmtDate(filters.date_to)}`}
+            </span>
+          </div>
+          <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-xs font-bold text-slate-600">
+            <span>رصيد افتتاحي</span>
+            <span className="font-mono text-slate-800">{fmt(data.opening||0,3)} ر.س</span>
+          </div>
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-slate-500"><tr>
+              {['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'].map(h=>(
+                <th key={h} className="px-3 py-2.5 text-right font-semibold">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {rows.length===0
+                ?<tr><td colSpan={9} className="text-center py-8 text-slate-400">لا توجد حركات في هذه الفترة</td></tr>
+                :rows.map((r,i)=>(
+                  <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}>
+                    <td className="px-3 py-2 font-mono font-bold text-blue-700 text-[11px]">{r.serial}</td>
+                    <td className="px-3 py-2"><span className={`font-semibold ${TX_META[r.tx_type]?.color||'text-slate-600'}`}>{TX_META[r.tx_type]?.label||r.tx_type}</span></td>
+                    <td className="px-3 py-2 text-slate-500">{fmtDate(r.tx_date)}</td>
+                    <td className="px-3 py-2 text-slate-600 max-w-[100px] truncate">{r.party||'—'}</td>
+                    <td className="px-3 py-2 text-slate-500 max-w-[140px] truncate">{r.description||'—'}</td>
+                    <td className="px-3 py-2 text-slate-400 font-mono text-[10px]">{r.reference||'—'}</td>
+                    <td className="px-3 py-2 font-mono font-bold text-emerald-700">{r.debit>0?fmt(r.debit,3):'—'}</td>
+                    <td className="px-3 py-2 font-mono font-bold text-red-600">{r.credit>0?fmt(r.credit,3):'—'}</td>
+                    <td className={`px-3 py-2 font-mono font-bold ${(r.running_balance||0)>=0?'text-blue-700':'text-red-700'}`}>{fmt(r.running_balance||0,3)}</td>
+                  </tr>
+                ))}
+            </tbody>
+            <tfoot className="bg-blue-50 border-t-2 border-blue-200 text-xs font-bold">
+              <tr>
+                <td colSpan={6} className="px-3 py-3 text-blue-800">الإجمالي</td>
+                <td className="px-3 py-3 font-mono text-emerald-700">{fmt(data.total_debit||0,3)}</td>
+                <td className="px-3 py-3 font-mono text-red-600">{fmt(data.total_credit||0,3)}</td>
+                <td className="px-3 py-3 font-mono font-bold text-blue-800">{fmt(data.closing||0,3)}</td>
               </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-blue-50 border-t-2 border-blue-200 font-bold text-xs">
-            <tr>
-              <td colSpan={3} className="px-3 py-3 text-blue-800">الإجمالي</td>
-              <td className="px-3 py-3 font-mono text-emerald-700">{fmt(data.total_debit||0,3)}</td>
-              <td className="px-3 py-3 font-mono text-red-600">{fmt(data.total_credit||0,3)}</td>
-              <td className="px-3 py-3 font-mono text-blue-800 font-bold">{fmt(data.closing||0,3)}</td>
-            </tr>
-          </tfoot>
-        </table>
+            </tfoot>
+          </table>
+        </div>
       </div>
-    )}
+    })()}
 
-    {/* التدفق الشهري */}
-    {sub==='monthly-flow' && data && (
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-3 bg-indigo-700 text-white text-sm font-bold">📊 التدفق النقدي الشهري</div>
-        <table className="w-full text-xs">
-          <thead className="bg-slate-50 text-slate-500"><tr>
-            {['الفترة','تدفقات داخلة','تدفقات خارجة','صافي التدفق'].map(h=><th key={h} className="px-4 py-2.5 text-right font-semibold">{h}</th>)}
-          </tr></thead>
-          <tbody>
-            {(data.rows||[]).map((r,i)=>(
-              <tr key={i} className={`border-t border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/40'}`}>
-                <td className="px-4 py-2.5 font-semibold text-slate-700">{r.period}</td>
-                <td className="px-4 py-2.5 font-mono text-emerald-700">{fmt(r.inflow,3)}</td>
-                <td className="px-4 py-2.5 font-mono text-red-600">{fmt(r.outflow,3)}</td>
-                <td className={`px-4 py-2.5 font-mono font-bold ${r.net>=0?'text-blue-700':'text-red-700'}`}>{fmt(r.net,3)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-indigo-50 border-t-2 border-indigo-200 font-bold text-xs">
-            <tr>
-              <td className="px-4 py-3 text-indigo-800">الإجمالي</td>
-              <td className="px-4 py-3 font-mono text-emerald-700">{fmt(data.total_inflow||0,3)}</td>
-              <td className="px-4 py-3 font-mono text-red-600">{fmt(data.total_outflow||0,3)}</td>
-              <td className={`px-4 py-3 font-mono font-bold ${(data.net||0)>=0?'text-blue-800':'text-red-700'}`}>{fmt(data.net||0,3)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    )}
+
 
     {/* تقرير التسوية */}
     {sub==='reconciliation' && (
@@ -7070,15 +6993,19 @@ function ActivityLogTab({showToast}) {
 function CashFlowPage({showToast}) {
   const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState(null)
   const [view,    setView]    = useState('interactive') // 'interactive' | 'formal'
   const [filters, setFilters] = useState({year:new Date().getFullYear(), date_from:'', date_to:''})
 
   const load = async() => {
-    setLoading(true)
+    setLoading(true); setError(null)
     try {
       const r = await api.treasury.cashFlowStatement(filters)
       setData(r?.data)
-    } catch(e){ showToast(e.message,'error') }
+    } catch(e){
+      setError(e.message)
+      showToast('خطأ في تحميل التقرير: '+e.message,'error')
+    }
     finally{ setLoading(false) }
   }
 
@@ -7146,6 +7073,21 @@ function CashFlowPage({showToast}) {
 
   return (
     <div className="space-y-5 pb-8" dir="rtl">
+
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center space-y-3">
+          <div className="text-3xl">⚠️</div>
+          <p className="font-semibold text-red-700">تعذّر تحميل تقرير التدفقات النقدية</p>
+          <p className="text-xs text-red-500 font-mono bg-red-100 px-3 py-1.5 rounded-lg inline-block">{error}</p>
+          <div>
+            <button onClick={load}
+              className="px-5 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700">
+              🔄 إعادة المحاولة
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="relative rounded-3xl overflow-hidden p-6 text-white"
