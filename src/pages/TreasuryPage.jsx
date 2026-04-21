@@ -4882,20 +4882,8 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
 
   // التحقق من الأبعاد الإلزامية مع تحديد الحقول المطلوبة
   const validateDims=()=>{
-    const req=dimDefs.filter(d=>d.is_required)
-    const missing=[]
-    const errs={}
-    for(const d of req){
-      if(d.code==='branch'                  && !form.branch_code)                  {missing.push('الفرع');              errs.branch_code=true}
-      if(d.code==='cost_center'             && !form.cost_center)                  {missing.push('مركز التكلفة');       errs.cost_center=true}
-      if(d.code==='project'                 && !form.project_code)                 {missing.push('المشروع');            errs.project_code=true}
-      if(d.code==='expense_classification'  && !form.expense_classification_code)  {missing.push('تصنيف المصروف');     errs.expense_classification_code=true}
-    }
-    if(missing.length>0){
-      setFieldErrors(prev=>({...prev,...errs}))
-      showToast(`الأبعاد التالية إلزامية: ${missing.join(' — ')}`, 'error')
-      return false
-    }
+    // الأبعاد تحذيرية فقط — لا تمنع الحفظ
+    // التحقق الإلزامي يتم عند الترحيل من خلال إعدادات الحساب
     return true
   }
 
@@ -5068,87 +5056,10 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
         )}
       </div>
 
-      {/* نوع الدفعة — PV فقط */}
-      {isPV&&<div>
-        <label className="text-sm font-semibold text-slate-600 block mb-2">نوع الصرف</label>
-        <div className="flex gap-3">
-          {[{v:'expense',l:'💼 مصروف / قيد محاسبي'},{v:'vendor',l:'🏢 سداد مورد'}].map(opt=>(
-            <button key={opt.v} onClick={()=>setPayType(opt.v)}
-              className={`flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition-all
-                ${payType===opt.v?'bg-red-600 text-white border-red-600':'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-              {opt.l}
-            </button>
-          ))}
-        </div>
-        {payType==='vendor'&&vendors.length>0&&<div className="mt-3">
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اختر المورد</label>
-          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
-            onChange={e=>{const v=vendors.find(x=>x.id===e.target.value);if(v)selectVendor(v)}}>
-            <option value="">— اختر المورد —</option>
-            {vendors.map(v=><option key={v.id} value={v.id}>{v.vendor_name}</option>)}
-          </select>
-
-          {/* فواتير المورد المفتوحة */}
-          {loadingInvoices && <div className="text-xs text-slate-400 mt-2 animate-pulse">⏳ جارٍ تحميل الفواتير...</div>}
-          {!loadingInvoices && vendorInvoices.length > 0 && (
-            <div className="mt-3">
-              <label className="text-sm font-semibold text-slate-600 block mb-1.5">
-                🧾 الفاتورة المراد سدادها
-                <span className="text-xs font-normal text-slate-400 mr-2">({vendorInvoices.length} فاتورة مفتوحة)</span>
-              </label>
-              <select
-                className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:outline-none
-                  ${selectedInvoice ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 focus:border-blue-500'}`}
-                value={selectedInvoice?.id||''}
-                onChange={e => {
-                  const inv = vendorInvoices.find(i=>i.id===e.target.value)
-                  setSelectedInvoice(inv||null)
-                  if (inv) {
-                    s('amount',      String(inv.balance_due || inv.amount_due || inv.total_amount || ''))
-                    s('reference',   inv.invoice_number || inv.serial || '')
-                    s('description', `سداد فاتورة ${inv.invoice_number||inv.serial||''} — ${inv.vendor_name||''}`)
-                  }
-                }}>
-                <option value="">— اختر الفاتورة —</option>
-                {vendorInvoices.map(inv => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.invoice_number||inv.serial} | {fmt(inv.balance_due||inv.amount_due||inv.total_amount||0,2)} ر.س
-                    {inv.invoice_date ? ` | ${fmtDate(inv.invoice_date)}` : ''}
-                  </option>
-                ))}
-              </select>
-              {selectedInvoice && (
-                <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">رقم الفاتورة</span>
-                    <span className="font-mono font-bold text-slate-700">{selectedInvoice.invoice_number||selectedInvoice.serial}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">المبلغ المستحق</span>
-                    <span className="font-mono font-bold text-red-600">{fmt(selectedInvoice.balance_due||selectedInvoice.amount_due||selectedInvoice.total_amount||0,2)} ر.س</span>
-                  </div>
-                  {selectedInvoice.invoice_date && (
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">تاريخ الفاتورة</span>
-                      <span className="text-slate-600">{fmtDate(selectedInvoice.invoice_date)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {!loadingInvoices && vendors.length > 0 && vendorInvoices.length === 0 && payType==='vendor' && (
-            <div className="mt-2 text-xs text-slate-400 text-center py-2">
-              لا توجد فواتير مفتوحة لهذا المورد
-            </div>
-          )}
-        </div>}
-      </div>}
-
       {/* الحساب المقابل */}
       <div className="bg-blue-50 rounded-2xl p-4 border-2 border-blue-200">
         <AccountPicker
-          label={isPV&&payType==='vendor'?'حساب ذمم الموردين':isPV?'الحساب المقابل — مصروف / حساب':'الحساب المقابل — ذمة عميل / إيراد / حساب'}
+          label={isPV ? 'الحساب المقابل — مصروف / حساب / Counter Account' : 'الحساب المقابل — ذمة عميل / إيراد / Counter Account'}
           required value={form.counterpart_account}
           onChange={(code,name)=>{s('counterpart_account',code);s('counterpart_name',name)}}/>
       </div>
@@ -5324,13 +5235,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
   const selectVendor=(v)=>{s('beneficiary_name',v.vendor_name);s('counterpart_account',v.gl_account_code||'210101');s('counterpart_name',v.vendor_name)}
 
   const validateDims=()=>{
-    const req=dimDefs.filter(d=>d.is_required)
-    for(const d of req){
-      if(d.code==='branch'               && !form.branch_code)                    {showToast('الفرع إلزامي','error');return false}
-      if(d.code==='cost_center'          && !form.cost_center)                    {showToast('مركز التكلفة إلزامي','error');return false}
-      if(d.code==='project'              && !form.project_code)                   {showToast('المشروع إلزامي','error');return false}
-      if(d.code==='expense_classification'&&!form.expense_classification_code)    {showToast('تصنيف المصروف إلزامي','error');return false}
-    }
+    // الأبعاد تحذيرية فقط — لا تمنع الحفظ
     return true
   }
 
@@ -5481,28 +5386,10 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
         </div>}
       </div>
 
-      {/* نوع الدفعة BP */}
-      {type==='BP'&&<div>
-        <label className="text-sm font-semibold text-slate-600 block mb-2">نوع الدفعة</label>
-        <div className="flex gap-3">
-          {[{v:'expense',l:'💼 مصروف / قيد محاسبي'},{v:'vendor',l:'🏢 سداد مورد'}].map(opt=>(
-            <button key={opt.v} onClick={()=>setPayType(opt.v)}
-              className={`flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition-all ${payType===opt.v?'bg-blue-700 text-white border-blue-700':'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{opt.l}</button>
-          ))}
-        </div>
-        {payType==='vendor'&&vendors.length>0&&<div className="mt-3">
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اختر المورد</label>
-          <select className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" onChange={e=>{const v=vendors.find(x=>x.id===e.target.value);if(v)selectVendor(v)}}>
-            <option value="">— اختر المورد —</option>
-            {vendors.map(v=><option key={v.id} value={v.id}>{v.vendor_name}</option>)}
-          </select>
-        </div>}
-      </div>}
-
-      {/* الحساب المقابل */}
+      {/* الحساب المقابل / Counter Account */}
       <div className="bg-blue-50 rounded-2xl p-4 border-2 border-blue-200">
         <AccountPicker
-          label={type==='BR'?'الحساب المقابل — ذمم عملاء / إيراد':type==='BP'&&payType==='vendor'?'حساب ذمم الموردين':'الحساب المقابل — مصروف / حساب'}
+          label={type==='BR' ? 'الحساب المقابل — ذمم عملاء / إيراد / Counter Account' : 'الحساب المقابل — مصروف / ذمم موردين / Counter Account'}
           required value={form.counterpart_account}
           onChange={(code,name)=>{s('counterpart_account',code);s('counterpart_name',name)}}
           errorMsg={fieldErrorsBT?.counterpart_account?"⚠️ الحساب المقابل مطلوب":null}
