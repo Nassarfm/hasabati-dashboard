@@ -4255,7 +4255,7 @@ function Tip({text}) {
 }
 
 function BankAccountPage({account, onBack, onSaved, showToast}) {
-  const isEdit    = !!account
+  const isEdit    = !!(account?.id)   // ✅ فقط إذا كان id موجوداً — وليس مجرد object
   const initType  = account?.account_type || 'bank'
   const [fundType, setFundType] = useState(account?.account_sub_type||'main')
   const [isCashFund, setIsCashFund] = useState(initType === 'cash_fund')
@@ -4335,10 +4335,15 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
     if(!validate()) return
     setSaving(true)
     try{
-      if(isEdit) await api.treasury.updateBankAccount(account.id,form)
+      if(isEdit) await api.treasury.updateBankAccount(account.id, form)
       else       await api.treasury.createBankAccount(form)
       onSaved('تم الحفظ ✅')
-    }catch(e){showToast(e.message,'error')}
+    }catch(e){
+      // نعرض رسالة الخطأ التفصيلية من الـ server
+      const msg = e.message||'خطأ غير معروف'
+      showToast(`❌ فشل الحفظ: ${msg}`, 'error')
+      console.error('[BankAccountPage save]', e)
+    }
     finally{setSaving(false)}
   }
 
@@ -4801,8 +4806,15 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       vat_account_code: vatLine ? vatLine.account_code : '',
       vat_rate:         vatLine ? (je_lines.find(l=>l.tax_type_code)?.tax_type_code||'') : '',
     }
-    try{await api.treasury.createCashTransaction(formData);onSaved(`تم إنشاء ${typeLabel} ✅`)}
-    catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+    try{
+      await api.treasury.createCashTransaction(formData)
+      onSaved(`تم إنشاء ${typeLabel} ✅`)
+    }
+    catch(e){
+      showToast(`❌ فشل الحفظ: ${e.message||'خطأ غير معروف'}`, 'error')
+      console.error('[CashVoucherPage save]', e)
+    }
+    finally{setSaving(false)}
   }
 
   const handlePrint=()=>{
@@ -5874,7 +5886,10 @@ function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
       if(isEdit) await api.treasury.updatePettyCashFund(fund.id, form)
       else       await api.treasury.createPettyCashFund(form)
       onSaved()
-    } catch(e) { showToast(e.message,'error') }
+    } catch(e) {
+      showToast(`❌ فشل الحفظ: ${e.message||'خطأ غير معروف'}`, 'error')
+      console.error('[PettyCashFundModal save]', e)
+    }
     finally { setSaving(false) }
   }
 

@@ -18,7 +18,21 @@ async function request(method, path, body = null) {
   if (res.status === 204) return null
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const msg = data?.error?.message || data?.detail || data?.message || `خطأ ${res.status}`
+    // معالجة تفصيلية لأنواع الأخطاء المختلفة
+    let msg = ''
+    if (res.status === 422) {
+      // FastAPI validation error — يأتي كـ array
+      if (Array.isArray(data?.detail)) {
+        msg = data.detail.map(e => {
+          const field = e.loc?.slice(1).join('.') || ''
+          return field ? `${field}: ${e.msg}` : e.msg
+        }).join(' | ')
+      } else {
+        msg = data?.detail || data?.message || `خطأ في بيانات الطلب (422)`
+      }
+    } else {
+      msg = data?.error?.message || data?.detail || data?.message || `خطأ ${res.status}`
+    }
     throw new Error(msg)
   }
   return data
