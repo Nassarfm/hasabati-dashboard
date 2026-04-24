@@ -68,6 +68,7 @@ export default function PartiesPage({ view: initView = 'list' }) {
           {[
             {id:'list',     label:'القائمة',          labelEn:'List',           icon:'📋'},
             {id:'balances', label:'الأرصدة المفتوحة', labelEn:'Open Balances',  icon:'💰'},
+            {id:'roles',    label:'الأدوار',          labelEn:'Role Settings',  icon:'⚙️'},
           ].map(v=>(
             <button key={v.id} onClick={()=>setView(v.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all
@@ -80,6 +81,7 @@ export default function PartiesPage({ view: initView = 'list' }) {
 
       {view==='list'     && <PartiesList     showToast={showToast}/>}
       {view==='balances' && <OpenBalances    showToast={showToast}/>}
+      {view==='roles'    && <PartyRolesSettings showToast={showToast}/>}
     </div>
   )
 }
@@ -613,6 +615,155 @@ function OpenBalances({ showToast }) {
             <div className={`font-mono ${total>=0?'text-red-700':'text-emerald-700'}`}>{fmt(total,3)}</div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── PartyRolesSettings — إعدادات أدوار المتعاملين ────────────
+function PartyRolesSettings({ showToast }) {
+  const [roles,    setRoles]    = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [showAdd,  setShowAdd]  = useState(false)
+  const [form,     setForm]     = useState({role_name_ar:'', role_name_en:'', role_code:'', sort_order:50})
+  const [saving,   setSaving]   = useState(false)
+  const s = (k,v) => setForm(p=>({...p,[k]:v}))
+
+  const load = async() => {
+    setLoading(true)
+    try { const r = await api.parties.listRoles(); setRoles(r?.data||[]) }
+    catch(e) { showToast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+  useEffect(()=>{ load() },[])
+
+  const save = async() => {
+    if(!form.role_name_ar.trim()){ showToast('اسم الدور بالعربية مطلوب','error'); return }
+    setSaving(true)
+    try {
+      await api.parties.createRole(form)
+      setForm({role_name_ar:'', role_name_en:'', role_code:'', sort_order:50})
+      setShowAdd(false); load(); showToast('تم إضافة الدور ✅')
+    } catch(e) { showToast(e.message,'error') }
+    finally { setSaving(false) }
+  }
+
+  const del = async(id, name) => {
+    if(!confirm(`حذف دور "${name}"؟`)) return
+    try { await api.parties.deleteRole(id); load(); showToast('تم الحذف') }
+    catch(e) { showToast(e.message,'error') }
+  }
+
+  return (
+    <div className="space-y-4" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">⚙️ إعدادات أدوار المتعاملين / Party Role Settings</h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            الأدوار النظامية محمية ولا يمكن حذفها — يمكنك إضافة أدوار مخصصة حسب احتياج منشأتك
+          </p>
+        </div>
+        <button onClick={()=>setShowAdd(s=>!s)}
+          className="px-4 py-2 rounded-xl bg-teal-700 text-white text-sm font-semibold hover:bg-teal-800 flex items-center gap-2">
+          ＋ دور جديد <span className="text-xs opacity-70">/ Add Role</span>
+        </button>
+      </div>
+
+      {/* فورم الإضافة */}
+      {showAdd && (
+        <div className="bg-teal-50/50 rounded-2xl border-2 border-teal-200 p-5 space-y-4">
+          <div className="text-sm font-bold text-teal-700">دور مخصص جديد / New Custom Role</div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                الاسم بالعربية <span className="text-red-500">*</span>
+                <span className="text-slate-400 font-normal"> / Arabic Name</span>
+              </label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-teal-500"
+                value={form.role_name_ar} onChange={e=>s('role_name_ar',e.target.value)}
+                placeholder="مثال: مستثمر"/>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                الاسم بالإنجليزية / English Name
+              </label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-teal-500"
+                value={form.role_name_en} onChange={e=>s('role_name_en',e.target.value)}
+                placeholder="e.g. Investor" dir="ltr"/>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                الترتيب / Sort Order
+              </label>
+              <input type="number" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-teal-500"
+                value={form.sort_order} onChange={e=>s('sort_order',parseInt(e.target.value)||50)}/>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={()=>setShowAdd(false)}
+              className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 text-sm hover:bg-slate-50">
+              إلغاء / Cancel
+            </button>
+            <button onClick={save} disabled={saving}
+              className="px-6 py-2 rounded-xl bg-teal-700 text-white text-sm font-semibold hover:bg-teal-800 disabled:opacity-50">
+              {saving ? '⏳ جارٍ الحفظ...' : '💾 حفظ / Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* قائمة الأدوار */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="grid text-white text-xs font-semibold px-4 py-3"
+          style={{background:'linear-gradient(135deg,#0f766e,#0d9488)', gridTemplateColumns:'1.5fr 2fr 2fr 1fr 1fr'}}>
+          <div>كود الدور / Role Code</div>
+          <div>الاسم بالعربية / Arabic</div>
+          <div>الاسم بالإنجليزية / English</div>
+          <div>النوع / Type</div>
+          <div>إجراء / Action</div>
+        </div>
+
+        {loading ? (
+          <div className="py-10 text-center text-slate-400 text-sm">جارٍ التحميل... / Loading...</div>
+        ) : roles.map((r,i)=>(
+          <div key={r.role_code}
+            className={`grid items-center px-4 py-3 border-b border-slate-50 text-sm
+              ${i%2===0?'bg-white':'bg-slate-50/30'}`}
+            style={{gridTemplateColumns:'1.5fr 2fr 2fr 1fr 1fr'}}>
+            <div className="font-mono text-teal-700 font-bold text-xs bg-teal-50 px-2 py-1 rounded-lg w-fit">
+              {r.role_code}
+            </div>
+            <div className="font-semibold text-slate-800">{r.role_name_ar}</div>
+            <div className="text-slate-500 text-xs">{r.role_name_en || '—'}</div>
+            <div>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold
+                ${r.is_system?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>
+                {r.is_system ? '🔒 نظامي / System' : '✏️ مخصص / Custom'}
+              </span>
+            </div>
+            <div>
+              {!r.is_system ? (
+                <button onClick={()=>del(r.id, r.role_name_ar)}
+                  className="px-3 py-1 rounded-lg text-xs text-red-600 border border-red-200 hover:bg-red-50">
+                  🗑️ حذف
+                </button>
+              ) : (
+                <span className="text-xs text-slate-300">محمي / Protected</span>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {!loading && roles.length === 0 && (
+          <div className="py-10 text-center text-slate-400 text-sm">
+            لا توجد أدوار — شغّل الـ migration أولاً
+          </div>
+        )}
+      </div>
+
+      <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4 text-xs text-blue-700">
+        <span className="font-bold">💡 ملاحظة:</span> الأدوار المخصصة التي تضيفها ستظهر تلقائياً في جميع صفحات الإدخال (سندات القبض والصرف، المعاملات البنكية، العهدة النثرية) عند تحديد متعامل.
       </div>
     </div>
   )

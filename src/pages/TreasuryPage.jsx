@@ -148,7 +148,8 @@ function PartyPicker({value, onChange, label, role, required=false, placeholder}
   const doSearch=useCallback(async(q)=>{
     setLoading(true)
     try{
-      const r = await api.parties.list({search:q||undefined, limit:40})
+      // نجلب كل الأنواع بدون فلتر — المستخدم يختار
+      const r = await api.parties.list({search:q||undefined, limit:60})
       setResults(r?.data||[])
     }catch{setResults([])}finally{setLoading(false)}
   },[])
@@ -317,6 +318,49 @@ function AccountingRow({line, idx, taxTypes, onTaxChange, COLS}) {
 }
 
 // ══════════════════════════════════════════════════════════
+// ── usePartyRoles — جلب أدوار المتعاملين ────────────────────
+function usePartyRoles() {
+  const DEFAULT_ROLES = [
+    {role_code:'employee_loan',    role_name_ar:'سلفة موظف',       role_name_en:'Employee Loan'},
+    {role_code:'petty_cash_keeper',role_name_ar:'أمين عهدة نثرية', role_name_en:'Petty Cash Keeper'},
+    {role_code:'fund_keeper',      role_name_ar:'أمين صندوق',       role_name_en:'Fund Keeper'},
+    {role_code:'customer',         role_name_ar:'عميل',             role_name_en:'Customer'},
+    {role_code:'vendor',           role_name_ar:'مورد',             role_name_en:'Vendor'},
+    {role_code:'shareholder',      role_name_ar:'مساهم',            role_name_en:'Shareholder'},
+    {role_code:'contractor',       role_name_ar:'مقاول / متعاقد',   role_name_en:'Contractor'},
+    {role_code:'government',       role_name_ar:'جهة حكومية',       role_name_en:'Government Entity'},
+    {role_code:'other',            role_name_ar:'أخرى',             role_name_en:'Other'},
+  ]
+  const [roles, setRoles] = useState(DEFAULT_ROLES)
+  useEffect(() => {
+    api.parties?.listRoles?.()
+      .then(r => { if(r?.data?.length) setRoles(r.data) })
+      .catch(()=>{})
+  }, [])
+  return roles
+}
+
+// ── PartyRoleSelector — يعرض كل الأدوار ديناميكياً ──────────
+function PartyRoleSelector({value, onChange}) {
+  const roles = usePartyRoles()
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {roles.map(r=>(
+        <button key={r.role_code} type="button"
+          title={r.role_name_en}
+          onClick={()=>onChange(r.role_code)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all
+            ${value===r.role_code
+              ?'bg-teal-700 text-white border-teal-700'
+              :'border-teal-200 text-teal-700 hover:bg-teal-50'}`}>
+          {r.role_name_ar}
+          <span className="opacity-50 mr-1 text-[10px]">/{r.role_name_en}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // AccountingTable — جدول القيد المحاسبي
 // ══════════════════════════════════════════════════════════
 function AccountingTable({lines=[], taxTypes=[], onTaxChange=null}) {
@@ -400,15 +444,22 @@ function amountToWords(n) {
 }
 
 // ── Print ─────────────────────────────────────────────────
-function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimNames={}) {
+function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimNames={},roleLabel='') {
   const types={RV:'سند قبض نقدي',PV:'سند صرف نقدي',BR:'قبض بنكي',BP:'دفعة بنكية',BT:'تحويل بنكي',IT:'تحويل داخلي'}
   const title=types[tx.tx_type]||'سند خزينة'
   const isPosted = tx.status==='posted'
-  // أسماء الأبعاد — يُعطى dimNames = {branch:'اسم الفرع', cost_center:'اسم المركز', project:'اسم المشروع'}
   const branchLabel      = dimNames.branch      || tx.branch_name      || tx.branch_code      || '—'
   const costCenterLabel  = dimNames.cost_center || tx.cost_center_name || tx.cost_center      || '—'
   const projectLabel     = dimNames.project     || tx.project_name     || tx.project_code     || '—'
-  const counterpartLabel = tx.counterpart_name  || tx.party_name       || tx.beneficiary_name || '—'
+  const counterpartLabel = tx.counterpart_name  || tx.beneficiary_name || '—'
+  // المتعامل — يعرض الاسم من party_name أو beneficiary_name
+  const partyName  = tx.party_name || tx.beneficiary_name || ''
+  const partyRole  = roleLabel || tx.party_role_label || ({
+    employee_loan:'سلفة موظف', petty_cash_keeper:'أمين عهدة نثرية',
+    fund_keeper:'أمين صندوق',  customer:'عميل', vendor:'مورد',
+    shareholder:'مساهم',       contractor:'مقاول / متعاقد',
+    government:'جهة حكومية',   other:'أخرى',
+  })[tx.party_role] || tx.party_role || ''
   const w=window.open('','_blank','width=900,height=650')
   w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${title}</title>
   <style>
@@ -501,16 +552,33 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimName
     ${tx.je_serial?`<div class="je">رقم القيد المحاسبي: ${tx.je_serial}</div>`:''}
   </div>
 
-  <div class="info-grid">
-    <div class="info-item"><div class="lbl">الحساب / الصندوق</div><div class="val">${bankName||'—'}</div></div>
-    <div class="info-item"><div class="lbl">الحساب المقابل</div><div class="val">${counterpartLabel}</div></div>
-    <div class="info-item"><div class="lbl">البيان</div><div class="val">${tx.description||'—'}</div></div>
-    <div class="info-item"><div class="lbl">المرجع</div><div class="val">${tx.reference||'—'}</div></div>
-    <div class="info-item"><div class="lbl">طريقة الدفع</div><div class="val">${tx.payment_method||'—'}</div></div>
-    <div class="info-item"><div class="lbl">تاريخ السند</div><div class="val">${fmtDate(tx.tx_date)}</div></div>
-    ${tx.branch_code?`<div class="info-item"><div class="lbl">الفرع</div><div class="val">${branchLabel}</div></div>`:''}
-    ${tx.cost_center?`<div class="info-item"><div class="lbl">مركز التكلفة</div><div class="val">${costCenterLabel}</div></div>`:''}
-    ${tx.project_code?`<div class="info-item"><div class="lbl">المشروع</div><div class="val">${projectLabel}</div></div>`:''}
+    <div class="info-grid">
+    <div class="info-item"><div class="lbl">الحساب / الصندوق / Account</div><div class="val">${bankName||'—'}</div></div>
+    <div class="info-item"><div class="lbl">الحساب المقابل / Counter Account</div><div class="val">${counterpartLabel}</div></div>
+    <div class="info-item"><div class="lbl">البيان / Description</div><div class="val">${tx.description||'—'}</div></div>
+    <div class="info-item"><div class="lbl">المرجع / Reference</div><div class="val">${tx.reference||'—'}</div></div>
+    <div class="info-item"><div class="lbl">طريقة الدفع / Payment Method</div><div class="val">${tx.payment_method||'—'}</div></div>
+    <div class="info-item"><div class="lbl">تاريخ السند / Date</div><div class="val">${fmtDate(tx.tx_date)}</div></div>
+    </div>
+
+    ${partyName ? `
+    <div style="background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:2px solid #5eead4;border-radius:14px;padding:14px 20px;margin:10px 0;display:flex;align-items:center;gap:16px">
+      <span style="font-size:28px">🤝</span>
+      <div style="flex:1">
+        <div style="font-size:10px;color:#0f766e;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">
+          المتعامل / Financial Party
+        </div>
+        <div style="font-size:16px;font-weight:800;color:#134e4a">${partyName}</div>
+        ${partyRole?`<div style="margin-top:4px;font-size:11px;color:#0f766e;background:#99f6e4;display:inline-block;padding:2px 10px;border-radius:10px;font-weight:600">${partyRole}</div>`:''}
+      </div>
+      ${tx.party_id?`<div style="font-size:10px;color:#5eead4;font-family:monospace">${tx.party_id.slice(0,8)}...</div>`:''}
+    </div>
+    ` : ''}
+
+    <div class="info-grid">
+    ${tx.branch_code?`<div class="info-item"><div class="lbl">الفرع / Branch</div><div class="val">${branchLabel}</div></div>`:''}
+    ${tx.cost_center?`<div class="info-item"><div class="lbl">مركز التكلفة / Cost Center</div><div class="val">${costCenterLabel}</div></div>`:''}
+    ${tx.project_code?`<div class="info-item"><div class="lbl">المشروع / Project</div><div class="val">${projectLabel}</div></div>`:''}
   </div>
 
   ${(()=>{
@@ -989,6 +1057,8 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
                 ['الصندوق / البنك', <span className="font-semibold">{accLabel}</span>],
                 ['المبلغ', <span className="font-mono font-bold text-slate-800">{fmt(amt,3)} {tx.currency_code||'ر.س'}</span>],
                 ['الطرف', tx.party_name||tx.beneficiary_name||'—'],
+                ...(tx.party_id ? [['المتعامل / Financial Party', <span className="font-semibold text-teal-700 flex items-center gap-1">🤝 {tx.party_name||tx.beneficiary_name||'—'}</span>]] : []),
+                ...(tx.party_role ? [['دور المتعامل / Party Role', <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-semibold">{({employee_loan:'سلفة موظف',petty_cash_keeper:'أمين عهدة',fund_keeper:'أمين صندوق',customer:'عميل',vendor:'مورد',other:'أخرى'})[tx.party_role]||tx.party_role}</span>]] : []),
                 ['المرجع', tx.reference||'—'],
                 ['الحساب المقابل', <span className="font-mono text-blue-700 text-xs">{cpLabel}</span>],
               ].map(([l,v],i)=>(
@@ -1085,6 +1155,16 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
                   <span className="text-slate-400">نوع السند</span>
                   <span className="font-bold text-slate-700">{TX_LABELS[tx.tx_type]||tx.tx_type}</span>
                 </div>
+                {(tx.party_name||tx.beneficiary_name)&&<div className="flex justify-between text-xs border-t border-slate-100 pt-2">
+                  <span className="text-slate-400">المتعامل</span>
+                  <span className="font-bold text-teal-700 flex items-center gap-1">🤝 {tx.party_name||tx.beneficiary_name}</span>
+                </div>}
+                {tx.party_role&&<div className="flex justify-between text-xs">
+                  <span className="text-slate-400">الدور</span>
+                  <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-semibold">
+                    {({employee_loan:'سلفة موظف',petty_cash_keeper:'أمين عهدة',fund_keeper:'أمين صندوق',customer:'عميل',vendor:'مورد',other:'أخرى'})[tx.party_role]||tx.party_role}
+                  </span>
+                </div>}
               </div>
             </div>
           </div>
@@ -4918,6 +4998,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
     finally{setSaving(false)}
   }
 
+  const roles = usePartyRoles()
   const handlePrint=()=>{
     if(!form.amount||!form.bank_account_id){showToast('أكمل البيانات أولاً','error');return}
     const dimNames = {
@@ -4925,7 +5006,14 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
       cost_center: costCenters.find(c=>c.code===form.cost_center||c.id===form.cost_center)?.name||'',
       project:     projects.find(p=>p.code===form.project_code||p.id===form.project_code)?.name||'',
     }
-    printVoucher({...form,serial:'مسودة'},je_lines,selectedBank?.account_name||'—','حساباتي ERP',dimNames)
+    const roleObj = roles.find(r=>r.role_code===form.party_role)
+    printVoucher({
+      ...form,
+      serial:'مسودة',
+      party_name: form.party_name || '',
+      party_role: form.party_role || '',
+    }, je_lines, selectedBank?.account_name||'—', 'حساباتي ERP', dimNames,
+    roleObj?.role_name_ar || '')
   }
 
   return <div className="max-w-4xl" dir="rtl">
@@ -5040,18 +5128,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
             <label className="text-xs font-semibold text-slate-500 block mb-1.5">
               دور المتعامل في هذا السند / Party Role
             </label>
-            <div className="flex gap-2 flex-wrap">
-              {(isPV
-                ? [['vendor','مورد / Vendor'],['employee_loan','سلفة موظف / Employee Loan'],['other','أخرى / Other']]
-                : [['customer','عميل / Customer'],['vendor','مورد / Vendor'],['other','أخرى / Other']]
-              ).map(([val,lbl])=>(
-                <button key={val} type="button" onClick={()=>s('party_role',val)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all
-                    ${form.party_role===val?'bg-teal-700 text-white border-teal-700':'border-teal-200 text-teal-700 hover:bg-teal-50'}`}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
+            <PartyRoleSelector value={form.party_role} onChange={v=>s('party_role',v)}/>
           </div>
         )}
       </div>
@@ -5359,17 +5436,11 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
           placeholder={type==='BR' ? 'عميل... Customer' : 'مورد أو موظف... Vendor / Employee'}
         />
         {form.party_id && (
-          <div className="flex gap-2 flex-wrap">
-            {(type==='BR'
-              ? [['customer','عميل / Customer'],['other','أخرى / Other']]
-              : [['vendor','مورد / Vendor'],['employee_loan','سلفة موظف / Employee Loan'],['other','أخرى / Other']]
-            ).map(([val,lbl])=>(
-              <button key={val} type="button" onClick={()=>s('party_role',val)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all
-                  ${form.party_role===val?'bg-teal-700 text-white border-teal-700':'border-teal-200 text-teal-700 hover:bg-teal-50'}`}>
-                {lbl}
-              </button>
-            ))}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 block mb-1.5">
+              دور المتعامل في هذا السند / Party Role
+            </label>
+            <PartyRoleSelector value={form.party_role} onChange={v=>s('party_role',v)}/>
           </div>
         )}
       </div>
