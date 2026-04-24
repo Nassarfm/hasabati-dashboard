@@ -126,25 +126,26 @@ export default function SideNav({ activePage, onNavigate }) {
       className="fixed top-0 right-0 h-screen z-50 flex flex-col transition-all duration-300"
       style={{
         width: collapsed ? '64px' : '240px',
-        background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',
-        borderLeft: '1px solid rgba(255,255,255,0.06)',
+        background: 'linear-gradient(180deg, #0d1b3e 0%, #122054 50%, #0d1b3e 100%)',
+        borderLeft: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '2px 0 20px rgba(0,0,0,0.3)',
       }}>
 
       {/* الشعار / Logo */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
         {!collapsed && (
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center shrink-0 shadow-lg" style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)'}}>
               <span className="text-white font-bold text-sm">ح</span>
             </div>
             <div>
               <div className="text-white font-bold text-sm leading-tight">حساباتي</div>
-              <div className="text-slate-400 text-[10px]">ERP v2.0</div>
+              <div className="text-blue-300/60 text-[10px]">ERP v2.0</div>
             </div>
           </div>
         )}
         {collapsed && (
-          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center mx-auto">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center mx-auto shadow-lg" style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)'}}>
             <span className="text-white font-bold text-sm">ح</span>
           </div>
         )}
@@ -168,9 +169,10 @@ export default function SideNav({ activePage, onNavigate }) {
                 onClick={() => !isSoon && handleNav(group.id)}
                 title={collapsed ? `${group.labelAr} / ${group.labelEn}` : ''}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right
-                  ${isActive ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/8 hover:text-white'}
-                  ${isSoon ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}
-                style={isActive ? {} : {}}>
+                  ${isSoon ? 'opacity-40 cursor-default text-slate-500' : ''}`}
+                style={isActive
+                  ? {background:'linear-gradient(135deg,#2563eb,#1d4ed8)', color:'white', boxShadow:'0 2px 10px rgba(37,99,235,0.4)'}
+                  : {color:'rgba(148,163,184,0.9)'}}>
                 <span className="text-base shrink-0">{group.icon}</span>
                 {!collapsed && (
                   <span className="flex-1 text-right truncate">
@@ -187,8 +189,10 @@ export default function SideNav({ activePage, onNavigate }) {
               <button
                 onClick={() => setOpenGroup(isOpen ? '' : group.id)}
                 title={collapsed ? `${group.labelAr} / ${group.labelEn}` : ''}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right
-                  ${isActive ? 'bg-white/12 text-white' : 'text-slate-400 hover:bg-white/8 hover:text-white'}`}>
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right"
+                style={isActive
+                  ? {background:'rgba(37,99,235,0.15)', color:'rgba(147,197,253,1)', borderRight:'2px solid #3b82f6'}
+                  : {color:'rgba(148,163,184,0.9)'}}>
                 <span className="text-base shrink-0">{group.icon}</span>
                 {!collapsed && (
                   <>
@@ -200,14 +204,16 @@ export default function SideNav({ activePage, onNavigate }) {
 
               {/* Sub-items */}
               {isOpen && !collapsed && (
-                <div className="mr-4 mt-0.5 mb-1 border-r border-white/10 pr-2 space-y-0.5">
+                <div className="mr-4 mt-0.5 mb-1 border-r space-y-0.5 pr-2" style={{borderColor:'rgba(59,130,246,0.25)'}}>
                   {group.items?.map(item => {
                     const isItemActive = activePage === item.id
                     return (
                       <button key={item.id}
                         onClick={() => handleNav(item.id)}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all text-right
-                          ${isItemActive ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/8 hover:text-slate-200'}`}>
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all text-right"
+                        style={isItemActive
+                          ? {background:'linear-gradient(135deg,#2563eb,#1d4ed8)', color:'white', boxShadow:'0 1px 6px rgba(37,99,235,0.35)'}
+                          : {color:'rgba(148,163,184,0.8)'}}>
                         <span className="text-sm shrink-0">{item.icon}</span>
                         <span className="flex-1 text-right truncate">{item.labelAr}</span>
                       </button>
@@ -221,29 +227,30 @@ export default function SideNav({ activePage, onNavigate }) {
       </nav>
 
       {/* المستخدم / User */}
-      <div className="border-t border-white/10 p-3">
+      <div className="border-t p-3" style={{borderColor:'rgba(59,130,246,0.2)', background:'rgba(0,0,0,0.2)'}}>
         <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 text-white text-xs font-bold">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold shadow-lg"
+            style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)'}}>
             {initials}
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <div className="text-white text-xs font-semibold truncate">{userName}</div>
-              <div className="text-slate-500 text-[10px] truncate">{user?.email}</div>
+              <div className="text-blue-300/50 text-[10px] truncate">{user?.email}</div>
             </div>
           )}
           {!collapsed && (
             <button onClick={signOut}
-              title="تسجيل الخروج"
-              className="text-slate-500 hover:text-red-400 text-sm">
+              title="تسجيل الخروج / Sign Out"
+              className="text-blue-300/40 hover:text-red-400 text-sm transition-colors">
               ⬚
             </button>
           )}
         </div>
         {!collapsed && (
           <div className="mt-2 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>
-            <span className="text-slate-500 text-[10px]">متصل / Online</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm" style={{boxShadow:'0 0 4px #34d399'}}/>
+            <span className="text-blue-300/40 text-[10px]">متصل / Online</span>
           </div>
         )}
       </div>

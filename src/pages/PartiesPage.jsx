@@ -648,7 +648,7 @@ function PartyRolesSettings({ showToast }) {
     finally { setSaving(false) }
   }
 
-  const del = async(id, name) => {
+  const deleteRole = async(id, name) => {
     if(!confirm(`حذف دور "${name}"؟`)) return
     try { await api.parties.deleteRole(id); load(); showToast('تم الحذف') }
     catch(e) { showToast(e.message,'error') }
@@ -744,7 +744,7 @@ function PartyRolesSettings({ showToast }) {
             </div>
             <div>
               {!r.is_system ? (
-                <button onClick={()=>del(r.id, r.role_name_ar)}
+                <button onClick={()=>deleteRole(r.id, r.role_name_ar)}
                   className="px-3 py-1 rounded-lg text-xs text-red-600 border border-red-200 hover:bg-red-50">
                   🗑️ حذف
                 </button>

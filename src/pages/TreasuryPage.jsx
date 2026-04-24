@@ -2670,9 +2670,13 @@ function ReportsSection({showToast}) {
         r = await api.treasury.inactiveAccounts()
       }
       else if(sub==='reconciliation') {
-        // التسوية البنكية — تعرض قائمة البنوك لاختيار جلسة
-        r = await api.treasury.listBankAccounts({account_type:'bank'})
-        r = {data: {banks: r?.data||[], type:'reconciliation_home'}}
+        // التسوية البنكية — جلب قائمة البنوك
+        const bankRes = await api.treasury.listBankAccounts({account_type:'bank'})
+        // normalize: قد يأتي كـ array مباشرة أو داخل data
+        const banksArr = Array.isArray(bankRes?.data) ? bankRes.data
+                       : Array.isArray(bankRes)       ? bankRes
+                       : bankRes?.data?.items         || bankRes?.data || []
+        r = {data: {banks: banksArr, type:'reconciliation_home'}}
       }
 
       const raw = r?.data
@@ -6196,16 +6200,7 @@ function PettyCashTab({showToast}) {
   const [editFund,setEditFund]=useState(null)
   const [showExpForm,setShowExpForm]=useState(false)
 
-  // صفحة كاملة لإدخال المصروف النثري
-  if(showExpForm) return (
-    <PettyCashExpensePage
-      funds={funds}
-      onBack={()=>setShowExpForm(false)}
-      onSaved={()=>{load();setShowExpForm(false);showToast('تم إنشاء المصروف ✅')}}
-      showToast={showToast}
-    />
-  )
-
+  // ✅ load يجب أن يكون قبل أي return مشروط
   const load=useCallback(async()=>{
     setLoading(true)
     try{
@@ -6219,6 +6214,16 @@ function PettyCashTab({showToast}) {
     }catch(e){showToast(e.message,'error')}finally{setLoading(false)}
   },[])
   useEffect(()=>{load()},[load])
+
+  // ✅ Early return بعد كل الـ hooks
+  if(showExpForm) return (
+    <PettyCashExpensePage
+      funds={funds}
+      onBack={()=>setShowExpForm(false)}
+      onSaved={()=>{load();setShowExpForm(false);showToast('تم إنشاء المصروف ✅')}}
+      showToast={showToast}
+    />
+  )
 
   const doPost=async(id)=>{try{await api.treasury.postPettyCashExpense(id);load();showToast('تم الترحيل ✅')}catch(e){showToast(e.message,'error')}}
   const doReplenish=async(fundId)=>{if(!confirm('إنشاء طلب تعبئة؟'))return;try{await api.treasury.createReplenishment(fundId);load();showToast('تم إنشاء طلب التعبئة ✅')}catch(e){showToast(e.message,'error')}}
@@ -6352,7 +6357,7 @@ function PettyCashTab({showToast}) {
     {/* Modal للصندوق */}
     {showFundForm&&<PettyCashFundModal fund={editFund} bankAccounts={bankAccounts}
       onClose={()=>setShowFundForm(false)} onSaved={()=>{load();setShowFundForm(false);showToast('تم الحفظ ✅')}} showToast={showToast}/>}
-    {showExpForm&&null /* handled by early return above */}
+    {/* مصروف نثري — يُعرض كصفحة كاملة عبر early return */}
   </div>
 }
 

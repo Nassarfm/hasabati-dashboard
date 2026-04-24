@@ -129,7 +129,7 @@ function AppContent() {
       case 'treasury_recurring':    return <TreasuryPage section="operations" sub="recurring"/>
       case 'treasury_gl_import':    return <TreasuryPage section="bank" sub="gl-import"/>
       case 'treasury_smart_import': return <TreasuryPage section="bank" sub="smart-import"/>
-      case 'treasury_cash_flow':    return <TreasuryPage section="bank" sub="cash-flow"/>
+      case 'treasury_cash_flow':    return <TreasuryPage section="reports" sub="cash-flow"/>
       case 'treasury_activity':     return <TreasuryPage section="cash" sub="activity"/>
       case 'sales':              return <SalesPage/>
       case 'purchases':          return <PurchasesPage/>
