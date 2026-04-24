@@ -2642,24 +2642,37 @@ function ReportsSection({showToast}) {
         r = await api.treasury.checkAging()
       }
       else if(sub==='cash-flow') {
-        r = await api.treasury.listCashTransactions({
-          status: 'posted',
-          date_from: filters.date_from||undefined,
-          date_to:   filters.date_to||undefined,
-        })
+        // نجلب سندات القبض والصرف النقدي المرحّلة
+        try {
+          r = await api.treasury.listCashTransactions({
+            status: 'posted',
+            date_from: filters.date_from||undefined,
+            date_to:   filters.date_to||undefined,
+            limit: 500,
+          })
+        } catch(e) {
+          // fallback: اجلب بدون فلتر
+          r = await api.treasury.listCashTransactions({ limit: 200 })
+        }
       }
       else if(sub==='bank-expenses') {
-        r = await api.treasury.listBankFees({
-          bank_account_id: filters.account_id||undefined,
-          date_from: filters.date_from||undefined,
-          date_to:   filters.date_to||undefined,
-        })
+        try {
+          r = await api.treasury.listBankFees({
+            bank_account_id: filters.account_id||undefined,
+            date_from: filters.date_from||undefined,
+            date_to:   filters.date_to||undefined,
+          })
+        } catch(e) {
+          r = {data: {items:[], message:'جدول الرسوم البنكية غير موجود بعد'}}
+        }
       }
       else if(sub==='inactive') {
         r = await api.treasury.inactiveAccounts()
       }
       else if(sub==='reconciliation') {
-        r = {data:{info:'يدوية من صفحة حركات البنك'}}
+        // التسوية البنكية — تعرض قائمة البنوك لاختيار جلسة
+        r = await api.treasury.listBankAccounts({account_type:'bank'})
+        r = {data: {banks: r?.data||[], type:'reconciliation_home'}}
       }
 
       const raw = r?.data
@@ -2988,7 +3001,75 @@ function ReportsSection({showToast}) {
           {icon:'📤', label:'إجمالي الدائن', value:`${fmt(data.total_credit||0,3)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
           {icon:'🔵', label:'الرصيد الختامي', value:`${fmt(data.closing||0,3)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-800', bg:'bg-blue-50 border-blue-200'},
         ]}/>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <button onClick={()=>{
+            const w=window.open('','_blank','width=1000,height=700')
+            const accName=acc.account_name||'الحساب'
+            w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+            <title>كشف حساب ${accName}</title>
+            <style>
+              *{box-sizing:border-box;margin:0;padding:0}
+              body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:12px;direction:rtl}
+              @media print{.no-print{display:none!important}@page{margin:12mm}}
+              .page{max-width:210mm;margin:0 auto;padding:20px}
+              .header{background:linear-gradient(135deg,#1e3a5f,#1e40af);color:white;padding:16px 20px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+              .header h1{font-size:18px;font-weight:800}
+              .header .meta{text-align:left;font-size:11px;opacity:0.85}
+              .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+              .kpi{border:1px solid #e2e8f0;border-radius:10px;padding:10px;text-align:center}
+              .kpi .lbl{font-size:10px;color:#94a3b8;margin-bottom:4px}
+              .kpi .val{font-size:15px;font-weight:800;font-family:monospace}
+              table{width:100%;border-collapse:collapse;font-size:11px}
+              thead tr{background:#1e3a5f;color:white}
+              th{padding:8px 10px;text-align:right;font-weight:600}
+              td{padding:7px 10px;border-bottom:1px solid #f1f5f9}
+              tr:nth-child(even) td{background:#f8fafc}
+              .total-row td{background:#eff6ff!important;font-weight:700;border-top:2px solid #1e40af}
+              .footer{margin-top:16px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}
+            </style></head><body><div class="page">
+            <div class="header">
+              <div><h1>📄 كشف حساب: ${accName}</h1><div style="margin-top:4px;font-size:11px;opacity:0.8">كود الحساب: ${acc.account_code||'—'}</div></div>
+              <div class="meta">
+                <div>من: ${filters.date_from?fmtDate(filters.date_from):'—'} | إلى: ${filters.date_to?fmtDate(filters.date_to):'—'}</div>
+                <div style="margin-top:4px">طُبع: ${new Date().toLocaleDateString('ar-SA')}</div>
+              </div>
+            </div>
+            <div class="kpis">
+              <div class="kpi"><div class="lbl">الرصيد الافتتاحي</div><div class="val" style="color:#475569">${fmt(data.opening||0,3)}</div></div>
+              <div class="kpi"><div class="lbl">إجمالي المدين / Debit</div><div class="val" style="color:#16a34a">${fmt(data.total_debit||0,3)}</div></div>
+              <div class="kpi"><div class="lbl">إجمالي الدائن / Credit</div><div class="val" style="color:#dc2626">${fmt(data.total_credit||0,3)}</div></div>
+              <div class="kpi"><div class="lbl">الرصيد الختامي</div><div class="val" style="color:#1e40af">${fmt(data.closing||0,3)}</div></div>
+            </div>
+            <table>
+              <thead><tr>${['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+              <tbody>
+                <tr style="background:#f0f9ff"><td colspan="9" style="text-align:center;font-weight:700;padding:8px">رصيد افتتاحي: ${fmt(data.opening||0,3)} ر.س</td></tr>
+                ${rows.map((r,i)=>`<tr>
+                  <td style="font-family:monospace;color:#1e40af;font-weight:700">${r.serial||'—'}</td>
+                  <td><span style="font-weight:700;color:${r.tx_type==='BR'||r.tx_type==='RV'?'#16a34a':'#dc2626'}">${r.tx_type||'—'}</span></td>
+                  <td style="color:#64748b">${fmtDate(r.tx_date)}</td>
+                  <td>${r.party||'—'}</td>
+                  <td>${r.description||'—'}</td>
+                  <td style="font-family:monospace;color:#94a3b8">${r.reference||'—'}</td>
+                  <td style="font-family:monospace;font-weight:700;color:#16a34a">${r.debit>0?fmt(r.debit,3):'—'}</td>
+                  <td style="font-family:monospace;font-weight:700;color:#dc2626">${r.credit>0?fmt(r.credit,3):'—'}</td>
+                  <td style="font-family:monospace;font-weight:700;color:${(r.running_balance||0)>=0?'#1e40af':'#dc2626'}">${fmt(r.running_balance||0,3)}</td>
+                </tr>`).join('')}
+                <tr class="total-row"><td colspan="6" style="text-align:center">الإجمالي / Total</td>
+                  <td style="font-family:monospace;color:#16a34a">${fmt(data.total_debit||0,3)}</td>
+                  <td style="font-family:monospace;color:#dc2626">${fmt(data.total_credit||0,3)}</td>
+                  <td style="font-family:monospace;color:#1e40af;font-weight:800">${fmt(data.closing||0,3)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="footer"><span>حساباتي ERP v2.0</span><span>${accName} | ${rows.length} حركة</span></div>
+            <div class="no-print" style="text-align:center;margin-top:20px">
+              <button onclick="window.print()" style="background:#1e3a5f;color:white;border:none;padding:10px 30px;border-radius:8px;cursor:pointer;font-size:14px">🖨️ طباعة / PDF</button>
+              <button onclick="window.close()" style="margin-right:10px;background:#f1f5f9;border:1px solid #e2e8f0;padding:10px 20px;border-radius:8px;cursor:pointer">✕ إغلاق</button>
+            </div>
+            </div></body></html>`)
+            w.document.close()
+          }} className="px-3 py-2 rounded-xl bg-blue-700 text-white text-xs font-semibold hover:bg-blue-800">🖨️ طباعة / Print</button>
           <button onClick={()=>exportXLS(
             rows.map(r=>[r.serial,r.tx_type,fmtDate(r.tx_date),r.party||'',r.description||'',r.reference||'',r.debit>0?r.debit:0,r.credit>0?r.credit:0,r.running_balance]),
             ['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'],
@@ -3046,24 +3127,298 @@ function ReportsSection({showToast}) {
 
     {/* تقرير التسوية */}
     {sub==='reconciliation' && (
-      <div className="bg-white rounded-2xl border border-emerald-200 overflow-hidden">
-        <div className="px-5 py-4 bg-emerald-600 text-white text-sm font-bold">
-          ✅ تقرير التسوية البنكية
-        </div>
-        <div className="p-6 text-center text-slate-500 space-y-3">
-          <div className="text-4xl">🏦</div>
-          <p className="font-semibold">التسوية البنكية اليدوية تعمل من صفحة حركات البنك</p>
-          <p className="text-xs text-slate-400">افتح الخزينة والبنوك ← حركات البنوك ← ضع ✓ على الحركات الموجودة في كشف البنك</p>
-          <button
-            onClick={()=>window.dispatchEvent(new CustomEvent('navigate',{detail:'treasury_bank'}))}
-            className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700">
-            الذهاب لحركات البنك ←
-          </button>
-        </div>
-      </div>
+      <BankReconciliationSession
+        banks={data?.banks||[]}
+        showToast={showToast}
+        onNavigateToBank={()=>window.dispatchEvent(new CustomEvent('navigate',{detail:'treasury_bank'}))}
+      />
     )}
 
   </div>
+}
+
+// ══ BANK RECONCILIATION SESSION ═══════════════════════════
+function BankReconciliationSession({banks, showToast, onNavigateToBank}) {
+  const [selBank,  setSelBank]  = useState('')
+  const [stmtBal,  setStmtBal]  = useState('')
+  const [stmtDate, setStmtDate] = useState(today())
+  const [txData,   setTxData]   = useState(null)
+  const [loading,  setLoading]  = useState(false)
+  const [session,  setSession]  = useState(null) // نتيجة الجلسة
+
+  const selectedBankObj = banks.find(b=>b.id===selBank)
+
+  const startSession = async() => {
+    if(!selBank)   { showToast('اختر الحساب البنكي أولاً','error'); return }
+    if(!stmtBal)   { showToast('أدخل رصيد كشف البنك','error'); return }
+    if(!stmtDate)  { showToast('أدخل تاريخ الكشف البنكي','error'); return }
+    setLoading(true)
+    try {
+      const r = await api.treasury.accountStatement({
+        bank_account_id: selBank,
+        date_to: stmtDate,
+      })
+      const d = r?.data || {}
+      const rows = d.rows || []
+      const bookBalance  = d.closing || 0
+      const stmtBalance  = parseFloat(stmtBal) || 0
+      const difference   = stmtBalance - bookBalance
+      const unreconciled = rows.filter(r=>!r.is_reconciled)
+      const reconciled   = rows.filter(r=>r.is_reconciled)
+      setSession({
+        bank:      selectedBankObj,
+        stmtBal:   stmtBalance,
+        stmtDate,
+        bookBal:   bookBalance,
+        diff:      difference,
+        rows,
+        unreconciled,
+        reconciled,
+        opening:   d.opening || 0,
+        totalDebit:  d.total_debit  || 0,
+        totalCredit: d.total_credit || 0,
+      })
+    } catch(e) { showToast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+
+  const printReconciliation = () => {
+    if(!session) return
+    const {bank, stmtBal, stmtDate, bookBal, diff, rows, opening} = session
+    const w = window.open('','_blank','width=1000,height=750')
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+    <title>تقرير التسوية البنكية</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:12px;direction:rtl}
+      @media print{.no-print{display:none!important}@page{margin:12mm}}
+      .page{max-width:210mm;margin:0 auto;padding:20px}
+      .header{background:linear-gradient(135deg,#064e3b,#059669);color:white;padding:16px 20px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between}
+      .header h1{font-size:17px;font-weight:800}
+      .sum-table{width:100%;border-collapse:collapse;margin:14px 0;font-size:12px}
+      .sum-table td{padding:9px 14px;border-bottom:1px solid #e2e8f0}
+      .sum-table .lbl{color:#64748b;width:60%}
+      .sum-table .val{font-family:monospace;font-weight:700;text-align:left}
+      .diff-pos{color:#16a34a}.diff-neg{color:#dc2626}.diff-zero{color:#1e40af}
+      table{width:100%;border-collapse:collapse;margin:12px 0;font-size:11px}
+      thead tr{background:#064e3b;color:white}
+      th{padding:7px 9px;text-align:right;font-weight:600}
+      td{padding:6px 9px;border-bottom:1px solid #f1f5f9}
+      tr:nth-child(even) td{background:#f0fdf4}
+      .section-hdr{background:#dcfce7;font-weight:700;font-size:11px;color:#166534;padding:8px 12px;border-radius:8px;margin:12px 0 6px}
+      .footer{margin-top:14px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}
+      .signatures{display:flex;justify-content:space-around;margin-top:30px;padding-top:16px;border-top:1px dashed #e2e8f0}
+      .sign-box{text-align:center;min-width:130px}
+      .sign-line{border-top:2px solid #1e293b;width:130px;margin:0 auto 6px}
+      .sign-label{font-size:11px;color:#64748b;font-weight:600}
+    </style></head><body><div class="page">
+    <div class="header">
+      <div><h1>✅ تقرير التسوية البنكية / Bank Reconciliation Report</h1>
+        <div style="font-size:11px;opacity:0.85;margin-top:4px">${bank?.account_name||'—'} | ${bank?.account_code||''}</div>
+      </div>
+      <div style="text-align:left;font-size:11px;opacity:0.85">
+        <div>تاريخ الكشف: ${fmtDate(stmtDate)}</div>
+        <div>طُبع: ${new Date().toLocaleDateString('ar-SA')}</div>
+      </div>
+    </div>
+    <table class="sum-table">
+      <tr><td class="lbl">رصيد كشف البنك / Bank Statement Balance</td><td class="val" style="color:#1e40af">${fmt(stmtBal,3)} ر.س</td></tr>
+      <tr><td class="lbl">رصيد الدفاتر / Book Balance</td><td class="val" style="color:#1e40af">${fmt(bookBal,3)} ر.س</td></tr>
+      <tr style="background:#f0fdf4"><td class="lbl"><strong>الفرق / Difference</strong></td>
+        <td class="val ${diff===0?'diff-zero':diff>0?'diff-pos':'diff-neg'}" style="font-size:14px">
+          ${diff===0?'✅ متطابق':diff>0?`+${fmt(diff,3)} ر.س`:fmt(diff,3)+' ر.س'}
+        </td>
+      </tr>
+    </table>
+    ${session.unreconciled.length>0?`
+    <div class="section-hdr">⏳ حركات غير مسوّاة (${session.unreconciled.length}) / Unreconciled Transactions</div>
+    <table>
+      <thead><tr><th>الرقم</th><th>النوع</th><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th></tr></thead>
+      <tbody>
+        ${session.unreconciled.map(r=>`<tr>
+          <td style="font-family:monospace;color:#1e40af">${r.serial||'—'}</td>
+          <td>${r.tx_type||'—'}</td>
+          <td style="color:#64748b">${fmtDate(r.tx_date)}</td>
+          <td>${r.description||'—'}</td>
+          <td style="font-family:monospace;color:#16a34a">${r.debit>0?fmt(r.debit,3):'—'}</td>
+          <td style="font-family:monospace;color:#dc2626">${r.credit>0?fmt(r.credit,3):'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`:''}
+    ${session.reconciled.length>0?`
+    <div class="section-hdr">✅ حركات مسوّاة (${session.reconciled.length}) / Reconciled Transactions</div>
+    <table>
+      <thead><tr><th>الرقم</th><th>النوع</th><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th></tr></thead>
+      <tbody>
+        ${session.reconciled.map(r=>`<tr>
+          <td style="font-family:monospace;color:#16a34a">${r.serial||'—'}</td>
+          <td>${r.tx_type||'—'}</td>
+          <td style="color:#64748b">${fmtDate(r.tx_date)}</td>
+          <td>${r.description||'—'}</td>
+          <td style="font-family:monospace;color:#16a34a">${r.debit>0?fmt(r.debit,3):'—'}</td>
+          <td style="font-family:monospace;color:#dc2626">${r.credit>0?fmt(r.credit,3):'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`:''}
+    <div class="signatures">
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">أمين الخزينة / Treasurer</div></div>
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المراجع / Reviewer</div></div>
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المدير المالي / CFO</div></div>
+    </div>
+    <div class="footer"><span>حساباتي ERP v2.0</span><span>${bank?.account_name||''} | ${rows.length} حركة</span></div>
+    <div class="no-print" style="text-align:center;margin-top:20px">
+      <button onclick="window.print()" style="background:#064e3b;color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px">🖨️ طباعة / PDF</button>
+      <button onclick="window.close()" style="margin-right:10px;background:#f1f5f9;border:1px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer">✕ إغلاق</button>
+    </div>
+    </div></body></html>`)
+    w.document.close()
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="bg-white rounded-2xl border-2 border-emerald-200 p-5">
+        <h3 className="text-lg font-bold text-emerald-800 mb-4 flex items-center gap-2">
+          ✅ جلسة تسوية بنكية جديدة
+          <span className="text-sm font-normal text-slate-400">/ New Bank Reconciliation Session</span>
+        </h3>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">الحساب البنكي / Bank Account <span className="text-red-500">*</span></label>
+            <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500"
+              value={selBank} onChange={e=>{setSelBank(e.target.value);setSession(null)}}>
+              <option value="">— اختر البنك —</option>
+              {banks.map(b=><option key={b.id} value={b.id}>{b.account_name} ({b.account_code})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">تاريخ كشف البنك / Statement Date <span className="text-red-500">*</span></label>
+            <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500"
+              value={stmtDate} onChange={e=>setStmtDate(e.target.value)}/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">رصيد كشف البنك / Statement Balance <span className="text-red-500">*</span></label>
+            <input type="number" step="0.001" className="w-full border-2 border-emerald-300 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-emerald-600 bg-emerald-50"
+              value={stmtBal} onChange={e=>setStmtBal(e.target.value)} placeholder="0.000"/>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-4">
+          <button onClick={startSession} disabled={loading}
+            className="px-6 py-2.5 rounded-xl bg-emerald-700 text-white font-semibold text-sm hover:bg-emerald-800 disabled:opacity-50">
+            {loading?'⏳ جارٍ التحميل...':'🔍 بدء جلسة التسوية / Start Session'}
+          </button>
+          {session && (
+            <button onClick={printReconciliation}
+              className="px-5 py-2.5 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50">
+              🖨️ طباعة التقرير / Print Report
+            </button>
+          )}
+          <button onClick={onNavigateToBank}
+            className="px-5 py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+            → حركات البنك / Bank Transactions
+          </button>
+        </div>
+      </div>
+
+      {/* نتيجة الجلسة */}
+      {session && (
+        <div className="space-y-4">
+          {/* KPIs */}
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              {label:'رصيد كشف البنك', labelEn:'Statement Bal.', value:`${fmt(session.stmtBal,3)} ر.س`, color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
+              {label:'رصيد الدفاتر',   labelEn:'Book Balance',  value:`${fmt(session.bookBal,3)} ر.س`, color:'text-slate-700', bg:'bg-slate-50 border-slate-200'},
+              {label:'الفرق',          labelEn:'Difference',    value:session.diff===0?'✅ متطابق':`${fmt(session.diff,3)} ر.س`,
+                color:session.diff===0?'text-emerald-700':session.diff>0?'text-amber-600':'text-red-600',
+                bg:session.diff===0?'bg-emerald-50 border-emerald-200':session.diff>0?'bg-amber-50 border-amber-200':'bg-red-50 border-red-200'},
+              {label:'غير مسوّاة',     labelEn:'Unreconciled',  value:`${session.unreconciled.length} حركة`, color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
+            ].map((k,i)=>(
+              <div key={i} className={`rounded-2xl border-2 p-4 ${k.bg}`}>
+                <div className="text-xs text-slate-400 mb-1">{k.label} <span className="opacity-60">/ {k.labelEn}</span></div>
+                <div className={`text-lg font-bold font-mono ${k.color}`}>{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* الفرق */}
+          {session.diff !== 0 && (
+            <div className={`rounded-2xl border-2 p-4 ${session.diff>0?'bg-amber-50 border-amber-300':'bg-red-50 border-red-300'}`}>
+              <div className="font-bold text-sm mb-1 flex items-center gap-2">
+                ⚠️ يوجد فرق في التسوية / Reconciliation Difference
+              </div>
+              <div className="text-xs text-slate-600">
+                {session.diff > 0
+                  ? 'رصيد البنك أعلى من الدفاتر — قد توجد إيداعات في البنك لم تُسجَّل بعد'
+                  : 'رصيد الدفاتر أعلى من البنك — قد توجد شيكات صادرة لم تُصرف بعد'}
+                <br/>
+                <span className="text-slate-400">الفرق: <span className="font-mono font-bold">{fmt(Math.abs(session.diff),3)} ر.س</span></span>
+              </div>
+            </div>
+          )}
+
+          {/* الحركات غير المسوّاة */}
+          {session.unreconciled.length > 0 && (
+            <div className="bg-white rounded-2xl border border-amber-200 overflow-hidden">
+              <div className="px-5 py-3 bg-amber-500 text-white text-sm font-bold flex items-center justify-between">
+                <span>⏳ حركات غير مسوّاة / Unreconciled ({session.unreconciled.length})</span>
+                <span className="font-mono text-xs opacity-80">
+                  {fmt(session.unreconciled.reduce((s,r)=>s+(r.debit||0)-(r.credit||0),0),3)} ر.س
+                </span>
+              </div>
+              <table className="w-full text-xs">
+                <thead><tr className="bg-amber-50 text-slate-600">
+                  {['الرقم','النوع','التاريخ','البيان','الطرف','مدين','دائن'].map(h=>(
+                    <th key={h} className="px-3 py-2 text-right font-semibold">{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {session.unreconciled.map((r,i)=>(
+                    <tr key={i} className={`border-t border-amber-50 ${i%2===0?'bg-white':'bg-amber-50/20'}`}>
+                      <td className="px-3 py-2 font-mono font-bold text-blue-700">{r.serial}</td>
+                      <td className="px-3 py-2"><span className={`font-bold ${TX_META[r.tx_type]?.color||'text-slate-600'}`}>{TX_META[r.tx_type]?.label||r.tx_type}</span></td>
+                      <td className="px-3 py-2 text-slate-400">{fmtDate(r.tx_date)}</td>
+                      <td className="px-3 py-2 text-slate-500 max-w-[150px] truncate">{r.description||'—'}</td>
+                      <td className="px-3 py-2 text-slate-400">{r.party||'—'}</td>
+                      <td className="px-3 py-2 font-mono text-emerald-700">{r.debit>0?fmt(r.debit,3):'—'}</td>
+                      <td className="px-3 py-2 font-mono text-red-600">{r.credit>0?fmt(r.credit,3):'—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* الحركات المسوّاة */}
+          {session.reconciled.length > 0 && (
+            <div className="bg-white rounded-2xl border border-emerald-200 overflow-hidden">
+              <div className="px-5 py-3 bg-emerald-600 text-white text-sm font-bold flex items-center justify-between">
+                <span>✅ حركات مسوّاة / Reconciled ({session.reconciled.length})</span>
+              </div>
+              <table className="w-full text-xs">
+                <thead><tr className="bg-emerald-50 text-slate-600">
+                  {['الرقم','النوع','التاريخ','البيان','مدين','دائن'].map(h=>(
+                    <th key={h} className="px-3 py-2 text-right font-semibold">{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {session.reconciled.map((r,i)=>(
+                    <tr key={i} className={`border-t border-emerald-50 ${i%2===0?'bg-white':'bg-emerald-50/20'}`}>
+                      <td className="px-3 py-2 font-mono font-bold text-emerald-700">{r.serial}</td>
+                      <td className="px-3 py-2"><span className="font-bold text-emerald-600">{TX_META[r.tx_type]?.label||r.tx_type}</span></td>
+                      <td className="px-3 py-2 text-slate-400">{fmtDate(r.tx_date)}</td>
+                      <td className="px-3 py-2 text-slate-500 max-w-[150px] truncate">{r.description||'—'}</td>
+                      <td className="px-3 py-2 font-mono text-emerald-700">{r.debit>0?fmt(r.debit,3):'—'}</td>
+                      <td className="px-3 py-2 font-mono text-red-600">{r.credit>0?fmt(r.credit,3):'—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ══ DASHBOARD ═════════════════════════════════════════════
@@ -5841,6 +6196,16 @@ function PettyCashTab({showToast}) {
   const [editFund,setEditFund]=useState(null)
   const [showExpForm,setShowExpForm]=useState(false)
 
+  // صفحة كاملة لإدخال المصروف النثري
+  if(showExpForm) return (
+    <PettyCashExpensePage
+      funds={funds}
+      onBack={()=>setShowExpForm(false)}
+      onSaved={()=>{load();setShowExpForm(false);showToast('تم إنشاء المصروف ✅')}}
+      showToast={showToast}
+    />
+  )
+
   const load=useCallback(async()=>{
     setLoading(true)
     try{
@@ -5871,7 +6236,7 @@ function PettyCashTab({showToast}) {
       {icon:'📊', label:'إجمالي المصاريف', value:`${fmt(totalExpenses,2)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-800'},
     ]}/>
     <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
-      {[{id:'funds',l:'🗄️ الصناديق'},{id:'expenses',l:'💸 المصاريف النثرية'},{id:'replenishments',l:'🔄 إعادة التعبئة'}].map(t=>(
+      {[{id:'funds',l:'🗄️ الصناديق'},{id:'expenses',l:'💸 المصاريف النثرية'},{id:'replenishments',l:'📋 طلبات الاسترداد'}].map(t=>(
         <button key={t.id} onClick={()=>setSubTab(t.id)} className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${subTab===t.id?'bg-white text-blue-700 shadow-sm':'text-slate-500'}`}>{t.l}</button>
       ))}
     </div>
@@ -5921,7 +6286,7 @@ function PettyCashTab({showToast}) {
             </div>
             <div className="flex justify-between text-xs mb-3">
               <span className="text-slate-400">{pct}%</span>
-              {f.needs_replenishment&&isActive&&<span className="text-amber-600 font-medium">⚠️ تحتاج تعبئة</span>}
+              {f.needs_replenishment&&isActive&&<span className="text-amber-600 font-medium">⚠️ يحتاج استرداد / Reimbursement Needed</span>}
             </div>
             {/* أزرار */}
             <div className="flex gap-2">
@@ -5987,8 +6352,7 @@ function PettyCashTab({showToast}) {
     {/* Modal للصندوق */}
     {showFundForm&&<PettyCashFundModal fund={editFund} bankAccounts={bankAccounts}
       onClose={()=>setShowFundForm(false)} onSaved={()=>{load();setShowFundForm(false);showToast('تم الحفظ ✅')}} showToast={showToast}/>}
-    {showExpForm&&<PettyCashExpenseModal funds={funds}
-      onClose={()=>setShowExpForm(false)} onSaved={()=>{load();setShowExpForm(false);showToast('تم إنشاء المصروف ✅')}} showToast={showToast}/>}
+    {showExpForm&&null /* handled by early return above */}
   </div>
 }
 
@@ -7556,73 +7920,313 @@ function CashFlowPage({showToast}) {
 }
 
 
-function PettyCashExpenseModal({funds,onClose,onSaved,showToast}) {
-  const [form,setForm]=useState({fund_id:'',expense_date:today(),description:'',reference:'',notes:'',party_id:'',party_role:'petty_cash_keeper'})
-  const [lines,setLines]=useState([{id:1,expense_account:'',expense_account_name:'',description:'',amount:'',vat_amount:'',vendor_name:''}])
-  const [saving,setSaving]=useState(false)
-  const s=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const {isOpen:periodOk, isClosed:periodClosed, checking:periodChecking} = useFiscalPeriod(form.expense_date)
-  const sl=(i,k,v)=>setLines(ls=>ls.map((l,idx)=>idx===i?{...l,[k]:v}:l))
-  const addLine=()=>setLines(ls=>[...ls,{id:Date.now(),expense_account:'',expense_account_name:'',description:'',amount:'',vat_amount:'',vendor_name:''}])
-  const rmLine=(i)=>{if(lines.length>1)setLines(ls=>ls.filter((_,idx)=>idx!==i))}
-  const total=lines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0)
-  const selectedFund=funds.find(f=>f.id===form.fund_id)
-  const je_lines=[
-    ...lines.filter(l=>l.expense_account&&parseFloat(l.amount)>0).map(l=>({account_code:l.expense_account,account_name:l.expense_account_name||l.description||'مصروف',debit:parseFloat(l.amount)||0,credit:0})),
-    ...(selectedFund&&total>0?[{account_code:selectedFund.gl_account_code||'—',account_name:selectedFund.fund_name,debit:0,credit:total}]:[])
+function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
+  const [form,setForm]   = useState({fund_id:'',expense_date:today(),description:'',reference:'',notes:'',party_id:'',party_role:'petty_cash_keeper'})
+  const [lines,setLines] = useState([{id:1,expense_account:'',expense_account_name:'',description:'',amount:'',vat_amount:'',vendor_name:''}])
+  const [saving,setSaving]   = useState(false)
+  const [saveError,setSaveError] = useState('')
+  const s  = (k,v) => setForm(p=>({...p,[k]:v}))
+  const sl = (i,k,v) => setLines(ls=>ls.map((l,idx)=>idx===i?{...l,[k]:v}:l))
+  const {isOpen:periodOk, isClosed:periodClosed} = useFiscalPeriod(form.expense_date)
+
+  const addLine = () => setLines(ls=>[...ls,{id:Date.now(),expense_account:'',expense_account_name:'',description:'',amount:'',vat_amount:'',vendor_name:''}])
+  const rmLine  = (i) => { if(lines.length>1) setLines(ls=>ls.filter((_,idx)=>idx!==i)) }
+
+  const total       = lines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0)
+  const totalVAT    = lines.reduce((s,l)=>s+(parseFloat(l.vat_amount)||0),0)
+  const selectedFund = funds.find(f=>f.id===form.fund_id)
+
+  // جدول القيود
+  const je_lines = [
+    ...lines.filter(l=>l.expense_account&&parseFloat(l.amount)>0).map(l=>({
+      account_code: l.expense_account,
+      account_name: l.expense_account_name||l.description||'مصروف',
+      debit: parseFloat(l.amount)||0, credit:0,
+    })),
+    ...(selectedFund&&total>0?[{
+      account_code: selectedFund.gl_account_code||'—',
+      account_name: selectedFund.fund_name,
+      debit:0, credit:total+totalVAT,
+    }]:[]),
   ]
-  const save=async()=>{
-    if(!form.fund_id||!form.description||lines.some(l=>!l.expense_account||!l.amount)){showToast('جميع الحقول مطلوبة','error');return}
-    setSaving(true)
-    try{await api.treasury.createPettyCashExpense({...form,lines:lines.map(l=>({...l,amount:parseFloat(l.amount)||0,vat_amount:parseFloat(l.vat_amount)||0,net_amount:parseFloat(l.amount)||0}))});onSaved()}catch(e){showToast(e.message,'error')}finally{setSaving(false)}
+
+  const save = async() => {
+    if(!form.fund_id)      { showToast('اختر الصندوق أولاً','error'); return }
+    if(!form.description)  { showToast('البيان مطلوب','error'); return }
+    if(lines.some(l=>!l.expense_account||!l.amount)) { showToast('أكمل سطور المصروف (الحساب والمبلغ)','error'); return }
+    if(periodClosed)       { showToast('الفترة المالية مغلقة','error'); return }
+    setSaveError(''); setSaving(true)
+    try {
+      await api.treasury.createPettyCashExpense({
+        ...form,
+        lines: lines.map(l=>({
+          ...l,
+          amount:     parseFloat(l.amount)||0,
+          vat_amount: parseFloat(l.vat_amount)||0,
+          net_amount: parseFloat(l.amount)||0,
+        }))
+      })
+      onSaved()
+    } catch(e) {
+      setSaveError(e.message)
+      showToast(`❌ ${e.message}`,'error')
+    } finally { setSaving(false) }
   }
-  return <div className="fixed inset-0 z-[100] flex items-center justify-center" dir="rtl">
-    <div className="absolute inset-0 bg-slate-900/60" onClick={onClose}/>
-    <div className="relative bg-white rounded-2xl shadow-2xl w-[900px] max-h-[92vh] overflow-y-auto p-6">
-      <div className="flex justify-between mb-5"><h3 className="font-bold text-xl">💸 مصروف نثري جديد / Petty Cash Expense</h3><button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">✕</button></div>
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div><label className="text-xs font-semibold text-slate-600 block mb-1">الصندوق / Fund *</label><select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.fund_id} onChange={e=>s('fund_id',e.target.value)}><option value="">— اختر —</option>{funds.map(f=><option key={f.id} value={f.id}>{f.fund_name}</option>)}</select></div>
-        <div><label className="text-xs font-semibold text-slate-600 block mb-1">التاريخ / Date *</label><input type="date" className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${periodClosed?'border-red-300 bg-red-50':'border-slate-200'}`} value={form.expense_date} onChange={e=>s('expense_date',e.target.value)}/><FiscalPeriodBadge date={form.expense_date}/></div>
-        <div><label className="text-xs font-semibold text-slate-600 block mb-1">المرجع / Reference</label><input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.reference} onChange={e=>s('reference',e.target.value)}/></div>
-        <div className="col-span-2">
-          <label className="text-xs font-semibold text-slate-600 block mb-1">البيان / Description *</label>
-          <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" value={form.description} onChange={e=>s('description',e.target.value)}/>
-        </div>
-        <div>
-          <PartyPicker
-            label="المتعامل / Party"
-            role="petty_cash_keeper"
-            value={form.party_id}
-            onChange={(id)=>s('party_id',id)}
-            placeholder="أمين العهدة... Custodian"
-          />
-        </div>
-      </div>
-      <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mb-4">
-        <div className="grid text-white text-xs font-semibold" style={{background:'#1e3a5f',gridTemplateColumns:'1.5fr 2fr 1.5fr 1fr 1fr 1.5fr 28px'}}>
-          {['حساب المصروف *','اسم الحساب','البيان','المبلغ','الضريبة','المورد',''].map(h=><div key={h} className="px-2 py-2">{h}</div>)}
-        </div>
-        {lines.map((l,i)=>(
-          <div key={l.id} className="grid border-b border-slate-200 bg-white" style={{gridTemplateColumns:'1.5fr 2fr 1.5fr 1fr 1fr 1.5fr 28px'}}>
-            <input className="px-2 py-2 text-xs border-r border-slate-200 font-mono focus:outline-none focus:bg-blue-50" value={l.expense_account} onChange={e=>sl(i,'expense_account',e.target.value)} placeholder="610101"/>
-            <input className="px-2 py-2 text-xs border-r border-slate-200 focus:outline-none focus:bg-blue-50" value={l.expense_account_name} onChange={e=>sl(i,'expense_account_name',e.target.value)} placeholder="اسم الحساب"/>
-            <input className="px-2 py-2 text-xs border-r border-slate-200 focus:outline-none focus:bg-blue-50" value={l.description} onChange={e=>sl(i,'description',e.target.value)} placeholder="بيان"/>
-            <input type="number" className="px-2 py-2 text-xs border-r border-slate-200 font-mono text-center focus:outline-none focus:bg-blue-50" value={l.amount} onChange={e=>sl(i,'amount',e.target.value)} placeholder="0.000" step="0.001"/>
-            <input type="number" className="px-2 py-2 text-xs border-r border-slate-200 font-mono text-center focus:outline-none focus:bg-blue-50" value={l.vat_amount} onChange={e=>sl(i,'vat_amount',e.target.value)} placeholder="0.000" step="0.001"/>
-            <input className="px-2 py-2 text-xs border-r border-slate-200 focus:outline-none focus:bg-blue-50" value={l.vendor_name} onChange={e=>sl(i,'vendor_name',e.target.value)} placeholder="المورد"/>
-            <button onClick={()=>rmLine(i)} className="flex items-center justify-center text-red-400 hover:text-red-600">✕</button>
-          </div>
-        ))}
-        <div className="flex justify-between px-3 py-2 bg-slate-100">
-          <button onClick={addLine} className="text-xs text-blue-600 hover:underline font-medium">+ إضافة سطر</button>
-          <div className="font-mono font-bold text-blue-700">الإجمالي: {fmt(total,3)} ر.س</div>
-        </div>
-      </div>
-      <AccountingTable lines={je_lines}/>
-      <div className="flex gap-3 mt-4">
-        <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm">إلغاء</button>
-        <button onClick={save} disabled={saving||periodClosed} title={periodClosed?'الفترة مغلقة':''} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50">{saving?'⏳...':periodClosed?'🔒 مغلقة':'💾 حفظ'}</button>
+
+  // طباعة طلب الاسترداد
+  const handlePrint = () => {
+    if(!form.fund_id||!form.description) { showToast('أكمل البيانات أولاً','error'); return }
+    const w = window.open('','_blank','width=900,height=700')
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+    <title>طلب استرداد مصروف نثري</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;font-size:12px;direction:rtl}
+      @media print{.no-print{display:none!important}@page{margin:12mm}}
+      .page{max-width:210mm;margin:0 auto;padding:20px}
+      .header{background:linear-gradient(135deg,#7f1d1d,#dc2626);color:white;padding:16px 20px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+      .header h1{font-size:17px;font-weight:800}
+      .meta-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px}
+      .meta-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:9px 13px}
+      .meta-item .lbl{font-size:10px;color:#94a3b8;margin-bottom:3px;font-weight:600}
+      .meta-item .val{font-weight:700;font-size:12px;color:#1e293b}
+      .party-box{background:#f0fdfa;border:2px solid #5eead4;border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+      table{width:100%;border-collapse:collapse;margin:12px 0;font-size:11px}
+      thead tr{background:#7f1d1d;color:white}
+      th{padding:8px 10px;text-align:right;font-weight:600}
+      td{padding:7px 10px;border-bottom:1px solid #f1f5f9}
+      tr:nth-child(even) td{background:#fef2f2}
+      .total-row td{background:#fff1f2!important;font-weight:700;border-top:2px solid #dc2626;color:#7f1d1d}
+      .signatures{display:flex;justify-content:space-around;margin-top:30px;padding-top:16px;border-top:1px dashed #e2e8f0}
+      .sign-box{text-align:center;min-width:120px}
+      .sign-line{border-top:2px solid #1e293b;width:120px;margin:0 auto 6px}
+      .sign-label{font-size:11px;color:#64748b;font-weight:600}
+      .footer{margin-top:14px;padding-top:8px;border-top:1px solid #f1f5f9;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}
+    </style></head><body><div class="page">
+    <div class="header">
+      <div><h1>📋 طلب استرداد مصروف نثري</h1><div style="font-size:11px;opacity:0.8;margin-top:3px">Petty Cash Reimbursement Request</div></div>
+      <div style="text-align:left;font-size:11px;opacity:0.85">
+        <div>التاريخ: ${fmtDate(form.expense_date)}</div>
+        <div style="margin-top:3px">المرجع: ${form.reference||'—'}</div>
+        <div style="margin-top:3px">طُبع: ${new Date().toLocaleDateString('ar-SA')}</div>
       </div>
     </div>
-  </div>
+    <div class="meta-grid">
+      <div class="meta-item"><div class="lbl">الصندوق / Fund</div><div class="val">${selectedFund?.fund_name||'—'}</div></div>
+      <div class="meta-item"><div class="lbl">البيان / Description</div><div class="val">${form.description||'—'}</div></div>
+      <div class="meta-item"><div class="lbl">الملاحظات / Notes</div><div class="val">${form.notes||'—'}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>#</th><th>حساب المصروف / Account</th><th>اسم الحساب</th>
+        <th>البيان / Description</th><th>المورد / Vendor</th>
+        <th>المبلغ / Amount</th><th>الضريبة / VAT</th>
+      </tr></thead>
+      <tbody>
+        ${lines.filter(l=>l.expense_account&&l.amount).map((l,i)=>`<tr>
+          <td style="text-align:center;color:#94a3b8">${i+1}</td>
+          <td style="font-family:monospace;font-weight:700;color:#7f1d1d">${l.expense_account||'—'}</td>
+          <td>${l.expense_account_name||'—'}</td>
+          <td>${l.description||'—'}</td>
+          <td>${l.vendor_name||'—'}</td>
+          <td style="font-family:monospace;font-weight:700;text-align:center">${fmt(parseFloat(l.amount)||0,3)}</td>
+          <td style="font-family:monospace;text-align:center;color:#b45309">${parseFloat(l.vat_amount||0)>0?fmt(parseFloat(l.vat_amount),3):'—'}</td>
+        </tr>`).join('')}
+        <tr class="total-row">
+          <td colspan="5" style="text-align:center">الإجمالي / Total</td>
+          <td style="font-family:monospace;text-align:center">${fmt(total,3)}</td>
+          <td style="font-family:monospace;text-align:center">${fmt(totalVAT,3)}</td>
+        </tr>
+        <tr style="background:#fff7ed"><td colspan="5" style="text-align:center;font-weight:700;color:#b45309">الإجمالي شامل الضريبة</td>
+          <td colspan="2" style="text-align:center;font-family:monospace;font-weight:800;color:#b45309">${fmt(total+totalVAT,3)} ر.س</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="signatures">
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المُعِدّ / Prepared</div></div>
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">أمين الصندوق / Custodian</div></div>
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المراجع / Reviewed</div></div>
+      <div class="sign-box"><div class="sign-line"></div><div class="sign-label">المعتمد / Approved</div></div>
+    </div>
+    <div class="footer"><span>حساباتي ERP v2.0</span><span>${selectedFund?.fund_name||''} | ${lines.filter(l=>l.amount).length} سطر | إجمالي: ${fmt(total+totalVAT,3)} ر.س</span></div>
+    <div class="no-print" style="text-align:center;margin-top:20px">
+      <button onclick="window.print()" style="background:#7f1d1d;color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px">🖨️ طباعة / PDF</button>
+      <button onclick="window.close()" style="margin-right:10px;background:#f1f5f9;border:1px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer">✕ إغلاق</button>
+    </div>
+    </div></body></html>`)
+    w.document.close()
+  }
+
+  // تصدير Excel
+  const handleExcel = () => {
+    exportXLS(
+      lines.filter(l=>l.expense_account&&l.amount).map((l,i)=>[
+        i+1, l.expense_account, l.expense_account_name,
+        l.description, l.vendor_name||'', parseFloat(l.amount)||0, parseFloat(l.vat_amount)||0,
+      ]),
+      ['#','كود الحساب','اسم الحساب','البيان','المورد','المبلغ','الضريبة'],
+      `مصروف_نثري_${form.expense_date}`
+    )
+  }
+
+  return (
+    <div className="max-w-5xl" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium">← رجوع / Back</button>
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold text-red-700">💸 مصروف نثري جديد</h2>
+          <p className="text-xs text-slate-400 mt-0.5">New Petty Cash Expense — يُسجَّل كمسودة حتى الترحيل</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handlePrint} className="px-4 py-2 rounded-xl border-2 border-blue-200 text-blue-700 hover:bg-blue-50 text-sm font-semibold">🖨️ طباعة طلب الاسترداد</button>
+          <button onClick={handleExcel} className="px-4 py-2 rounded-xl border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold">📥 Excel</button>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        {/* المعلومات الأساسية */}
+        <div className="bg-white rounded-2xl border-2 border-slate-200 p-5">
+          <div className="text-xs font-bold text-slate-400 uppercase mb-4">معلومات السند / Voucher Info</div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-semibold text-slate-600 block mb-1.5">الصندوق / Fund <span className="text-red-500">*</span></label>
+              <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-red-400"
+                value={form.fund_id} onChange={e=>s('fund_id',e.target.value)}>
+                <option value="">— اختر الصندوق —</option>
+                {funds.map(f=><option key={f.id} value={f.id}>{f.fund_name} ({fmt(f.current_balance,2)} {f.currency_code})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-600 block mb-1.5">التاريخ / Date <span className="text-red-500">*</span></label>
+              <input type="date" className={`w-full border-2 rounded-xl px-3 py-2.5 text-sm focus:outline-none ${periodClosed?'border-red-300 bg-red-50':'border-slate-200 focus:border-red-400'}`}
+                value={form.expense_date} onChange={e=>s('expense_date',e.target.value)}/>
+              <FiscalPeriodBadge date={form.expense_date}/>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-600 block mb-1.5">المرجع / Reference</label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-red-400"
+                value={form.reference} onChange={e=>s('reference',e.target.value)} placeholder="رقم الفاتورة / Invoice No."/>
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm font-semibold text-slate-600 block mb-1.5">البيان العام / General Description <span className="text-red-500">*</span></label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-red-400"
+                value={form.description} onChange={e=>s('description',e.target.value)} placeholder="وصف المصروف النثري..."/>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-600 block mb-1.5">ملاحظات / Notes</label>
+              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-red-400"
+                value={form.notes} onChange={e=>s('notes',e.target.value)}/>
+            </div>
+          </div>
+        </div>
+
+        {/* المتعامل */}
+        <div className="bg-teal-50/40 rounded-2xl border border-teal-200 p-4">
+          <PartyPicker
+            label="أمين العهدة / Petty Cash Custodian"
+            role="petty_cash_keeper"
+            value={form.party_id}
+            onChange={(id,name)=>s('party_id',id)}
+            placeholder="اختر أمين العهدة... Select Custodian"
+          />
+        </div>
+
+        {/* سطور المصروفات */}
+        <div className="bg-white rounded-2xl border-2 border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 flex items-center justify-between" style={{background:'linear-gradient(135deg,#7f1d1d,#dc2626)'}}>
+            <span className="text-white font-bold text-sm">📋 سطور المصروفات / Expense Lines</span>
+            <button onClick={addLine} className="px-3 py-1 rounded-lg bg-white/20 text-white text-xs hover:bg-white/30 font-semibold">＋ سطر / Add Line</button>
+          </div>
+
+          {/* رأس الجدول */}
+          <div className="grid text-slate-500 text-xs font-semibold bg-slate-50 border-b border-slate-200"
+            style={{gridTemplateColumns:'2fr 2.5fr 2fr 1fr 1fr 2fr 32px'}}>
+            {['حساب المصروف *','اسم الحساب / Account Name','البيان / Description','المبلغ *','الضريبة / VAT','المورد / Vendor',''].map(h=>(
+              <div key={h} className="px-3 py-2.5">{h}</div>
+            ))}
+          </div>
+
+          {/* سطور */}
+          {lines.map((l,i)=>(
+            <div key={l.id} className={`grid border-b border-slate-100 items-center ${i%2===0?'bg-white':'bg-slate-50/30'}`}
+              style={{gridTemplateColumns:'2fr 2.5fr 2fr 1fr 1fr 2fr 32px'}}>
+              {/* حساب المصروف — مرتبط بـ AccountPicker */}
+              <div className="border-r border-slate-100 p-1">
+                <AccountPicker
+                  value={l.expense_account}
+                  onChange={(code,name)=>{sl(i,'expense_account',code);sl(i,'expense_account_name',name)}}
+                  label=""
+                  required={false}
+                />
+              </div>
+              <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
+                value={l.expense_account_name} onChange={e=>sl(i,'expense_account_name',e.target.value)} placeholder="اسم الحساب"/>
+              <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
+                value={l.description} onChange={e=>sl(i,'description',e.target.value)} placeholder="بيان السطر..."/>
+              <input type="number" step="0.001"
+                className="px-3 py-2.5 text-xs border-r border-slate-100 font-mono text-center focus:outline-none focus:bg-blue-50 bg-transparent"
+                value={l.amount} onChange={e=>sl(i,'amount',e.target.value)} placeholder="0.000"/>
+              <input type="number" step="0.001"
+                className="px-3 py-2.5 text-xs border-r border-slate-100 font-mono text-center focus:outline-none focus:bg-amber-50 bg-transparent text-amber-700"
+                value={l.vat_amount} onChange={e=>sl(i,'vat_amount',e.target.value)} placeholder="0.000"/>
+              <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
+                value={l.vendor_name} onChange={e=>sl(i,'vendor_name',e.target.value)} placeholder="اسم المورد / Vendor"/>
+              <button onClick={()=>rmLine(i)} className="flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 h-full">✕</button>
+            </div>
+          ))}
+
+          {/* الإجمالي */}
+          <div className="grid items-center bg-red-50 border-t-2 border-red-200 text-sm font-bold"
+            style={{gridTemplateColumns:'2fr 2.5fr 2fr 1fr 1fr 2fr 32px'}}>
+            <div className="col-span-5 px-4 py-3 text-red-800">الإجمالي / Total</div>
+            <div className="px-3 py-3 font-mono text-red-700">{fmt(total,3)}</div>
+            <div/>
+          </div>
+          {totalVAT > 0 && (
+            <div className="px-4 py-2 bg-amber-50 border-t text-xs text-amber-700 flex justify-between">
+              <span>ضريبة القيمة المضافة / VAT</span>
+              <span className="font-mono font-bold">{fmt(totalVAT,3)} ر.س</span>
+            </div>
+          )}
+          <div className="px-4 py-2.5 bg-red-700 text-white text-sm flex justify-between font-bold">
+            <span>الإجمالي شامل الضريبة / Total incl. VAT</span>
+            <span className="font-mono text-lg">{fmt(total+totalVAT,3)} ر.س</span>
+          </div>
+        </div>
+
+        {/* جدول القيود */}
+        <AccountingTable lines={je_lines}/>
+
+        {/* خطأ الحفظ */}
+        {saveError && (
+          <div className="bg-red-50 border-2 border-red-400 rounded-2xl px-5 py-4 flex items-start gap-3">
+            <span className="text-2xl shrink-0">❌</span>
+            <div className="flex-1">
+              <div className="font-bold text-red-700 text-sm mb-1">فشل الحفظ / Save Failed</div>
+              <div className="text-red-600 text-sm">{saveError}</div>
+            </div>
+            <button onClick={()=>setSaveError('')} className="text-red-400 hover:text-red-600 text-xl">✕</button>
+          </div>
+        )}
+
+        {/* أزرار */}
+        <div className="flex gap-3 pb-6">
+          <button onClick={onBack} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">
+            إلغاء / Cancel
+          </button>
+          <button onClick={handlePrint} className="px-6 py-3 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold hover:bg-blue-50">
+            🖨️ طباعة طلب الاسترداد
+          </button>
+          <button onClick={save} disabled={saving||periodClosed}
+            className={`flex-1 py-3 rounded-xl font-semibold transition-all ${periodClosed?'bg-slate-100 text-slate-400 border-2 border-slate-200 cursor-not-allowed':'bg-red-600 text-white hover:bg-red-700'}`}>
+            {saving?'⏳ جارٍ الحفظ...':periodClosed?'🔒 الفترة مغلقة':'💾 حفظ كمسودة / Save Draft'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
+
+// Keep old modal name as alias for backward compatibility
+function PettyCashExpenseModal(props) { return <PettyCashExpensePage {...props} onBack={props.onClose}/> }
