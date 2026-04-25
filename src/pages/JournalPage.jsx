@@ -410,7 +410,8 @@ export default function JournalPage() {
           <div className="col-span-2 px-4 py-3.5">رقم القيد</div>
           <div className="col-span-1 px-3 py-3.5">التاريخ</div>
           <div className="col-span-1 px-3 py-3.5">النوع</div>
-          <div className="col-span-3 px-3 py-3.5">البيان</div>
+          <div className="col-span-2 px-3 py-3.5">البيان</div>
+          <div className="col-span-1 px-3 py-3.5" style={{color:'#a5f3fc'}}>🤝 المتعامل</div>
           <div className="col-span-1 px-3 py-3.5 text-center">المدين</div>
           <div className="col-span-1 px-3 py-3.5 text-center">الدائن</div>
           <div className="col-span-1 px-3 py-3.5 text-center">توازن</div>
@@ -446,9 +447,23 @@ export default function JournalPage() {
               <div className="col-span-1 px-3 py-3">
                 <span className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">{je.je_type}</span>
               </div>
-              <div className="col-span-3 px-3 py-3">
-                <div className="text-sm text-slate-700 truncate max-w-[210px]">{je.description}</div>
+              <div className="col-span-2 px-3 py-3">
+                <div className="text-sm text-slate-700 truncate max-w-[150px]">{je.description}</div>
                 {je.reference&&<div className="text-xs text-slate-400 mt-0.5">📎 {je.reference}</div>}
+              </div>
+              {/* 🤝 المتعامل — يُجلب من أول سطر فيه party */}
+              <div className="col-span-1 px-3 py-3">
+                {(()=>{
+                  const partyLine = (je.lines||[]).find(l=>l.party_id||l.party_name)
+                  return partyLine ? (
+                    <div>
+                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-lg font-semibold max-w-[90px] truncate block">
+                        🤝 {partyLine.party_name||partyLine.party_code}
+                      </span>
+                      {partyLine.party_role&&<span className="text-[10px] text-slate-400 mt-0.5 block truncate">{partyLine.party_role}</span>}
+                    </div>
+                  ) : <span className="text-slate-200 text-xs">—</span>
+                })()}
               </div>
               <div className="col-span-1 px-3 py-3 text-center">
                 <span className="font-mono text-blue-700 font-semibold text-sm">{fmt(dr,2)}</span>
@@ -851,15 +866,47 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
                 {(je.lines||[]).filter(l=>parseFloat(l.debit)>0||parseFloat(l.credit)>0).map((l,i)=>{
                   const ldr=parseFloat(l.debit)||0, lcr=parseFloat(l.credit)||0
                   return(
-                    <div key={i} className="flex items-center justify-between text-xs gap-1">
-                      <span className="text-slate-600 truncate flex-1">{l.account_name||l.account_code}</span>
-                      {ldr>0&&<span className="font-mono text-blue-600 shrink-0">+{fmt(ldr,2)}</span>}
-                      {lcr>0&&<span className="font-mono text-emerald-600 shrink-0">+{fmt(lcr,2)}</span>}
+                    <div key={i} className="text-xs">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-slate-600 truncate flex-1">{l.account_name||l.account_code}</span>
+                        {ldr>0&&<span className="font-mono text-blue-600 shrink-0">+{fmt(ldr,2)}</span>}
+                        {lcr>0&&<span className="font-mono text-emerald-600 shrink-0">+{fmt(lcr,2)}</span>}
+                      </div>
+                      {l.party_id&&(
+                        <div className="mt-0.5 flex items-center gap-1">
+                          <span className="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-md font-semibold">
+                            🤝 {l.party_name||l.party_code}
+                          </span>
+                          {l.party_role&&<span className="text-[10px] text-slate-400">{l.party_role}</span>}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
               </div>
             </div>
+
+            {/* Financial Parties — ملخص المتعاملين في القيد */}
+            {(je.lines||[]).some(l=>l.party_id) && (
+              <div className="bg-teal-50 rounded-2xl border border-teal-200 overflow-hidden shadow-sm">
+                <div className="px-4 py-3 text-xs font-bold text-white" style={{background:'linear-gradient(135deg,#0f766e,#0d9488)'}}>
+                  🤝 المتعاملون الماليون / Financial Parties
+                </div>
+                <div className="p-3 space-y-2">
+                  {[...new Map(
+                    (je.lines||[]).filter(l=>l.party_id).map(l=>[l.party_id, l])
+                  ).values()].map((l,i)=>(
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className="text-lg">🤝</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-teal-800 truncate">{l.party_name||l.party_code}</div>
+                        <div className="text-teal-600 text-[10px]">{l.party_role||'—'} | {l.account_name}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Applied Dimensions */}
             {hasDimensions&&(
