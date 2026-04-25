@@ -451,19 +451,16 @@ export default function JournalPage() {
                 <div className="text-sm text-slate-700 truncate max-w-[150px]">{je.description}</div>
                 {je.reference&&<div className="text-xs text-slate-400 mt-0.5">📎 {je.reference}</div>}
               </div>
-              {/* 🤝 المتعامل — يُجلب من أول سطر فيه party */}
+              {/* 🤝 المتعامل — first_party_name من الـ header مباشرة */}
               <div className="col-span-1 px-3 py-3">
-                {(()=>{
-                  const partyLine = (je.lines||[]).find(l=>l.party_id||l.party_name)
-                  return partyLine ? (
-                    <div>
-                      <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-lg font-semibold max-w-[90px] truncate block">
-                        🤝 {partyLine.party_name||partyLine.party_code}
-                      </span>
-                      {partyLine.party_role&&<span className="text-[10px] text-slate-400 mt-0.5 block truncate">{partyLine.party_role}</span>}
-                    </div>
-                  ) : <span className="text-slate-200 text-xs">—</span>
-                })()}
+                {je.first_party_name ? (
+                  <div>
+                    <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-lg font-semibold max-w-[90px] truncate block">
+                      🤝 {je.first_party_name}
+                    </span>
+                    {je.first_party_role&&<span className="text-[10px] text-slate-400 mt-0.5 block truncate">{je.first_party_role}</span>}
+                  </div>
+                ) : <span className="text-slate-200 text-xs">—</span>}
               </div>
               <div className="col-span-1 px-3 py-3 text-center">
                 <span className="font-mono text-blue-700 font-semibold text-sm">{fmt(dr,2)}</span>
