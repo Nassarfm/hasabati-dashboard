@@ -555,3 +555,5 @@ export const api = {
     deleteArticle:  (id)     => del('/knowledge/articles/' + id),
   },
 }
+
+export default api
