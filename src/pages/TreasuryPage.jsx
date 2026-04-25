@@ -3146,9 +3146,486 @@ function BankReconciliationSession({banks, showToast, onNavigateToBank}) {
   const [selBank,  setSelBank]  = useState('')
   const [stmtBal,  setStmtBal]  = useState('')
   const [stmtDate, setStmtDate] = useState(today())
-  const [txData,   setTxData]   = useState(null)
   const [loading,  setLoading]  = useState(false)
-  const [session,  setSession]  = useState(null) // نتيجة الجلسة
+  const [session,  setSession]  = useState(null)
+
+  const selectedBankObj = banks.find(b=>b.id===selBank)
+
+  const startSession = async() => {
+    if(!selBank)  { showToast('اختر الحساب البنكي أولاً','error'); return }
+    if(!stmtBal)  { showToast('أدخل رصيد كشف البنك','error'); return }
+    if(!stmtDate) { showToast('أدخل تاريخ الكشف','error'); return }
+    setLoading(true)
+    try {
+      const r = await api.treasury.accountStatement({
+        bank_account_id: selBank,
+        date_to: stmtDate,
+      })
+      const d    = r?.data || {}
+      const rows = d.rows  || []
+
+      const stmtBalance = parseFloat(stmtBal) || 0
+      const bookBalance = parseFloat(d.closing || 0)
+
+      // تصنيف الحركات
+      const reconciled   = rows.filter(r => r.is_reconciled)
+      const unreconciled = rows.filter(r => !r.is_reconciled)
+
+      // الجانب الأول: حركات غير ظاهرة في كشف البنك
+      // دفعات معلقة (Outstanding Checks/Payments) = BP في الدفاتر غير مسوّاة → تُطرح من رصيد البنك
+      const outstandingPayments = unreconciled.filter(r => r.credit > 0)  // دائن = خرج من الحساب
+      const depositsInTransit   = unreconciled.filter(r => r.debit  > 0)  // مدين = دخل للحساب
+
+      const totalOutstandingPay = outstandingPayments.reduce((s,r)=>s+(r.credit||0), 0)
+      const totalDepositsTransit= depositsInTransit.reduce((s,r)=>s+(r.debit||0), 0)
+
+      // الرصيد المعدّل حسب البنك
+      // = رصيد الكشف + إيداعات في الطريق - دفعات معلقة
+      const adjustedBankBal = stmtBalance + totalDepositsTransit - totalOutstandingPay
+
+      // الجانب الثاني: رصيد الدفاتر
+      const adjustedBookBal = bookBalance  // يُعدَّل لو فيه رسوم بنكية غير مسجَّلة
+
+      // الفرق النهائي
+      const finalDiff = adjustedBankBal - adjustedBookBal
+
+      setSession({
+        bank:           selectedBankObj,
+        stmtBal:        stmtBalance,
+        stmtDate,
+        bookBal:        bookBalance,
+        reconciled,
+        unreconciled,
+        outstandingPayments,
+        depositsInTransit,
+        totalOutstandingPay,
+        totalDepositsTransit,
+        adjustedBankBal,
+        adjustedBookBal,
+        finalDiff,
+        rows,
+        opening:        d.opening      || 0,
+        totalDebit:     d.total_debit  || 0,
+        totalCredit:    d.total_credit || 0,
+      })
+    } catch(e) { showToast(e.message,'error') }
+    finally { setLoading(false) }
+  }
+
+  // ── طباعة النموذج المحاسبي الاحترافي ──────────────────────
+  const printReconciliation = () => {
+    if(!session) return
+    const {bank, stmtBal, stmtDate, bookBal, finalDiff,
+           reconciled, outstandingPayments, depositsInTransit,
+           totalOutstandingPay, totalDepositsTransit,
+           adjustedBankBal, adjustedBookBal} = session
+
+    const isBalanced = Math.abs(finalDiff) < 0.01
+    const w = window.open('','_blank','width=900,height=750')
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+    <title>نموذج التسوية البنكية</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#1e293b;font-size:12px;direction:rtl;background:#fff}
+      @media print{.no-print{display:none!important}@page{margin:15mm}body{font-size:11px}}
+      .page{max-width:210mm;margin:0 auto;padding:22px 28px}
+
+      /* رأس الصفحة */
+      .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #064e3b;padding-bottom:14px;margin-bottom:18px}
+      .company-name{font-size:18px;font-weight:900;color:#064e3b}
+      .doc-title{text-align:center;font-size:16px;font-weight:800;color:#1e293b;border:2px solid #064e3b;padding:6px 20px;border-radius:8px}
+      .doc-meta{text-align:left;font-size:11px;color:#475569}
+
+      /* معلومات البنك */
+      .bank-info{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+      .bank-info .item .lbl{font-size:10px;color:#6b7280;font-weight:600;margin-bottom:3px}
+      .bank-info .item .val{font-weight:700;color:#1e293b;font-size:13px}
+
+      /* الجانبان */
+      .sides{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+      .side{border:2px solid #e2e8f0;border-radius:12px;overflow:hidden}
+      .side-header{padding:10px 14px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+      .side-bank .side-header{background:#1e40af;color:white}
+      .side-book .side-header{background:#7f1d1d;color:white}
+      .side-row{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid #f1f5f9;font-size:11.5px}
+      .side-row .lbl{color:#475569}
+      .side-row .val{font-family:monospace;font-weight:700;color:#1e293b}
+      .side-row.add .lbl{color:#16a34a}
+      .side-row.add .val{color:#16a34a}
+      .side-row.sub .lbl{color:#dc2626}
+      .side-row.sub .val{color:#dc2626}
+      .side-row.total{background:#f8fafc;font-weight:800;border-top:2px solid #e2e8f0}
+      .side-row.total .lbl{color:#1e293b}
+      .side-row.total .val{font-size:14px}
+
+      /* نتيجة التسوية */
+      .result{text-align:center;border:3px solid ${isBalanced?'#16a34a':'#dc2626'};border-radius:14px;padding:16px;margin-bottom:18px;background:${isBalanced?'#f0fdf4':'#fef2f2'}}
+      .result .icon{font-size:32px;margin-bottom:6px}
+      .result .title{font-size:16px;font-weight:900;color:${isBalanced?'#14532d':'#7f1d1d'}}
+      .result .diff{font-size:13px;color:#475569;margin-top:4px}
+
+      /* جداول الحركات */
+      .table-section{margin-bottom:16px}
+      .table-hdr{padding:9px 12px;font-weight:700;font-size:12px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between}
+      .hdr-blue{background:#1e3a5f;color:white}
+      .hdr-amber{background:#b45309;color:white}
+      .hdr-green{background:#064e3b;color:white}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      thead tr{background:#f8fafc}
+      th{padding:7px 9px;text-align:right;font-weight:600;color:#475569;border-bottom:2px solid #e2e8f0}
+      td{padding:6px 9px;border-bottom:1px solid #f1f5f9}
+      tr:nth-child(even) td{background:#fafafa}
+      .total-row td{background:#f0fdf4!important;font-weight:700;border-top:2px solid #16a34a}
+
+      /* التوقيعات */
+      .signatures{display:flex;justify-content:space-around;margin-top:28px;padding-top:16px;border-top:2px dashed #e2e8f0}
+      .sign-box{text-align:center;min-width:130px}
+      .sign-line{border-top:2px solid #1e293b;width:130px;margin:0 auto 8px}
+      .sign-label{font-size:11px;color:#475569;font-weight:600}
+      .sign-name{font-size:10px;color:#94a3b8;margin-top:3px}
+
+      /* الذيل */
+      .footer{display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:10px;border-top:1px solid #f1f5f9;font-size:10px;color:#94a3b8}
+    </style></head><body><div class="page">
+
+    <div class="header">
+      <div class="company-name">🏦 حساباتي ERP</div>
+      <div class="doc-title">📋 نموذج التسوية البنكية<br/><span style="font-size:12px;font-weight:400">Bank Reconciliation Statement</span></div>
+      <div class="doc-meta">
+        <div>تاريخ الكشف: <strong>${fmtDate(stmtDate)}</strong></div>
+        <div>تاريخ الإعداد: <strong>${new Date().toLocaleDateString('ar-SA')}</strong></div>
+      </div>
+    </div>
+
+    <div class="bank-info">
+      <div class="item"><div class="lbl">الحساب البنكي / Bank Account</div><div class="val">${bank?.account_name||'—'}</div></div>
+      <div class="item"><div class="lbl">كود الحساب / Account Code</div><div class="val" style="font-family:monospace">${bank?.account_code||'—'}</div></div>
+      <div class="item"><div class="lbl">نوع الحساب / Type</div><div class="val">${bank?.bank_name||'حساب بنكي'}</div></div>
+    </div>
+
+    <!-- الجانبان الرئيسيان -->
+    <div class="sides">
+      <!-- الجانب الأول: كشف البنك -->
+      <div class="side side-bank">
+        <div class="side-header">
+          <span>🏦 جانب كشف البنك</span>
+          <span style="font-size:10px;opacity:0.8">Bank Statement Side</span>
+        </div>
+        <div class="side-row">
+          <span class="lbl">رصيد كشف البنك في ${fmtDate(stmtDate)}</span>
+          <span class="val" style="color:#93c5fd">${fmt(stmtBal,3)}</span>
+        </div>
+        <div class="side-row add">
+          <span class="lbl">＋ إيداعات في الطريق (${depositsInTransit.length})<br/><span style="font-size:10px;opacity:0.75">حركات في الدفاتر غير ظاهرة بالكشف</span></span>
+          <span class="val">${fmt(totalDepositsTransit,3)}</span>
+        </div>
+        <div class="side-row sub">
+          <span class="lbl">－ دفعات/شيكات معلقة (${outstandingPayments.length})<br/><span style="font-size:10px;opacity:0.75">دفعات في الدفاتر لم تُصرف بعد</span></span>
+          <span class="val">(${fmt(totalOutstandingPay,3)})</span>
+        </div>
+        <div class="side-row total">
+          <span class="lbl">= الرصيد المعدّل / Adjusted Bank Balance</span>
+          <span class="val" style="color:#1e40af;font-size:14px">${fmt(adjustedBankBal,3)} ر.س</span>
+        </div>
+      </div>
+
+      <!-- الجانب الثاني: دفاتر المنشأة -->
+      <div class="side side-book">
+        <div class="side-header">
+          <span>📚 جانب دفاتر المنشأة</span>
+          <span style="font-size:10px;opacity:0.8">Book Side</span>
+        </div>
+        <div class="side-row">
+          <span class="lbl">رصيد الدفاتر في ${fmtDate(stmtDate)}</span>
+          <span class="val" style="color:#fca5a5">${fmt(bookBal,3)}</span>
+        </div>
+        <div class="side-row add">
+          <span class="lbl">＋ إيرادات أضافها البنك لم تُسجَّل</span>
+          <span class="val">0.000</span>
+        </div>
+        <div class="side-row sub">
+          <span class="lbl">－ رسوم بنكية لم تُسجَّل</span>
+          <span class="val">(0.000)</span>
+        </div>
+        <div class="side-row total">
+          <span class="lbl">= الرصيد المعدّل / Adjusted Book Balance</span>
+          <span class="val" style="color:#7f1d1d;font-size:14px">${fmt(adjustedBookBal,3)} ر.س</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- النتيجة -->
+    <div class="result">
+      <div class="icon">${isBalanced ? '✅' : '❌'}</div>
+      <div class="title">${isBalanced
+        ? 'الحسابات متطابقة — التسوية مكتملة'
+        : 'يوجد فرق يستلزم المراجعة'}</div>
+      <div class="diff">
+        ${isBalanced
+          ? `الرصيد المعدّل حسب البنك = الرصيد المعدّل حسب الدفاتر = <strong>${fmt(adjustedBankBal,3)} ر.س</strong>`
+          : `الفرق: <strong style="color:#dc2626">${fmt(finalDiff,3)} ر.س</strong> — يرجى مراجعة الحركات غير المسوّاة`}
+      </div>
+    </div>
+
+    <!-- إيداعات في الطريق -->
+    ${depositsInTransit.length > 0 ? `
+    <div class="table-section">
+      <div class="table-hdr hdr-green">
+        <span>📥 إيداعات في الطريق / Deposits in Transit (${depositsInTransit.length})</span>
+        <span>${fmt(totalDepositsTransit,3)} ر.س</span>
+      </div>
+      <table><thead><tr>
+        <th>#</th><th>الرقم</th><th>النوع</th><th>التاريخ</th><th>البيان</th><th>الطرف</th><th>المبلغ</th>
+      </tr></thead><tbody>
+        ${depositsInTransit.map((r,i)=>`<tr>
+          <td style="color:#94a3b8">${i+1}</td>
+          <td style="font-family:monospace;color:#16a34a;font-weight:700">${r.serial||'—'}</td>
+          <td>${r.tx_type||'—'}</td>
+          <td style="color:#64748b">${fmtDate(r.tx_date)}</td>
+          <td>${r.description||'—'}</td>
+          <td>${r.party||'—'}</td>
+          <td style="font-family:monospace;font-weight:700;color:#16a34a">${fmt(r.debit||0,3)}</td>
+        </tr>`).join('')}
+        <tr class="total-row">
+          <td colspan="6" style="text-align:center">الإجمالي / Total</td>
+          <td style="font-family:monospace;color:#16a34a">${fmt(totalDepositsTransit,3)}</td>
+        </tr>
+      </tbody></table>
+    </div>` : ''}
+
+    <!-- دفعات معلقة -->
+    ${outstandingPayments.length > 0 ? `
+    <div class="table-section">
+      <div class="table-hdr hdr-amber">
+        <span>⏳ دفعات/شيكات معلقة / Outstanding Payments (${outstandingPayments.length})</span>
+        <span>${fmt(totalOutstandingPay,3)} ر.س</span>
+      </div>
+      <table><thead><tr>
+        <th>#</th><th>الرقم</th><th>النوع</th><th>التاريخ</th><th>البيان</th><th>الطرف</th><th>المبلغ</th>
+      </tr></thead><tbody>
+        ${outstandingPayments.map((r,i)=>`<tr>
+          <td style="color:#94a3b8">${i+1}</td>
+          <td style="font-family:monospace;color:#b45309;font-weight:700">${r.serial||'—'}</td>
+          <td>${r.tx_type||'—'}</td>
+          <td style="color:#64748b">${fmtDate(r.tx_date)}</td>
+          <td>${r.description||'—'}</td>
+          <td>${r.party||'—'}</td>
+          <td style="font-family:monospace;font-weight:700;color:#dc2626">(${fmt(r.credit||0,3)})</td>
+        </tr>`).join('')}
+        <tr class="total-row">
+          <td colspan="6" style="text-align:center">الإجمالي / Total</td>
+          <td style="font-family:monospace;color:#dc2626">(${fmt(totalOutstandingPay,3)})</td>
+        </tr>
+      </tbody></table>
+    </div>` : ''}
+
+    <!-- حركات مسوّاة -->
+    ${reconciled.length > 0 ? `
+    <div class="table-section">
+      <div class="table-hdr hdr-blue">
+        <span>✅ الحركات المسوّاة مع كشف البنك / Reconciled Transactions (${reconciled.length})</span>
+        <span>${fmt(reconciled.reduce((s,r)=>s+(r.debit||0)-(r.credit||0),0),3)} ر.س</span>
+      </div>
+      <table><thead><tr>
+        <th>#</th><th>الرقم</th><th>النوع</th><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th>
+      </tr></thead><tbody>
+        ${reconciled.map((r,i)=>`<tr>
+          <td style="color:#94a3b8">${i+1}</td>
+          <td style="font-family:monospace;color:#1e40af;font-weight:700">${r.serial||'—'}</td>
+          <td>${r.tx_type||'—'}</td>
+          <td style="color:#64748b">${fmtDate(r.tx_date)}</td>
+          <td>${r.description||'—'}</td>
+          <td style="font-family:monospace;color:#16a34a">${r.debit>0?fmt(r.debit,3):'—'}</td>
+          <td style="font-family:monospace;color:#dc2626">${r.credit>0?fmt(r.credit,3):'—'}</td>
+        </tr>`).join('')}
+      </tbody></table>
+    </div>` : ''}
+
+    <div class="signatures">
+      <div class="sign-box">
+        <div class="sign-line"></div>
+        <div class="sign-label">أمين الخزينة / Treasurer</div>
+        <div class="sign-name">التاريخ: ................</div>
+      </div>
+      <div class="sign-box">
+        <div class="sign-line"></div>
+        <div class="sign-label">المراجع الداخلي / Internal Auditor</div>
+        <div class="sign-name">التاريخ: ................</div>
+      </div>
+      <div class="sign-box">
+        <div class="sign-line"></div>
+        <div class="sign-label">المدير المالي / CFO</div>
+        <div class="sign-name">التاريخ: ................</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>حساباتي ERP v2.0 — نموذج التسوية البنكية</span>
+      <span>${bank?.account_name||''} | تاريخ الكشف: ${fmtDate(stmtDate)}</span>
+    </div>
+
+    <div class="no-print" style="text-align:center;margin-top:22px;padding:16px 0;border-top:1px solid #e2e8f0">
+      <button onclick="window.print()"
+        style="background:linear-gradient(135deg,#064e3b,#059669);color:white;border:none;padding:11px 32px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600">
+        🖨️ طباعة / حفظ PDF
+      </button>
+      <button onclick="window.close()"
+        style="margin-right:10px;background:#f1f5f9;border:1px solid #e2e8f0;padding:11px 20px;border-radius:10px;cursor:pointer;font-size:14px">
+        ✕ إغلاق
+      </button>
+    </div>
+    </div></body></html>`)
+    w.document.close()
+  }
+
+  return (
+    <div className="space-y-5" dir="rtl">
+      {/* فورم البيانات */}
+      <div className="bg-white rounded-2xl border-2 border-emerald-200 p-5">
+        <h3 className="text-lg font-bold text-emerald-800 mb-1 flex items-center gap-2">
+          📋 نموذج التسوية البنكية
+          <span className="text-sm font-normal text-slate-400">/ Bank Reconciliation Statement</span>
+        </h3>
+        <p className="text-xs text-slate-400 mb-4">أدخل رصيد كشف البنك لتوليد نموذج التسوية الاحترافي</p>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              الحساب البنكي / Bank Account <span className="text-red-500">*</span>
+            </label>
+            <select className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500"
+              value={selBank} onChange={e=>{setSelBank(e.target.value);setSession(null)}}>
+              <option value="">— اختر البنك —</option>
+              {banks.map(b=>(
+                <option key={b.id} value={b.id}>
+                  {b.account_name} ({b.account_code})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              تاريخ كشف البنك / Statement Date <span className="text-red-500">*</span>
+            </label>
+            <input type="date" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-500"
+              value={stmtDate} onChange={e=>setStmtDate(e.target.value)}/>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-600 block mb-1.5">
+              رصيد كشف البنك / Statement Balance <span className="text-red-500">*</span>
+            </label>
+            <input type="number" step="0.001"
+              className="w-full border-2 border-emerald-300 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-emerald-600 bg-emerald-50"
+              value={stmtBal} onChange={e=>setStmtBal(e.target.value)}
+              placeholder="0.000"/>
+            <p className="text-[10px] text-slate-400 mt-1">أدخل الرصيد كما يظهر في كشف البنك الورقي</p>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-4">
+          <button onClick={startSession} disabled={loading}
+            className="px-6 py-2.5 rounded-xl bg-emerald-700 text-white font-semibold text-sm hover:bg-emerald-800 disabled:opacity-50 flex items-center gap-2">
+            {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ التحميل...</> : '🔍 إعداد التسوية / Generate'}
+          </button>
+          {session && (
+            <button onClick={printReconciliation}
+              className="px-5 py-2.5 rounded-xl border-2 border-blue-200 text-blue-700 font-semibold text-sm hover:bg-blue-50 flex items-center gap-2">
+              🖨️ طباعة النموذج الاحترافي / Print
+            </button>
+          )}
+          <button onClick={onNavigateToBank}
+            className="px-5 py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+            → صفحة حركات البنك
+          </button>
+        </div>
+      </div>
+
+      {/* نتيجة التسوية — عرض المعاينة */}
+      {session && (
+        <div className="space-y-4">
+          {/* بطاقة النتيجة الرئيسية */}
+          <div className={`rounded-2xl border-2 p-5 text-center ${session.finalDiff===0||Math.abs(session.finalDiff)<0.01?'bg-emerald-50 border-emerald-400':'bg-red-50 border-red-400'}`}>
+            <div className="text-4xl mb-2">{Math.abs(session.finalDiff)<0.01?'✅':'❌'}</div>
+            <div className={`text-xl font-bold mb-1 ${Math.abs(session.finalDiff)<0.01?'text-emerald-800':'text-red-700'}`}>
+              {Math.abs(session.finalDiff)<0.01 ? 'الحسابات متطابقة — التسوية مكتملة' : 'يوجد فرق يستلزم المراجعة'}
+            </div>
+            {Math.abs(session.finalDiff)>=0.01 && (
+              <div className="text-sm text-red-600 mt-1">الفرق: <span className="font-mono font-bold">{fmt(session.finalDiff,3)} ر.س</span></div>
+            )}
+          </div>
+
+          {/* الجانبان */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* جانب البنك */}
+            <div className="bg-white rounded-2xl border-2 border-blue-200 overflow-hidden">
+              <div className="px-4 py-3 text-white text-sm font-bold flex justify-between" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+                <span>🏦 جانب كشف البنك / Bank Side</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {[
+                  {label:`رصيد الكشف في ${fmtDate(session.stmtDate)}`, value:fmt(session.stmtBal,3), color:'text-blue-700'},
+                  {label:`＋ إيداعات في الطريق (${session.depositsInTransit.length})`, value:fmt(session.totalDepositsTransit,3), color:'text-emerald-600', sub:'مدفوعات في الدفاتر لم تظهر بالكشف'},
+                  {label:`－ دفعات/شيكات معلقة (${session.outstandingPayments.length})`, value:`(${fmt(session.totalOutstandingPay,3)})`, color:'text-red-600', sub:'دفعات في الدفاتر لم تُصرف'},
+                ].map((item,i)=>(
+                  <div key={i} className="flex justify-between items-center px-4 py-3">
+                    <div>
+                      <div className="text-xs font-semibold text-slate-600">{item.label}</div>
+                      {item.sub && <div className="text-[10px] text-slate-400">{item.sub}</div>}
+                    </div>
+                    <div className={`font-mono font-bold text-sm ${item.color}`}>{item.value}</div>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center px-4 py-3 bg-blue-50">
+                  <div className="text-sm font-bold text-blue-800">= الرصيد المعدّل / Adjusted</div>
+                  <div className="font-mono font-bold text-blue-800 text-base">{fmt(session.adjustedBankBal,3)} ر.س</div>
+                </div>
+              </div>
+            </div>
+
+            {/* جانب الدفاتر */}
+            <div className="bg-white rounded-2xl border-2 border-red-200 overflow-hidden">
+              <div className="px-4 py-3 text-white text-sm font-bold flex justify-between" style={{background:'linear-gradient(135deg,#7f1d1d,#dc2626)'}}>
+                <span>📚 جانب دفاتر المنشأة / Book Side</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {[
+                  {label:`رصيد الدفاتر في ${fmtDate(session.stmtDate)}`, value:fmt(session.bookBal,3), color:'text-red-700'},
+                  {label:'＋ إيرادات أضافها البنك لم تُسجَّل', value:'0.000', color:'text-emerald-600', sub:'Credit Memos'},
+                  {label:'－ رسوم بنكية لم تُسجَّل', value:'(0.000)', color:'text-red-600', sub:'Bank Charges'},
+                ].map((item,i)=>(
+                  <div key={i} className="flex justify-between items-center px-4 py-3">
+                    <div>
+                      <div className="text-xs font-semibold text-slate-600">{item.label}</div>
+                      {item.sub && <div className="text-[10px] text-slate-400">{item.sub}</div>}
+                    </div>
+                    <div className={`font-mono font-bold text-sm ${item.color}`}>{item.value}</div>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center px-4 py-3 bg-red-50">
+                  <div className="text-sm font-bold text-red-800">= الرصيد المعدّل / Adjusted</div>
+                  <div className="font-mono font-bold text-red-800 text-base">{fmt(session.adjustedBookBal,3)} ر.س</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ملخص الحركات */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              {label:'إيداعات في الطريق', labelEn:'Deposits in Transit', count:session.depositsInTransit.length, value:session.totalDepositsTransit, color:'bg-emerald-50 border-emerald-200 text-emerald-700'},
+              {label:'دفعات/شيكات معلقة', labelEn:'Outstanding Payments', count:session.outstandingPayments.length, value:session.totalOutstandingPay, color:'bg-amber-50 border-amber-200 text-amber-700'},
+              {label:'حركات مسوّاة', labelEn:'Reconciled Transactions', count:session.reconciled.length, value:session.reconciled.reduce((s,r)=>s+(r.debit||0),0), color:'bg-blue-50 border-blue-200 text-blue-700'},
+            ].map((k,i)=>(
+              <div key={i} className={`rounded-2xl border-2 p-4 ${k.color}`}>
+                <div className="text-xs mb-0.5 opacity-70">{k.label} / {k.labelEn}</div>
+                <div className="text-2xl font-bold font-mono">{k.count}</div>
+                <div className="text-xs font-mono opacity-80">{fmt(k.value,3)} ر.س</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
   const selectedBankObj = banks.find(b=>b.id===selBank)
 
