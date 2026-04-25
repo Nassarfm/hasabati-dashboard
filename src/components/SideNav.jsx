@@ -1,221 +1,397 @@
 /**
- * SideNav.jsx — الشريط الجانبي للتنقل
+ * SideNav.jsx — الشريط الجانبي الموحد
  * Path: src/components/SideNav.jsx
- * يستبدل TopNav الأفقي بشريط جانبي عمودي مثل الصورة
+ * اللون: أزرق ملكي فاتح
+ * الهيكل: لوحة تحكم → إعدادات → بيانات أساسية → عمليات → تقارير → Workflow → معرفة
  */
 import { useState, useEffect } from 'react'
 import { useAuth } from '../AuthContext'
 
-const NAV_GROUPS = [
+// ── ألوان وثيمات ──────────────────────────────────────────
+const THEME = {
+  bg:          'linear-gradient(180deg, #1e3a8a 0%, #1e40af 60%, #1d4ed8 100%)',
+  bgDark:      '#1e3a8a',
+  accent:      '#3b82f6',
+  accentHover: '#2563eb',
+  activeBg:    'linear-gradient(135deg, #2563eb, #3b82f6)',
+  activeShadow:'0 2px 12px rgba(59,130,246,0.5)',
+  border:      'rgba(147,197,253,0.15)',
+  text:        'rgba(219,234,254,0.85)',
+  textActive:  '#ffffff',
+  textMuted:   'rgba(147,197,253,0.5)',
+  sep:         'rgba(147,197,253,0.25)',
+}
+
+// ── تعريف الموديولات ──────────────────────────────────────
+const MODULES = [
+  // ─── الصفحة الرئيسية ─────────────────────────────────
   {
-    id: 'dashboard', icon: '🏠', labelAr: 'الصفحة الرئيسية', labelEn: 'Home',
+    id: 'home', icon: '🏠', labelAr: 'الصفحة الرئيسية', labelEn: 'Home',
     direct: true,
   },
+
+  // ─── المحاسبة ─────────────────────────────────────────
   {
     id: 'accounting', icon: '📊', labelAr: 'المحاسبة', labelEn: 'Accounting',
     items: [
-      { id: 'coa',         icon: '📋', labelAr: 'دليل الحسابات',      labelEn: 'Chart of Accounts' },
-      { id: 'journal',     icon: '📒', labelAr: 'القيود اليومية',     labelEn: 'Journal Entries' },
-      { id: 'recurring',   icon: '🔄', labelAr: 'القيود المتكررة',    labelEn: 'Recurring Entries' },
-      { id: 'reversing',   icon: '↩️', labelAr: 'القيود العكسية',     labelEn: 'Reversing Entries' },
-      { id: 'allocation',  icon: '🔀', labelAr: 'قيد التوزيع',        labelEn: 'Allocation' },
-      { id: 'trialbal',    icon: '⚖️', labelAr: 'ميزان المراجعة',     labelEn: 'Trial Balance' },
-      { id: 'ledger',      icon: '📋', labelAr: 'الأستاذ العام',      labelEn: 'General Ledger' },
-      { id: 'income_report',  icon: '📈', labelAr: 'قائمة الدخل',    labelEn: 'Income Statement' },
-      { id: 'balance_report', icon: '🏛️', labelAr: 'الميزانية',      labelEn: 'Balance Sheet' },
-      { id: 'vat',         icon: '🧮', labelAr: 'ضريبة القيمة المضافة', labelEn: 'VAT Return' },
-      { id: 'fiscal',      icon: '📅', labelAr: 'الفترات المالية',    labelEn: 'Fiscal Periods' },
-      { id: 'dimensions',  icon: '🏷️', labelAr: 'الأبعاد المحاسبية', labelEn: 'Dimensions' },
+      { type:'item', id:'accounting',          icon:'📊', labelAr:'لوحة تحكم المحاسبة',  labelEn:'Dashboard' },
+      { type:'item', id:'accounting_settings', icon:'⚙️', labelAr:'إعدادات المحاسبة',    labelEn:'Settings' },
+      { type:'sep',  labelAr:'البيانات الأساسية', labelEn:'Master Data' },
+      { type:'item', id:'coa',                 icon:'📋', labelAr:'دليل الحسابات',       labelEn:'Chart of Accounts' },
+      { type:'item', id:'dimensions',          icon:'🏷️', labelAr:'الأبعاد المحاسبية',   labelEn:'Dimensions' },
+      { type:'item', id:'branches',            icon:'🏢', labelAr:'الفروع',              labelEn:'Branches' },
+      { type:'item', id:'costcenters',         icon:'💰', labelAr:'مراكز التكلفة',       labelEn:'Cost Centers' },
+      { type:'item', id:'projects',            icon:'📁', labelAr:'المشاريع',            labelEn:'Projects' },
+      { type:'item', id:'fiscal',              icon:'📅', labelAr:'الفترات المالية',     labelEn:'Fiscal Periods' },
+      { type:'sep',  labelAr:'العمليات', labelEn:'Transactions' },
+      { type:'item', id:'journal',             icon:'📒', labelAr:'القيود اليومية',      labelEn:'Journal Entries' },
+      { type:'item', id:'recurring',           icon:'🔄', labelAr:'القيود المتكررة',     labelEn:'Recurring Entries' },
+      { type:'item', id:'reversing',           icon:'↩️', labelAr:'القيود العكسية',     labelEn:'Reversing Entries' },
+      { type:'item', id:'allocation',          icon:'🔀', labelAr:'قيد التوزيع',         labelEn:'Allocation' },
+      { type:'sep',  labelAr:'التقارير', labelEn:'Reports' },
+      { type:'item', id:'trialbal',            icon:'⚖️', labelAr:'ميزان المراجعة',      labelEn:'Trial Balance' },
+      { type:'item', id:'ledger',              icon:'📋', labelAr:'الأستاذ العام',       labelEn:'General Ledger' },
+      { type:'item', id:'income_report',       icon:'📈', labelAr:'قائمة الدخل',         labelEn:'Income Statement' },
+      { type:'item', id:'balance_report',      icon:'🏛️', labelAr:'الميزانية العمومية',  labelEn:'Balance Sheet' },
+      { type:'item', id:'cashflow_report',     icon:'💵', labelAr:'التدفقات النقدية',    labelEn:'Cash Flow' },
+      { type:'item', id:'vat',                 icon:'🧮', labelAr:'ضريبة القيمة المضافة', labelEn:'VAT Return' },
+      { type:'item', id:'financial_analysis',  icon:'📐', labelAr:'التحليل المالي',      labelEn:'Financial Analysis' },
+      { type:'divider' },
+      { type:'item', id:'workflow_accounting', icon:'🔀', labelAr:'مخطط سير العمل',     labelEn:'Workflow Chart',   special:'workflow' },
+      { type:'item', id:'knowledge_accounting',icon:'📚', labelAr:'المستندات والمعرفة', labelEn:'Docs & Knowledge', special:'knowledge' },
     ]
   },
+
+  // ─── الخزينة والبنوك ──────────────────────────────────
   {
-    id: 'treasury', icon: '🏦', labelAr: 'الخزينة والبنوك', labelEn: 'Treasury',
+    id: 'treasury', icon: '🏦', labelAr: 'الخزينة والبنوك', labelEn: 'Treasury & Banking',
     items: [
-      { id: 'treasury',          icon: '📊', labelAr: 'لوحة تحكم الخزينة', labelEn: 'Dashboard' },
-      { id: 'treasury_accounts', icon: '🏦', labelAr: 'الحسابات البنكية',  labelEn: 'Bank Accounts' },
-      { id: 'treasury_cash',     icon: '💵', labelAr: 'سندات القبض والصرف',labelEn: 'Cash Vouchers' },
-      { id: 'treasury_bank',     icon: '🏛️', labelAr: 'حركات البنوك',      labelEn: 'Bank Transactions' },
-      { id: 'treasury_transfers',icon: '🔄', labelAr: 'التحويلات الداخلية',labelEn: 'Internal Transfers' },
-      { id: 'treasury_checks',   icon: '📝', labelAr: 'إدارة الشيكات',     labelEn: 'Cheques' },
-      { id: 'treasury_petty',    icon: '👜', labelAr: 'العهدة النثرية',     labelEn: 'Petty Cash' },
-      { id: 'treasury_reconcile',icon: '⚖️', labelAr: 'التسوية البنكية',   labelEn: 'Reconciliation' },
-      { id: 'treasury_reports',  icon: '📈', labelAr: 'تقارير الخزينة',     labelEn: 'Reports' },
+      { type:'item', id:'treasury',            icon:'📊', labelAr:'لوحة تحكم الخزينة',  labelEn:'Dashboard' },
+      { type:'item', id:'treasury_settings',   icon:'⚙️', labelAr:'إعدادات الخزينة',    labelEn:'Settings' },
+      { type:'sep',  labelAr:'البيانات الأساسية', labelEn:'Master Data' },
+      { type:'item', id:'treasury_accounts',   icon:'🏦', labelAr:'الحسابات البنكية',    labelEn:'Bank Accounts' },
+      { type:'item', id:'treasury_petty',      icon:'👜', labelAr:'العهدة النثرية',       labelEn:'Petty Cash' },
+      { type:'item', id:'treasury_recurring',  icon:'🔁', labelAr:'المعاملات المتكررة',  labelEn:'Recurring' },
+      { type:'sep',  labelAr:'العمليات', labelEn:'Transactions' },
+      { type:'item', id:'treasury_cash',       icon:'💵', labelAr:'سندات القبض والصرف',  labelEn:'Cash Vouchers' },
+      { type:'item', id:'treasury_bank',       icon:'🏛️', labelAr:'حركات البنوك',        labelEn:'Bank Transactions' },
+      { type:'item', id:'treasury_transfers',  icon:'🔄', labelAr:'التحويلات الداخلية',  labelEn:'Internal Transfers' },
+      { type:'item', id:'treasury_checks',     icon:'📝', labelAr:'إدارة الشيكات',       labelEn:'Cheques' },
+      { type:'sep',  labelAr:'التقارير', labelEn:'Reports' },
+      { type:'item', id:'treasury_reports',    icon:'📈', labelAr:'تقارير الخزينة',       labelEn:'Treasury Reports' },
+      { type:'item', id:'treasury_reconcile',  icon:'⚖️', labelAr:'التسوية البنكية',      labelEn:'Reconciliation' },
+      { type:'item', id:'treasury_smart_import',icon:'🧠',labelAr:'الاستيراد الذكي',      labelEn:'Smart Import' },
+      { type:'divider' },
+      { type:'item', id:'workflow_treasury',   icon:'🔀', labelAr:'مخطط سير العمل',     labelEn:'Workflow Chart',   special:'workflow' },
+      { type:'item', id:'knowledge_treasury',  icon:'📚', labelAr:'المستندات والمعرفة', labelEn:'Docs & Knowledge', special:'knowledge' },
     ]
   },
+
+  // ─── المخزون ──────────────────────────────────────────
   {
     id: 'inventory', icon: '📦', labelAr: 'المخزون', labelEn: 'Inventory',
     items: [
-      { id: 'inventory', icon: '📊', labelAr: 'لوحة تحكم المخزون', labelEn: 'Dashboard' },
+      { type:'item', id:'inventory',           icon:'📊', labelAr:'لوحة تحكم المخزون',  labelEn:'Dashboard' },
+      { type:'sep',  labelAr:'البيانات الأساسية', labelEn:'Master Data' },
+      { type:'item', id:'inv_items',           icon:'🏷️', labelAr:'بطاقات الأصناف',     labelEn:'Item Master' },
+      { type:'item', id:'warehouses',          icon:'🏭', labelAr:'المستودعات',          labelEn:'Warehouses' },
+      { type:'sep',  labelAr:'العمليات', labelEn:'Transactions' },
+      { type:'item', id:'inv_transactions',    icon:'📋', labelAr:'الحركات المخزنية',    labelEn:'Transactions' },
+      { type:'item', id:'inv_count',           icon:'🔍', labelAr:'الجرد الفعلي',        labelEn:'Physical Count' },
+      { type:'sep',  labelAr:'التقارير', labelEn:'Reports' },
+      { type:'item', id:'inv_balance',         icon:'⚖️', labelAr:'رصيد المخزون',        labelEn:'Stock Balance' },
+      { type:'item', id:'inv_valuation',       icon:'💰', labelAr:'تقييم المخزون',       labelEn:'Valuation' },
+      { type:'divider' },
+      { type:'item', id:'workflow_inventory',  icon:'🔀', labelAr:'مخطط سير العمل',     labelEn:'Workflow Chart',   special:'workflow' },
+      { type:'item', id:'knowledge_inventory', icon:'📚', labelAr:'المستندات والمعرفة', labelEn:'Docs & Knowledge', special:'knowledge' },
     ]
   },
+
+  // ─── المشتريات ────────────────────────────────────────
   {
     id: 'purchases', icon: '🛒', labelAr: 'المشتريات', labelEn: 'Purchases',
     items: [
-      { id: 'purchases', icon: '📊', labelAr: 'لوحة تحكم المشتريات', labelEn: 'Dashboard' },
+      { type:'item', id:'purchases',           icon:'📊', labelAr:'لوحة تحكم المشتريات', labelEn:'Dashboard' },
+      { type:'sep',  labelAr:'البيانات الأساسية', labelEn:'Master Data' },
+      { type:'item', id:'vendors',             icon:'🏢', labelAr:'الموردون',            labelEn:'Vendors' },
+      { type:'sep',  labelAr:'العمليات', labelEn:'Transactions' },
+      { type:'item', id:'purchase_requests',   icon:'📝', labelAr:'طلبات الشراء',        labelEn:'Purchase Requests' },
+      { type:'item', id:'purchase_orders',     icon:'📋', labelAr:'أوامر الشراء',        labelEn:'Purchase Orders' },
+      { type:'item', id:'ap_invoices',         icon:'🧾', labelAr:'فواتير الموردين',     labelEn:'AP Invoices' },
+      { type:'item', id:'ap_payments',         icon:'💸', labelAr:'دفعات الموردين',      labelEn:'AP Payments' },
+      { type:'sep',  labelAr:'التقارير', labelEn:'Reports' },
+      { type:'item', id:'ap_aging',            icon:'⏱️', labelAr:'أعمار الديون',        labelEn:'AP Aging' },
+      { type:'divider' },
+      { type:'item', id:'workflow_purchases',  icon:'🔀', labelAr:'مخطط سير العمل',     labelEn:'Workflow Chart',   special:'workflow' },
+      { type:'item', id:'knowledge_purchases', icon:'📚', labelAr:'المستندات والمعرفة', labelEn:'Docs & Knowledge', special:'knowledge' },
     ]
   },
+
+  // ─── المبيعات ─────────────────────────────────────────
   {
     id: 'sales', icon: '🧾', labelAr: 'المبيعات', labelEn: 'Sales',
     items: [
-      { id: 'sales', icon: '📊', labelAr: 'لوحة تحكم المبيعات', labelEn: 'Dashboard' },
+      { type:'item', id:'sales',               icon:'📊', labelAr:'لوحة تحكم المبيعات', labelEn:'Dashboard' },
+      { type:'sep',  labelAr:'البيانات الأساسية', labelEn:'Master Data' },
+      { type:'item', id:'customers',           icon:'👤', labelAr:'العملاء',             labelEn:'Customers' },
+      { type:'sep',  labelAr:'العمليات', labelEn:'Transactions' },
+      { type:'item', id:'sales_invoices',      icon:'🧾', labelAr:'فواتير المبيعات',    labelEn:'Sales Invoices' },
+      { type:'item', id:'sales_receipts',      icon:'💵', labelAr:'المقبوضات',          labelEn:'Receipts' },
+      { type:'sep',  labelAr:'التقارير', labelEn:'Reports' },
+      { type:'item', id:'sales_aging',         icon:'⏱️', labelAr:'أعمار الديون',        labelEn:'AR Aging' },
+      { type:'item', id:'sales_report',        icon:'📈', labelAr:'تقارير المبيعات',    labelEn:'Sales Reports' },
+      { type:'divider' },
+      { type:'item', id:'workflow_sales',      icon:'🔀', labelAr:'مخطط سير العمل',     labelEn:'Workflow Chart',   special:'workflow' },
+      { type:'item', id:'knowledge_sales',     icon:'📚', labelAr:'المستندات والمعرفة', labelEn:'Docs & Knowledge', special:'knowledge' },
     ]
   },
+
+  // ─── الأصول الثابتة ───────────────────────────────────
   {
     id: 'assets', icon: '🏗️', labelAr: 'الأصول الثابتة', labelEn: 'Fixed Assets',
     direct: true, soon: true,
   },
+
+  // ─── الموارد البشرية ──────────────────────────────────
   {
     id: 'hr', icon: '👥', labelAr: 'الموارد البشرية', labelEn: 'Human Resources',
     direct: true, soon: true,
   },
+
+  // ─── الرواتب ──────────────────────────────────────────
   {
     id: 'payroll', icon: '💼', labelAr: 'الرواتب', labelEn: 'Payroll',
     direct: true, soon: true,
   },
+
+  // ─── المتعاملون ───────────────────────────────────────
   {
     id: 'parties', icon: '🤝', labelAr: 'المتعاملون', labelEn: 'Financial Parties',
     items: [
-      { id: 'parties',          icon: '📋', labelAr: 'قائمة المتعاملين', labelEn: 'Parties List' },
-      { id: 'parties_balances', icon: '💰', labelAr: 'الأرصدة المفتوحة', labelEn: 'Open Balances' },
+      { type:'item', id:'parties',             icon:'📋', labelAr:'قائمة المتعاملين',   labelEn:'Parties List' },
+      { type:'item', id:'parties_balances',    icon:'💰', labelAr:'الأرصدة المفتوحة',   labelEn:'Open Balances' },
+      { type:'item', id:'parties_roles',       icon:'⚙️', labelAr:'إعدادات الأدوار',    labelEn:'Role Settings' },
     ]
   },
+
+  // ─── الإعدادات ────────────────────────────────────────
   {
     id: 'settings', icon: '⚙️', labelAr: 'الإعدادات', labelEn: 'Settings',
     items: [
-      { id: 'company_settings',  icon: '🏢', labelAr: 'إعدادات المنشأة',       labelEn: 'Company Settings' },
-      { id: 'users',             icon: '👥', labelAr: 'إدارة المستخدمين',      labelEn: 'User Management' },
-      { id: 'roles_permissions', icon: '🔐', labelAr: 'الأدوار والصلاحيات',   labelEn: 'Roles & Permissions' },
-      { id: 'audit_trail',       icon: '🔍', labelAr: 'سجل النشاط',           labelEn: 'Audit Trail' },
-      { id: 'vat_settings',      icon: '🧾', labelAr: 'إعدادات الضريبة',      labelEn: 'VAT Settings' },
-      { id: 'number_series',     icon: '🔢', labelAr: 'الترقيم التلقائي',     labelEn: 'Number Series' },
-      { id: 'localization',      icon: '🌍', labelAr: 'الإقليمية والتوطين',   labelEn: 'Localization' },
+      { type:'sep',  labelAr:'الشركة والمستخدمين', labelEn:'Company & Users' },
+      { type:'item', id:'company_settings',    icon:'🏢', labelAr:'إعدادات المنشأة',     labelEn:'Company Settings' },
+      { type:'item', id:'users',               icon:'👥', labelAr:'إدارة المستخدمين',    labelEn:'User Management' },
+      { type:'item', id:'roles_permissions',   icon:'🔐', labelAr:'الأدوار والصلاحيات',  labelEn:'Roles & Permissions' },
+      { type:'item', id:'audit_trail',         icon:'🔍', labelAr:'سجل النشاط',          labelEn:'Audit Trail' },
+      { type:'sep',  labelAr:'الإعدادات المالية', labelEn:'Financial Settings' },
+      { type:'item', id:'vat_settings',        icon:'🧾', labelAr:'إعدادات الضريبة',     labelEn:'VAT Settings' },
+      { type:'item', id:'number_series',       icon:'🔢', labelAr:'الترقيم التلقائي',    labelEn:'Number Series' },
+      { type:'item', id:'localization',        icon:'🌍', labelAr:'الإقليمية والتوطين',  labelEn:'Localization' },
     ]
   },
 ]
 
-// map page → group id
-function getGroupForPage(page) {
-  if (page === 'dashboard') return 'dashboard'
-  for (const g of NAV_GROUPS) {
-    if (g.direct && g.id === page) return g.id
-    if (g.items?.some(i => i.id === page)) return g.id
+// ── الصفحات التي تنتمي لكل موديول ────────────────────────
+function getActiveModule(page) {
+  if (!page || page === 'dashboard') return 'home'
+  if (page.startsWith('treasury')) return 'treasury'
+  if (page.startsWith('inv_') || page === 'inventory' || page === 'warehouses') return 'inventory'
+  if (page.startsWith('purchase') || page === 'purchases' || page === 'vendors' || page === 'ap_invoices' || page === 'ap_payments' || page === 'ap_aging') return 'purchases'
+  if (page.startsWith('sales') || page === 'customers') return 'sales'
+  if (page === 'hr') return 'hr'
+  if (page === 'assets') return 'assets'
+  if (page === 'payroll') return 'payroll'
+  if (page.startsWith('parties')) return 'parties'
+  if (['company_settings','users','roles_permissions','audit_trail','vat_settings','number_series','localization'].includes(page)) return 'settings'
+  if (page.startsWith('workflow')) {
+    const mod = page.replace('workflow_', '')
+    return mod || 'accounting'
   }
-  if (page?.startsWith('treasury')) return 'treasury'
+  if (page.startsWith('knowledge')) {
+    const mod = page.replace('knowledge_', '')
+    return mod || 'accounting'
+  }
   return 'accounting'
 }
 
 export default function SideNav({ activePage, onNavigate }) {
   const { user, signOut } = useAuth()
-  const [openGroup, setOpenGroup] = useState(() => getGroupForPage(activePage))
-  const [collapsed, setCollapsed] = useState(false)
+  const [openModule, setOpenModule] = useState(() => getActiveModule(activePage))
+  const [collapsed,  setCollapsed]  = useState(false)
 
   useEffect(() => {
-    setOpenGroup(getGroupForPage(activePage))
+    setOpenModule(getActiveModule(activePage))
   }, [activePage])
 
-  const userName  = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'المستخدم'
-  const initials  = userName.slice(0, 2).toUpperCase()
-
-  const handleNav = (id) => {
-    onNavigate(id)
-  }
+  const nav = (id) => onNavigate && onNavigate(id)
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'المستخدم'
+  const initials = userName.slice(0, 2).toUpperCase()
 
   return (
     <aside
       dir="rtl"
-      className="fixed top-0 right-0 h-screen z-50 flex flex-col transition-all duration-300"
       style={{
-        width: collapsed ? '64px' : '240px',
-        background: 'linear-gradient(180deg, #0d1b3e 0%, #122054 50%, #0d1b3e 100%)',
-        borderLeft: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '2px 0 20px rgba(0,0,0,0.3)',
+        position:'fixed', top:0, right:0, height:'100vh', zIndex:50,
+        width: collapsed ? '60px' : '240px',
+        background: THEME.bg,
+        borderLeft: '1px solid ' + THEME.border,
+        boxShadow: '2px 0 24px rgba(30,58,138,0.4)',
+        transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
+        display: 'flex', flexDirection: 'column',
       }}>
 
-      {/* الشعار / Logo */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
+      {/* الشعار */}
+      <div style={{
+        display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'space-between',
+        padding:'14px 12px', borderBottom:'1px solid ' + THEME.border,
+      }}>
         {!collapsed && (
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center shrink-0 shadow-lg" style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)'}}>
-              <span className="text-white font-bold text-sm">ح</span>
+          <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+            <div style={{
+              width:34, height:34, borderRadius:10,
+              background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              boxShadow:'0 2px 10px rgba(59,130,246,0.4)', flexShrink:0,
+            }}>
+              <span style={{color:'white', fontWeight:900, fontSize:16}}>ح</span>
             </div>
             <div>
-              <div className="text-white font-bold text-sm leading-tight">حساباتي</div>
-              <div className="text-blue-300/60 text-[10px]">ERP v2.0</div>
+              <div style={{color:'white', fontWeight:800, fontSize:14, lineHeight:1.2}}>حساباتي</div>
+              <div style={{color:THEME.textMuted, fontSize:10}}>ERP v2.0</div>
             </div>
           </div>
         )}
         {collapsed && (
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center mx-auto shadow-lg" style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)'}}>
-            <span className="text-white font-bold text-sm">ح</span>
+          <div style={{
+            width:34, height:34, borderRadius:10,
+            background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+          }}>
+            <span style={{color:'white', fontWeight:900, fontSize:16}}>ح</span>
           </div>
         )}
-        <button onClick={() => setCollapsed(c => !c)}
-          className="text-slate-400 hover:text-white text-xs w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/10">
-          {collapsed ? '›' : '‹'}
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          style={{
+            color: THEME.textMuted, background:'none', border:'none',
+            cursor:'pointer', fontSize:18, padding:'0 4px',
+            transition:'color 0.2s',
+          }}>
+          {collapsed ? '‹' : '›'}
         </button>
       </div>
 
-      {/* القائمة / Menu */}
-      <nav className="flex-1 overflow-y-auto py-3 space-y-0.5 px-2" style={{scrollbarWidth:'none'}}>
-        {NAV_GROUPS.map(group => {
-          const isActive   = getGroupForPage(activePage) === group.id
-          const isOpen     = openGroup === group.id
-          const isDirect   = group.direct
-          const isSoon     = group.soon
+      {/* القائمة */}
+      <nav style={{flex:1, overflowY:'auto', padding:'8px 6px', scrollbarWidth:'none'}}>
+        {MODULES.map(mod => {
+          const isActiveModule = getActiveModule(activePage) === mod.id
+          const isOpen = openModule === mod.id
 
-          if (isDirect) {
+          // ─ صفحة مباشرة (Home, Assets, HR, Payroll) ─────
+          if (mod.direct) {
+            const isActive = activePage === mod.id || (mod.id === 'home' && activePage === 'dashboard')
             return (
-              <button key={group.id}
-                onClick={() => !isSoon && handleNav(group.id)}
-                title={collapsed ? `${group.labelAr} / ${group.labelEn}` : ''}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right
-                  ${isSoon ? 'opacity-40 cursor-default text-slate-500' : ''}`}
-                style={isActive
-                  ? {background:'linear-gradient(135deg,#2563eb,#1d4ed8)', color:'white', boxShadow:'0 2px 10px rgba(37,99,235,0.4)'}
-                  : {color:'rgba(148,163,184,0.9)'}}>
-                <span className="text-base shrink-0">{group.icon}</span>
+              <button key={mod.id}
+                onClick={() => !mod.soon && nav(mod.id === 'home' ? 'dashboard' : mod.id)}
+                title={collapsed ? mod.labelAr + ' / ' + mod.labelEn : ''}
+                style={{
+                  width:'100%', display:'flex', alignItems:'center',
+                  gap:10, padding:'8px 10px', borderRadius:10, border:'none',
+                  cursor: mod.soon ? 'default' : 'pointer',
+                  textAlign:'right', marginBottom:2,
+                  opacity: mod.soon ? 0.45 : 1,
+                  background: isActive ? THEME.activeBg : 'none',
+                  boxShadow: isActive ? THEME.activeShadow : 'none',
+                  color: isActive ? THEME.textActive : THEME.text,
+                  transition:'all 0.2s',
+                }}>
+                <span style={{fontSize:17, flexShrink:0}}>{mod.icon}</span>
                 {!collapsed && (
-                  <span className="flex-1 text-right truncate">
-                    {group.labelAr}
-                    {isSoon && <span className="mr-2 text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">قريباً</span>}
+                  <span style={{flex:1, textAlign:'right', fontSize:13, fontWeight: isActive ? 700 : 500, truncate:'ellipsis', overflow:'hidden', whiteSpace:'nowrap'}}>
+                    {mod.labelAr}
+                    {mod.soon && <span style={{marginRight:6, fontSize:9, background:'rgba(251,191,36,0.2)', color:'#fbbf24', padding:'2px 6px', borderRadius:6}}>قريباً</span>}
                   </span>
                 )}
               </button>
             )
           }
 
+          // ─ موديول مع قائمة فرعية ─────────────────────────
           return (
-            <div key={group.id}>
+            <div key={mod.id} style={{marginBottom:2}}>
+              {/* رأس الموديول */}
               <button
-                onClick={() => setOpenGroup(isOpen ? '' : group.id)}
-                title={collapsed ? `${group.labelAr} / ${group.labelEn}` : ''}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right"
-                style={isActive
-                  ? {background:'rgba(37,99,235,0.15)', color:'rgba(147,197,253,1)', borderRight:'2px solid #3b82f6'}
-                  : {color:'rgba(148,163,184,0.9)'}}>
-                <span className="text-base shrink-0">{group.icon}</span>
+                onClick={() => setOpenModule(isOpen ? '' : mod.id)}
+                title={collapsed ? mod.labelAr : ''}
+                style={{
+                  width:'100%', display:'flex', alignItems:'center',
+                  gap:10, padding:'8px 10px', borderRadius:10, border:'none',
+                  cursor:'pointer', textAlign:'right', background:'none',
+                  color: isActiveModule ? '#93c5fd' : THEME.text,
+                  borderRight: isActiveModule ? '3px solid #3b82f6' : '3px solid transparent',
+                  transition:'all 0.2s',
+                }}>
+                <span style={{fontSize:17, flexShrink:0}}>{mod.icon}</span>
                 {!collapsed && (
                   <>
-                    <span className="flex-1 text-right truncate">{group.labelAr}</span>
-                    <span className={`text-xs transition-transform ${isOpen ? 'rotate-90' : ''}`}>›</span>
+                    <span style={{flex:1, textAlign:'right', fontSize:13, fontWeight: isActiveModule ? 700 : 500}}>
+                      {mod.labelAr}
+                    </span>
+                    <span style={{fontSize:12, color:THEME.textMuted, transition:'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'none'}}>›</span>
                   </>
                 )}
               </button>
 
-              {/* Sub-items */}
+              {/* العناصر الفرعية */}
               {isOpen && !collapsed && (
-                <div className="mr-4 mt-0.5 mb-1 border-r space-y-0.5 pr-2" style={{borderColor:'rgba(59,130,246,0.25)'}}>
-                  {group.items?.map(item => {
+                <div style={{marginRight:12, borderRight:'2px solid rgba(147,197,253,0.2)', paddingRight:8, marginTop:2, marginBottom:4}}>
+                  {mod.items?.map((item, idx) => {
+                    if (item.type === 'sep') {
+                      return (
+                        <div key={idx} style={{
+                          display:'flex', alignItems:'center', gap:8,
+                          padding:'8px 10px 4px', marginTop:idx > 0 ? 4 : 0,
+                        }}>
+                          <div style={{flex:1, height:1, background: THEME.sep}}/>
+                          <span style={{fontSize:9, color:THEME.textMuted, fontWeight:700, letterSpacing:'0.05em', whiteSpace:'nowrap', textTransform:'uppercase'}}>
+                            {item.labelAr}
+                          </span>
+                        </div>
+                      )
+                    }
+                    if (item.type === 'divider') {
+                      return <div key={idx} style={{height:1, background: THEME.sep, margin:'8px 10px'}}/>
+                    }
                     const isItemActive = activePage === item.id
+                    const isSpecial = !!item.special
                     return (
                       <button key={item.id}
-                        onClick={() => handleNav(item.id)}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all text-right"
-                        style={isItemActive
-                          ? {background:'linear-gradient(135deg,#2563eb,#1d4ed8)', color:'white', boxShadow:'0 1px 6px rgba(37,99,235,0.35)'}
-                          : {color:'rgba(148,163,184,0.8)'}}>
-                        <span className="text-sm shrink-0">{item.icon}</span>
-                        <span className="flex-1 text-right truncate">{item.labelAr}</span>
+                        onClick={() => nav(item.id)}
+                        style={{
+                          width:'100%', display:'flex', alignItems:'center',
+                          gap:9, padding:'7px 10px', borderRadius:8, border:'none',
+                          cursor:'pointer', textAlign:'right', marginBottom:1,
+                          background: isItemActive ? THEME.activeBg : 'none',
+                          boxShadow: isItemActive ? THEME.activeShadow : 'none',
+                          color: isItemActive ? THEME.textActive : isSpecial ? '#a5f3fc' : THEME.text,
+                          transition:'all 0.2s',
+                        }}>
+                        <span style={{fontSize:14, flexShrink:0}}>{item.icon}</span>
+                        <div style={{flex:1, textAlign:'right', minWidth:0}}>
+                          <div style={{fontSize:12, fontWeight: isItemActive ? 700 : 500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+                            {item.labelAr}
+                          </div>
+                          {isItemActive && (
+                            <div style={{fontSize:9, color:'rgba(147,197,253,0.7)'}}>
+                              {item.labelEn}
+                            </div>
+                          )}
+                        </div>
+                        {isSpecial && !isItemActive && (
+                          <span style={{fontSize:9, background:'rgba(6,182,212,0.2)', color:'#22d3ee', padding:'1px 5px', borderRadius:4, flexShrink:0}}>
+                            {item.special === 'workflow' ? 'WF' : 'KB'}
+                          </span>
+                        )}
                       </button>
                     )
                   })}
@@ -226,33 +402,36 @@ export default function SideNav({ activePage, onNavigate }) {
         })}
       </nav>
 
-      {/* المستخدم / User */}
-      <div className="border-t p-3" style={{borderColor:'rgba(59,130,246,0.2)', background:'rgba(0,0,0,0.2)'}}>
-        <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold shadow-lg"
-            style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)'}}>
-            {initials}
-          </div>
+      {/* معلومات المستخدم */}
+      <div style={{
+        borderTop:'1px solid ' + THEME.border,
+        padding:'10px 10px', background:'rgba(0,0,0,0.15)',
+      }}>
+        <div style={{display:'flex', alignItems:'center', gap:10, justifyContent: collapsed ? 'center' : 'flex-start'}}>
+          <div style={{
+            width:32, height:32, borderRadius:'50%', flexShrink:0,
+            background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            color:'white', fontSize:12, fontWeight:700,
+            boxShadow:'0 2px 8px rgba(59,130,246,0.4)',
+          }}>{initials}</div>
           {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="text-white text-xs font-semibold truncate">{userName}</div>
-              <div className="text-blue-300/50 text-[10px] truncate">{user?.email}</div>
-            </div>
-          )}
-          {!collapsed && (
-            <button onClick={signOut}
-              title="تسجيل الخروج / Sign Out"
-              className="text-blue-300/40 hover:text-red-400 text-sm transition-colors">
-              ⬚
-            </button>
+            <>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{color:'white', fontSize:11, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{userName}</div>
+                <div style={{display:'flex', alignItems:'center', gap:4, marginTop:2}}>
+                  <span style={{width:6, height:6, borderRadius:'50%', background:'#34d399', boxShadow:'0 0 4px #34d399'}}/>
+                  <span style={{color:THEME.textMuted, fontSize:9}}>متصل / Online</span>
+                </div>
+              </div>
+              <button onClick={signOut}
+                title="تسجيل الخروج / Sign Out"
+                style={{background:'none', border:'none', cursor:'pointer', color:THEME.textMuted, fontSize:16, padding:4, borderRadius:6}}>
+                ⬚
+              </button>
+            </>
           )}
         </div>
-        {!collapsed && (
-          <div className="mt-2 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-sm" style={{boxShadow:'0 0 4px #34d399'}}/>
-            <span className="text-blue-300/40 text-[10px]">متصل / Online</span>
-          </div>
-        )}
       </div>
     </aside>
   )

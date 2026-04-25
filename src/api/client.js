@@ -537,7 +537,21 @@ export const api = {
 
     // تقارير
     openBalances:  (p={})   => get('/parties/reports/open-balances', p),
+
+    // أدوار المتعاملين / Role Definitions
+    listRoles:     ()       => get('/parties/role-definitions'),
+    createRole:    (b)      => post('/parties/role-definitions', b),
+    updateRole:    (id, b)  => put(`/parties/role-definitions/${id}`, b),
+    deleteRole:    (id)     => del(`/parties/role-definitions/${id}`),
+  },
+  // ── قاعدة المعرفة والمستندات ─────────────────────────────
+  knowledge: {
+    listDocuments:  (p={})   => get('/knowledge/documents', p),
+    createDocument: (b)      => post('/knowledge/documents', b),
+    deleteDocument: (id)     => del('/knowledge/documents/' + id),
+    listArticles:   (p={})   => get('/knowledge/articles', p),
+    createArticle:  (b)      => post('/knowledge/articles', b),
+    updateArticle:  (id, b)  => put('/knowledge/articles/' + id, b),
+    deleteArticle:  (id)     => del('/knowledge/articles/' + id),
   },
 }
-
-export default api
