@@ -274,6 +274,7 @@ export const api = {
     listInternalTransfers:  (p={})  => get('/treasury/internal-transfers', p),
     createInternalTransfer: (b)     => post('/treasury/internal-transfers', b),
     postInternalTransfer:   (id)    => post(`/treasury/internal-transfers/${id}/post`, {}),
+    toggleReconcile:        (id,v)  => post(`/treasury/transactions/${id}/reconcile`, {is_reconciled:v}),
     // GL Import
     getUnlinkedGLEntries:   (p={})  => get('/treasury/gl-import/unlinked-entries', p),
     importGLEntries:        (b)     => post('/treasury/gl-import/import-entries', b),

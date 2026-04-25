@@ -1632,6 +1632,7 @@ function TransfersFocusedPage({showToast, openView}) {
   const [accounts,setAccounts] = useState([])
   const [loading,setLoading]   = useState(true)
   const [selected,setSelected] = useState(null)
+  const [reconciledIds, setReconciledIds] = useState(new Set())
 
   const load = useCallback(async()=>{
     setLoading(true)
@@ -1640,12 +1641,31 @@ function TransfersFocusedPage({showToast, openView}) {
         api.treasury.listInternalTransfers(),
         api.treasury.listBankAccounts(),
       ])
-      setItems(r?.data?.items||[])
+      const txs = r?.data?.items||[]
+      setItems(txs)
       setAccounts(a?.data||[])
+      // تحميل الحركات المسوّاة مسبقاً
+      const rec = new Set(txs.filter(t=>t.is_reconciled).map(t=>t.id))
+      setReconciledIds(rec)
     }catch(e){showToast(e.message,'error')}
     finally{setLoading(false)}
   },[])
   useEffect(()=>{load()},[load])
+
+  const toggleReconcile = async(id) => {
+    const isRec = reconciledIds.has(id)
+    const next = new Set(reconciledIds)
+    isRec ? next.delete(id) : next.add(id)
+    setReconciledIds(next)
+    try {
+      await api.treasury.toggleReconcile(id, !isRec)
+    } catch(e) {
+      // rollback on error
+      const rollback = new Set(reconciledIds)
+      setReconciledIds(rollback)
+      showToast(e.message,'error')
+    }
+  }
 
   const posted = items.filter(i=>i.status==='posted').length
   const drafts = items.filter(i=>i.status==='draft').length
@@ -1674,7 +1694,8 @@ function TransfersFocusedPage({showToast, openView}) {
           🔄 تحويل داخلي جديد
         </button>
       </div>
-      <TxTable items={items} total={items.length} loading={loading} onView={setSelected}/>
+      <TxTable items={items} total={items.length} loading={loading} onView={setSelected}
+        onReconcile={toggleReconcile} reconciledIds={reconciledIds}/>
       <TransferSlideOver tx={selected} accounts={accounts} showToast={showToast}
         onClose={()=>setSelected(null)}
         onPosted={()=>{setSelected(null);load()}}/>
