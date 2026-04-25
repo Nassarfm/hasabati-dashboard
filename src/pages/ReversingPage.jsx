@@ -441,6 +441,7 @@ export default function ReversingPage({ onNavigateToJournal }) {
                       <th className="px-4 py-3 text-center text-white w-10 text-xs">#</th>
                       <th className="px-4 py-3 text-right text-white w-32 text-xs">كود الحساب</th>
                       <th className="px-4 py-3 text-right text-white text-xs">اسم الحساب / البيان</th>
+                      <th className="px-4 py-3 text-center w-28 text-xs" style={{color:'#a5f3fc'}}>🤝 المتعامل</th>
                       <th className="px-4 py-3 text-center w-36 text-xs" style={{color:'#93c5fd'}}>مدين</th>
                       <th className="px-4 py-3 text-center w-36 text-xs" style={{color:'#6ee7b7'}}>دائن</th>
                     </tr>
@@ -458,6 +459,13 @@ export default function ReversingPage({ onNavigateToJournal }) {
                             <div className="font-medium text-slate-800 text-sm">{line.account_name}</div>
                             <div className="text-xs text-slate-400 mt-0.5">{line.description}</div>
                           </td>
+                          <td className="px-4 py-3">
+                            {line.party_id ? (
+                              <span className="text-xs bg-teal-100 text-teal-700 px-2 py-1 rounded-xl font-semibold block max-w-[100px] truncate">
+                                🤝 {line.party_name||line.party_code}
+                              </span>
+                            ) : <span className="text-slate-300 text-xs">—</span>}
+                          </td>
                           <td className="px-4 py-3 text-center">
                             {dr>0
                               ? <span className="font-mono font-bold text-blue-700 text-base">{fmt(dr,3)}</span>
@@ -474,7 +482,7 @@ export default function ReversingPage({ onNavigateToJournal }) {
                   </tbody>
                   <tfoot>
                     <tr style={{background:'#1e3a5f'}} className="text-white font-bold">
-                      <td colSpan={3} className="px-4 py-3 text-sm">الإجمالي</td>
+                      <td colSpan={4} className="px-4 py-3 text-sm">الإجمالي</td>
                       <td className="px-4 py-3 text-center font-mono text-base">{fmt(detail.total_debit,3)}</td>
                       <td className="px-4 py-3 text-center font-mono text-base">{fmt(detail.total_credit,3)}</td>
                     </tr>

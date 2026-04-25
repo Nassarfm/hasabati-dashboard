@@ -5,6 +5,56 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast, fmt } from '../components/UI'
 import api from '../api/client'
 
+// ── InlinePartyPicker ─────────────────────────────────────
+function InlinePartyPicker({ value, name, role, onChange }) {
+  const [query,   setQuery]   = useState(name||'')
+  const [results, setResults] = useState([])
+  const [open,    setOpen]    = useState(false)
+  const [loading, setLoading] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => { setQuery(name||'') }, [name])
+  useEffect(() => {
+    const h = (e) => { if(!ref.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown',h); return ()=>document.removeEventListener('mousedown',h)
+  }, [])
+  const search = async (q) => {
+    setQuery(q); if(!q||q.length<1){setResults([]);setOpen(false);return}
+    setLoading(true); setOpen(true)
+    try { const r=await api.parties?.list({search:q,limit:8}); setResults(r?.data||[]) }
+    catch{setResults([])} finally{setLoading(false)}
+  }
+  const select = (p) => {
+    setQuery(p.party_name_ar||p.party_code); setOpen(false)
+    onChange({party_id:p.id,party_name:p.party_name_ar,party_code:p.party_code,party_role:role||''})
+  }
+  const clear = () => { setQuery('');setResults([]);setOpen(false);onChange({party_id:'',party_name:'',party_code:'',party_role:''}) }
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex items-center gap-1">
+        <input className="input text-xs w-full" placeholder="🤝 متعامل..."
+          value={query} onChange={e=>search(e.target.value)} onFocus={()=>query&&setOpen(true)}/>
+        {value&&<button onClick={clear} className="text-slate-300 hover:text-red-400 text-xs px-1 flex-shrink-0">✕</button>}
+      </div>
+      {value&&!open&&<div className="text-xs text-teal-600 mt-0.5 truncate">{name}</div>}
+      {open&&(
+        <div className="absolute top-full right-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-52 overflow-hidden">
+          {loading?<div className="px-3 py-2 text-xs text-slate-400 text-center">...</div>
+          :results.length===0?<div className="px-3 py-3 text-xs text-slate-400 text-center">لا نتائج</div>
+          :results.map(p=>(
+            <button key={p.id} onClick={()=>select(p)}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-teal-50 text-right">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold truncate">{p.party_name_ar}</div>
+                <div className="text-xs text-slate-400">{p.party_code}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const TODAY = new Date().toISOString().split('T')[0]
 const EMPTY_LINE = (id) => ({
   _id: id,
@@ -14,6 +64,9 @@ const EMPTY_LINE = (id) => ({
   pct:          '',   // النسبة المئوية
   debit:        0,    // يُحسب تلقائياً
   dims: {},           // { [dimCode]: { value_code, value_name } }
+  party_id:     '',   // المتعامل المالي
+  party_name:   '',
+  party_role:   '',
 })
 
 let _lineId = 1
@@ -232,18 +285,21 @@ export default function AllocationPage({ onBack }) {
           const baseDebit  = curCode !== 'SAR' ? parseFloat((foreignAmt * exRate).toFixed(3)) : l.debit
           return {
             account_code:   l.account_code,
-            description:    l.description || header.description || `توزيع — ${l.pct}%`,
+            description:    l.description || header.description || 'توزيع — ' + l.pct + '%',
             debit:          baseDebit,
             credit:         0,
             currency_code:  curCode,
             exchange_rate:  exRate,
-            amount_foreign: l.debit, // المبلغ الأصلي بالعملة الأجنبية
+            amount_foreign: l.debit,
+            party_id:       l.party_id||null,
+            party_name:     l.party_name||null,
+            party_role:     l.party_role||null,
             ...mapDims(l.dims),
           }
         }),
         {
           account_code:   header.sourceAccount.code,
-          description:    header.description || `توزيع — ${header.name}`,
+          description:    header.description || 'توزيع — ' + header.name,
           debit:          0,
           credit:         curCode !== 'SAR' ? parseFloat((totalAmount * exRate).toFixed(3)) : totalAmount,
           currency_code:  curCode,
@@ -257,7 +313,7 @@ export default function AllocationPage({ onBack }) {
       const created = await api.accounting.createJE({
         je_type:     'ALO',
         entry_date:  header.date,
-        description: header.description || `قيد توزيع — ${header.name}`,
+        description: header.description || 'قيد توزيع — ' + header.name,
         reference:   header.name,
         lines:       jeLines,
       })
@@ -272,7 +328,7 @@ export default function AllocationPage({ onBack }) {
 
       setResult({ serial, jeId, posted: post })
       setStep(4)
-      toast(post ? `✅ تم إنشاء وترحيل القيد ${serial}` : `✅ تم إنشاء القيد ${serial}`, 'success')
+      toast(post ? '✅ تم إنشاء وترحيل القيد ' + serial : '✅ تم إنشاء القيد ' + serial, 'success')
     } catch(e) {
       toast(e.message, 'error')
     } finally {
@@ -533,7 +589,7 @@ export default function AllocationPage({ onBack }) {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             {/* Header الجدول — ديناميكي */}
             {(()=>{
-              const cols = `2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 2.5rem`
+              const cols = `2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 9rem 2.5rem`
               return(
                 <div style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',gridTemplateColumns:cols}}
                   className="grid text-white text-xs font-bold py-3">
@@ -543,6 +599,7 @@ export default function AllocationPage({ onBack }) {
                   <div className="px-3 text-center">النسبة %</div>
                   <div className="px-3 text-center" style={{color:'#93c5fd'}}>المبلغ (مدين)</div>
                   {dimensions.map(d=><div key={d.id} className="px-2 text-center truncate">{d.name_ar}</div>)}
+                  <div className="px-3 text-center" style={{color:'#a5f3fc'}}>🤝 المتعامل</div>
                   <div className="px-2"/>
                 </div>
               )
@@ -551,7 +608,7 @@ export default function AllocationPage({ onBack }) {
             {/* الأسطر */}
             {lines.map((line, i) => {
               const computed = linesWithAmounts[i]?.debit || 0
-              const cols = `2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 2.5rem`
+              const cols = `2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 9rem 2.5rem`
               return (
                 <div key={line._id}
                   className={`grid items-center border-b border-slate-100 ${i%2===0?'bg-white':'bg-slate-50/30'}`}
@@ -625,6 +682,19 @@ export default function AllocationPage({ onBack }) {
                     </div>
                   ))}
 
+                  {/* 🤝 المتعامل */}
+                  <div className="px-2 py-2">
+                    <InlinePartyPicker
+                      value={line.party_id}
+                      name={line.party_name}
+                      role={line.party_role}
+                      onChange={p => updateLine(line._id, 'party_id', p.party_id) ||
+                                    updateLine(line._id, 'party_name', p.party_name) ||
+                                    updateLine(line._id, 'party_role', p.party_role) ||
+                                    setLines(prev => prev.map(l => l._id===line._id ? {...l,...p} : l))}
+                    />
+                  </div>
+
                   {/* حذف */}
                   <div className="px-2 py-2 text-center">
                     <button onClick={() => removeLine(line._id)}
@@ -639,7 +709,7 @@ export default function AllocationPage({ onBack }) {
 
             {/* Footer الجدول */}
             <div className="grid items-center py-3 border-t-2 border-slate-200 bg-slate-50"
-              style={{gridTemplateColumns:`2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 2.5rem`}}>
+              style={{gridTemplateColumns:`2rem 2fr 1.5fr 5rem 7rem ${dimensions.map(()=>'5rem').join(' ')} 9rem 2.5rem`}}>
               <div/>
               <div className="px-3 text-xs font-bold text-slate-500">الإجمالي ({lines.length} سطر وجهة)</div>
               <div/>

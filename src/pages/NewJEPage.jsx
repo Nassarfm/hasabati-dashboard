@@ -129,16 +129,16 @@ function ExcelImportModal({ accounts, onImport, onClose }) {
         const cc = String(r[4]||'').trim(), br = String(r[5]||'').trim(), proj = String(r[6]||'').trim()
         if (!code) continue
         const acct = accounts.find(a => a.code === code)
-        if (!acct) errs.push({ row: i+2, msg: `الحساب "${code}" غير موجود` })
-        if (debit>0 && credit>0) errs.push({ row: i+2, msg: `السطر ${i+2}: لا يمكن مدين ودائن معاً` })
-        if (!debit && !credit) errs.push({ row: i+2, msg: `السطر ${i+2}: يجب إدخال مدين أو دائن` })
+        if (!acct) errs.push({ row: i+2, msg: 'الحساب "' + code + '" غير موجود' })
+        if (debit>0 && credit>0) errs.push({ row: i+2, msg: 'السطر ' + i+2 + ': لا يمكن مدين ودائن معاً' })
+        if (!debit && !credit) errs.push({ row: i+2, msg: 'السطر ' + i+2 + ': يجب إدخال مدين أو دائن' })
         parsed.push({ id:Math.random(), account_code:code, account_name:acct?.name_ar||'', account:acct||null,
           description:desc, debit:debit||'', credit:credit||'', cost_center:cc, branch_code:br, project_code:proj,
           branch_name:'', cost_center_name:'', project_name:'', expense_classification_code:'', expense_classification_name:'' })
       }
       const tDR = parsed.reduce((s,r)=>s+(parseFloat(r.debit)||0),0)
       const tCR = parsed.reduce((s,r)=>s+(parseFloat(r.credit)||0),0)
-      if (Math.abs(tDR-tCR)>0.01) errs.push({row:0,msg:`القيد غير متوازن — ${fmt(tDR,2)} ≠ ${fmt(tCR,2)}`})
+      if (Math.abs(tDR-tCR)>0.01) errs.push({row:0,msg:'القيد غير متوازن — ' + fmt(tDR,2) + ' ≠ ' + fmt(tCR,2)})
       setRows(parsed); setErrors(errs)
     } catch { toast('خطأ في قراءة الملف','error') }
     finally { setLoading(false); e.target.value = '' }
@@ -226,6 +226,89 @@ function HotkeyOverlay({ onClose }) {
 // ══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// INLINE PARTY PICKER — بحث المتعامل داخل سطر القيد
+// ══════════════════════════════════════════════════════════
+function InlinePartyPicker({ value, name, role, onChange }) {
+  const [query,   setQuery]   = useState(name||'')
+  const [results, setResults] = useState([])
+  const [open,    setOpen]    = useState(false)
+  const [loading, setLoading] = useState(false)
+  const containerRef = useRef(null)
+
+  // الأدوار الافتراضية
+  const ROLES = {
+    customer:'عميل', vendor:'مورد', employee_loan:'سلفة موظف',
+    petty_cash_keeper:'أمين عهدة', fund_keeper:'أمين صندوق',
+    shareholder:'مساهم', contractor:'مقاول', other:'أخرى',
+  }
+
+  useEffect(() => { setQuery(name||'') }, [name])
+
+  useEffect(() => {
+    const h = (e) => { if(!containerRef.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  const search = async (q) => {
+    setQuery(q)
+    if (!q || q.length < 1) { setResults([]); setOpen(false); return }
+    setLoading(true); setOpen(true)
+    try {
+      const r = await api.parties?.list({ search:q, limit:8 })
+      setResults(r?.data||[])
+    } catch { setResults([]) }
+    finally { setLoading(false) }
+  }
+
+  const select = (party) => {
+    setQuery(party.party_name_ar||party.party_code)
+    setOpen(false)
+    onChange({ party_id:party.id, party_name:party.party_name_ar, party_code:party.party_code, party_role:role||'' })
+  }
+
+  const clear = () => {
+    setQuery(''); setResults([]); setOpen(false)
+    onChange({ party_id:'', party_name:'', party_code:'', party_role:'' })
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center gap-1">
+        <input
+          className="input text-xs w-full"
+          placeholder="🤝 متعامل..."
+          value={query}
+          onChange={e => search(e.target.value)}
+          onFocus={() => query && setOpen(true)}
+        />
+        {value && <button onClick={clear} className="text-slate-300 hover:text-red-400 text-xs px-1 flex-shrink-0">✕</button>}
+      </div>
+      {value && !open && (
+        <div className="text-xs text-teal-600 mt-0.5 px-0.5 truncate font-medium">{name}</div>
+      )}
+      {open && (
+        <div className="absolute top-full right-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-56 overflow-hidden">
+          {loading ? (
+            <div className="px-3 py-2 text-xs text-slate-400 text-center">جارٍ البحث...</div>
+          ) : results.length === 0 ? (
+            <div className="px-3 py-3 text-xs text-slate-400 text-center">لا نتائج</div>
+          ) : results.map(p => (
+            <button key={p.id} onClick={() => select(p)}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-teal-50 text-right transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-slate-800 truncate">{p.party_name_ar}</div>
+                <div className="text-xs text-slate-400 font-mono">{p.party_code}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function NewJEPage({ accounts, jeTypes, branches, costCenters, projects, expClass, allDimensions=[], taxTypes=[], currencies=[], onBack, onSaved, editJE = null }) {
   const emptyLine = useCallback(() => ({
     id:Math.random(), account_code:'', account_name:'', account:null,
@@ -237,6 +320,8 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
     // ── العملة الأجنبية ──
     currency_code:'SAR', exchange_rate:'1', amount_foreign:'',
     extraDims: {},
+    // ── المتعامل المالي ──
+    party_id:'', party_name:'', party_code:'', party_role:'',
   }), [])
 
   const [periodState, setPeriodState] = useState({ status:'idle', periodName:'', yearName:'' })
@@ -258,6 +343,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
         tax_type_code:l.tax_type_code||'', vat_amount:l.vat_amount||0, net_amount:l.net_amount||0,
         currency_code:l.currency_code||'SAR', exchange_rate:l.exchange_rate||'1', amount_foreign:l.amount_foreign||'',
         extraDims: l.extraDims||{},
+        party_id:l.party_id||'', party_name:l.party_name||'', party_code:l.party_code||'', party_role:l.party_role||'',
       }))
     }
     return [emptyLine(), emptyLine()]
@@ -305,9 +391,9 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
         parent_line_id: lineId,
         is_tax_line:    true,
         account_code:   taxAccCode,
-        account_name:   isDebit ? `ضريبة المدخلات (${tx.rate}%)` : `ضريبة المخرجات (${tx.rate}%)`,
+        account_name:   isDebit ? 'ضريبة المدخلات (' + tx.rate + '%)' : 'ضريبة المخرجات (' + tx.rate + '%)',
         account:        null,
-        description:    `ضريبة ${tx.name_ar} ${tx.rate}% — تلقائي`,
+        description:    'ضريبة ' + tx.name_ar + ' ' + tx.rate + '% — تلقائي',
         debit:          isDebit  ? String(vatAmt) : '',
         credit:         !isDebit ? String(vatAmt) : '',
         branch_code:'', branch_name:'', cost_center:'', cost_center_name:'',
@@ -350,8 +436,8 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
     const diff = totalD-totalC
     if (Math.abs(diff)<0.01) { toast('القيد متوازن ✅','success'); return }
     const lastLine = lines[lines.length-1]
-    if (diff>0) { setLine(lastLine.id,{credit:diff.toFixed(2),debit:''}); toast(`تم تعيين دائن ${fmt(diff,2)}`,'success') }
-    else        { setLine(lastLine.id,{debit:Math.abs(diff).toFixed(2),credit:''}); toast(`تم تعيين مدين ${fmt(Math.abs(diff),2)}`,'success') }
+    if (diff>0) { setLine(lastLine.id,{credit:diff.toFixed(2),debit:''}); toast('تم تعيين دائن ' + fmt(diff,2),'success') }
+    else        { setLine(lastLine.id,{debit:Math.abs(diff).toFixed(2),credit:''}); toast('تم تعيين مدين ' + fmt(Math.abs(diff),2),'success') }
   }, [totalD,totalC,lines,setLine])
 
   const handleDuplicate = useCallback(() => {
@@ -373,10 +459,10 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
     for (const l of validLines) {
       const acct = accounts.find(a => a.code===l.account_code)
       if (!acct?.dimension_required) continue
-      if (acct.dim_branch_required    && !l.branch_code)                 dimErrors.push(`${l.account_code}: الفرع مطلوب`)
-      if (acct.dim_cc_required        && !l.cost_center)                 dimErrors.push(`${l.account_code}: مركز التكلفة مطلوب`)
-      if (acct.dim_project_required   && !l.project_code)                dimErrors.push(`${l.account_code}: المشروع مطلوب`)
-      if (acct.dim_exp_class_required && !l.expense_classification_code) dimErrors.push(`${l.account_code}: تصنيف المصروف مطلوب`)
+      if (acct.dim_branch_required    && !l.branch_code)                 dimErrors.push(l.account_code + ': الفرع مطلوب')
+      if (acct.dim_cc_required        && !l.cost_center)                 dimErrors.push(l.account_code + ': مركز التكلفة مطلوب')
+      if (acct.dim_project_required   && !l.project_code)                dimErrors.push(l.account_code + ': المشروع مطلوب')
+      if (acct.dim_exp_class_required && !l.expense_classification_code) dimErrors.push(l.account_code + ': تصنيف المصروف مطلوب')
     }
     if (dimErrors.length>0) { setError('⚡ '+dimErrors.join(' | ')); return }
     setSaving(true); setError('')
@@ -402,6 +488,9 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
           currency_code:l.currency_code||'SAR',
           exchange_rate:parseFloat(l.exchange_rate)||1,
           amount_foreign:parseFloat(l.amount_foreign)||0,
+          party_id:l.party_id||null,
+          party_name:l.party_name||null,
+          party_role:l.party_role||null,
         }))
       }
       const jeRes = editJE ? await api.accounting.updateJE(editJE.id,payload) : await api.accounting.createJE(payload)
@@ -452,8 +541,8 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
       error:     'text-xs text-orange-700 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200 font-medium',
     }
     const labels = {
-      open: `✅ ${periodState.periodName} — مفتوحة`,
-      closed: `🔒 ${periodState.periodName} — مغلقة`,
+      open: '✅ ' + periodState.periodName + ' — مفتوحة',
+      closed: '🔒 ' + periodState.periodName + ' — مغلقة',
       not_found: '⚠️ لا توجد سنة مالية',
       error: '⚠️ تعذّر التحقق',
     }
@@ -463,7 +552,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
   // ── Grid column template — ديناميكي حسب عدد الأبعاد
   // الأبعاد المخصصة (غير الـ 4 الثابتة)
   const customDims = allDimensions.filter(d => !['branch','cost_center','expense_classification','project'].includes(d.code))
-  const COLS = `32px 2fr 1.5fr 90px 90px 130px 110px 110px 110px 100px 100px ${customDims.map(()=>'100px').join(' ')} 36px`
+  const COLS = `32px 2fr 1.5fr 90px 90px 130px 110px 110px 110px 100px 100px 160px ${customDims.map(()=>'100px').join(' ')} 36px`
 
   return (
     <div className="page-enter space-y-5">
@@ -486,7 +575,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
           </button>
           <div>
             <h1 className="text-xl font-bold text-slate-800">
-              {editJE ? `✏️ تعديل — ${editJE.serial}` : '📝 قيد محاسبي جديد'}
+              {editJE ? '✏️ تعديل — ' + editJE.serial : '📝 قيد محاسبي جديد'}
             </h1>
             {selectedType && (
               <p className="text-xs text-slate-400 mt-0.5">{selectedType.code} — {selectedType.name_ar||selectedType.name_en}</p>
@@ -638,6 +727,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
               <div className="px-3 py-3.5 text-center">تصنيف</div>
               <div className="px-3 py-3.5 text-center">مشروع</div>
               <div className="px-3 py-3.5 text-center">الضريبة</div>
+              <div className="px-3 py-3.5 text-center" style={{color:'#a5f3fc'}}>🤝 المتعامل</div>
               {customDims.map(d=>(
                 <div key={d.id} className="px-2 py-3.5 text-center truncate">{d.name_ar}</div>
               ))}
@@ -923,6 +1013,21 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                       </div>
 
                       {/* الأبعاد المخصصة */}
+                      {/* ── المتعامل المالي ── */}
+                      <div className="px-2 py-2">
+                        {line.is_tax_line ? (
+                          <div className="text-center text-slate-200 text-xs py-2">—</div>
+                        ) : (
+                          <InlinePartyPicker
+                            value={line.party_id}
+                            name={line.party_name}
+                            role={line.party_role}
+                            onChange={p => setLine(line.id, p)}
+                          />
+                        )}
+                      </div>
+
+                      {/* الأبعاد المخصصة */}
                       {customDims.map(dim => {
                         const val = line.extraDims?.[dim.code]
                         return(
@@ -1054,7 +1159,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
       {showHotkeys && <HotkeyOverlay onClose={() => setShowHotkeys(false)}/>}
       {showImport && (
         <ExcelImportModal accounts={accounts} onClose={() => setShowImport(false)}
-          onImport={rows => { setLines(rows); toast(`✅ تم استيراد ${rows.length} سطر`,'success') }}/>
+          onImport={rows => { setLines(rows); toast('✅ تم استيراد ' + rows.length + ' سطر','success') }}/>
       )}
       <AttachmentPanel jeId={savedJeId} open={showAttach} onClose={() => setShowAttach(false)}
         pendingFiles={pendingFiles}

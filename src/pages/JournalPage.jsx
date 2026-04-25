@@ -187,7 +187,7 @@ export default function JournalPage() {
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'القيود المحاسبية')
       XLSX.writeFile(wb, `journal_entries_${new Date().toISOString().split('T')[0]}.xlsx`)
-      toast(`✅ تم تصدير ${items.length} قيد`, 'success')
+      toast('✅ تم تصدير ' + items.length + ' قيد', 'success')
     } catch (e) { toast('خطأ: '+e.message,'error') }
     finally { setExporting(false) }
   }
@@ -701,6 +701,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
                       <th className="px-3 py-3 text-right text-white w-28">الكود</th>
                       <th className="px-3 py-3 text-right text-white">اسم الحساب / البيان</th>
                       <th className="px-3 py-3 text-center text-white w-36">الأبعاد</th>
+                      <th className="px-3 py-3 text-center w-32" style={{color:'#a5f3fc'}}>🤝 المتعامل</th>
                       <th className="px-3 py-3 text-center text-white w-24">العملة</th>
                       <th className="px-4 py-3 text-center w-44 text-base" style={{color:'#93c5fd'}}>مدين</th>
                       <th className="px-4 py-3 text-center w-44 text-base" style={{color:'#6ee7b7'}}>دائن</th>
@@ -727,6 +728,17 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
                                 {l.expense_classification_code&&<span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full w-fit">🏷️ {l.expense_classification_name||l.expense_classification_code}</span>}
                               </div>
                             ):<span className="text-slate-300">—</span>}
+                          </td>
+                          {/* 🤝 المتعامل */}
+                          <td className="px-3 py-3">
+                            {l.party_id ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs bg-teal-100 text-teal-700 px-2 py-1 rounded-xl font-semibold max-w-[110px] truncate block">
+                                  🤝 {l.party_name||l.party_code}
+                                </span>
+                                {l.party_role&&<span className="text-xs text-slate-400">{l.party_role}</span>}
+                              </div>
+                            ):<span className="text-slate-300 text-xs">—</span>}
                           </td>
                           <td className="px-3 py-3 text-center">
                             {l.currency_code && l.currency_code !== 'SAR' ? (
@@ -755,7 +767,7 @@ function JEDetailSlideOver({ je, jeTypes, onClose, onPosted, onEdit, currentUser
                   </tbody>
                   <tfoot>
                     <tr style={{background:'#1e3a5f'}}>
-                      <td colSpan={5} className="px-3 py-3 text-white text-xs font-bold">الإجمالي ({(je.lines||[]).length} سطر)</td>
+                      <td colSpan={6} className="px-3 py-3 text-white text-xs font-bold">الإجمالي ({(je.lines||[]).length} سطر)</td>
                       <td className="px-4 py-3 text-center font-mono font-bold text-lg" style={{color:'#93c5fd'}}>{fmt(dr,3)}</td>
                       <td className="px-4 py-3 text-center font-mono font-bold text-lg" style={{color:'#6ee7b7'}}>{fmt(cr,3)}</td>
                     </tr>

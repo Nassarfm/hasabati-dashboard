@@ -22,10 +22,13 @@ export function printJE(je, jeTypeName, userName) {
       <td class="num blue">${parseFloat(l.debit) > 0 ? fmt(l.debit) : ''}</td>
       <td class="num green">${parseFloat(l.credit) > 0 ? fmt(l.credit) : ''}</td>
       <td class="dims">
-        ${l.branch_name ? `<span class="dim-tag branch">🏢 ${l.branch_name}</span>` : ''}
-        ${l.cost_center_name ? `<span class="dim-tag cc">💰 ${l.cost_center_name}</span>` : ''}
-        ${l.project_name ? `<span class="dim-tag proj">📁 ${l.project_name}</span>` : ''}
-        ${l.expense_classification_name ? `<span class="dim-tag exp">🏷️ ${l.expense_classification_name}</span>` : ''}
+        ${l.branch_name ? '<span class="dim-tag branch">🏢 ' + l.branch_name + '</span>' : ''}
+        ${l.cost_center_name ? '<span class="dim-tag cc">💰 ' + l.cost_center_name + '</span>' : ''}
+        ${l.project_name ? '<span class="dim-tag proj">📁 ' + l.project_name + '</span>' : ''}
+        ${l.expense_classification_name ? '<span class="dim-tag exp">🏷️ ' + l.expense_classification_name + '</span>' : ''}
+      </td>
+      <td class="party-cell">
+        ${l.party_id ? '<span class="party-tag">🤝 ' + (l.party_name || l.party_code || '') + '</span>' + (l.party_role ? '<br/><span class="party-role">' + l.party_role + '</span>' : '') : '—'}
       </td>
     </tr>
   `).join('')
@@ -179,6 +182,17 @@ export function printJE(je, jeTypeName, userName) {
     .cc     { background: #ede9fe; color: #7c3aed; }
     .proj   { background: #d1fae5; color: #065f46; }
     .exp    { background: #fef3c7; color: #92400e; }
+    .party-cell { font-size: 10px; }
+    .party-tag {
+      display: inline-block;
+      background: #ccfbf1;
+      color: #0f766e;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 10px;
+    }
+    .party-role { font-size: 9px; color: #64748b; margin-top: 2px; display: inline-block; }
 
     /* ── Footer Row ── */
     .total-row td {
@@ -287,7 +301,8 @@ export function printJE(je, jeTypeName, userName) {
         <th>البيان</th>
         <th style="width:90px">مدين</th>
         <th style="width:90px">دائن</th>
-        <th style="width:130px">الأبعاد</th>
+        <th style="width:120px">الأبعاد</th>
+        <th style="width:110px">🤝 المتعامل</th>
       </tr>
     </thead>
     <tbody>

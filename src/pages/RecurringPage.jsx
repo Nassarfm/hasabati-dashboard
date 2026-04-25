@@ -2,7 +2,7 @@
  * القيود المتكررة — صفحة متكاملة
  * قائمة + إنشاء + جدول إطفاء + ترحيل
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { toast, fmt } from '../components/UI'
 import api from '../api/client'
 
@@ -46,6 +46,56 @@ const recurringApi = {
 // ══════════════════════════════════════════════════════════
 // MAIN PAGE
 // ══════════════════════════════════════════════════════════
+// ── InlinePartyPicker ─────────────────────────────────────
+function InlinePartyPicker({ value, name, role, onChange }) {
+  const [query,   setQuery]   = useState(name||'')
+  const [results, setResults] = useState([])
+  const [open,    setOpen]    = useState(false)
+  const [loading, setLoading] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => { setQuery(name||'') }, [name])
+  useEffect(() => {
+    const h = (e) => { if(!ref.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown',h); return ()=>document.removeEventListener('mousedown',h)
+  }, [])
+  const search = async (q) => {
+    setQuery(q); if(!q||q.length<1){setResults([]);setOpen(false);return}
+    setLoading(true); setOpen(true)
+    try { const r=await api.parties?.list({search:q,limit:8}); setResults(r?.data||[]) }
+    catch{setResults([])} finally{setLoading(false)}
+  }
+  const select = (p) => {
+    setQuery(p.party_name_ar||p.party_code); setOpen(false)
+    onChange({party_id:p.id,party_name:p.party_name_ar,party_code:p.party_code,party_role:role||''})
+  }
+  const clear = () => { setQuery('');setResults([]);setOpen(false);onChange({party_id:'',party_name:'',party_code:'',party_role:''}) }
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex items-center gap-1">
+        <input className="input text-xs w-full" placeholder="🤝 متعامل..."
+          value={query} onChange={e=>search(e.target.value)} onFocus={()=>query&&setOpen(true)}/>
+        {value&&<button onClick={clear} className="text-slate-300 hover:text-red-400 text-xs px-1">✕</button>}
+      </div>
+      {value&&!open&&<div className="text-xs text-teal-600 mt-0.5 truncate">{name}</div>}
+      {open&&(
+        <div className="absolute top-full right-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-52 overflow-hidden">
+          {loading?<div className="px-3 py-2 text-xs text-slate-400 text-center">...</div>
+          :results.length===0?<div className="px-3 py-3 text-xs text-slate-400 text-center">لا نتائج</div>
+          :results.map(p=>(
+            <button key={p.id} onClick={()=>select(p)}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-teal-50 text-right">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold truncate">{p.party_name_ar}</div>
+                <div className="text-xs text-slate-400">{p.party_code}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function RecurringPage() {
   const [view,     setView]     = useState('list') // 'list' | 'create' | 'detail'
   const [entries,  setEntries]  = useState([])
@@ -208,8 +258,8 @@ function CreateRecurringForm({ onBack }) {
   })
 
   const [lines, setLines] = useState([
-    { account_code:'', account_name:'', debit_pct:'', credit_pct:'', description:'', branch_code:'', cost_center:'', project_code:'', tax_type_code:'' },
-    { account_code:'', account_name:'', debit_pct:'', credit_pct:'', description:'', branch_code:'', cost_center:'', project_code:'', tax_type_code:'' },
+    { account_code:'', account_name:'', debit_pct:'', credit_pct:'', description:'', branch_code:'', cost_center:'', project_code:'', tax_type_code:'', party_id:'', party_name:'', party_role:'' },
+    { account_code:'', account_name:'', debit_pct:'', credit_pct:'', description:'', branch_code:'', cost_center:'', project_code:'', tax_type_code:'', party_id:'', party_name:'', party_role:'' },
   ])
 
   useEffect(() => {
@@ -273,6 +323,9 @@ function CreateRecurringForm({ onBack }) {
           cost_center:   l.cost_center||null,
           project_code:  l.project_code||null,
           tax_type_code: l.tax_type_code||null,
+          party_id:      l.party_id||null,
+          party_name:    l.party_name||null,
+          party_role:    l.party_role||null,
         }))
       })
       toast('✅ تم إنشاء القيد المتكرر وجدول الإطفاء','success')
@@ -380,7 +433,7 @@ function CreateRecurringForm({ onBack }) {
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="grid text-white text-xs font-semibold"
-              style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 90px 1fr 36px', background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+              style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 90px 1fr 140px 36px', background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
               <div className="px-3 py-3">الحساب</div>
               <div className="px-3 py-3 text-center">% مدين</div>
               <div className="px-3 py-3 text-center">% دائن</div>
@@ -388,12 +441,13 @@ function CreateRecurringForm({ onBack }) {
               <div className="px-3 py-3 text-center">م. التكلفة</div>
               <div className="px-3 py-3 text-center">الضريبة</div>
               <div className="px-3 py-3">البيان</div>
+              <div className="px-3 py-3 text-center" style={{color:'#a5f3fc'}}>🤝 المتعامل</div>
               <div className="px-2 py-3"/>
             </div>
 
             {lines.map((line,idx)=>(
               <div key={idx} className="grid border-b border-slate-100 items-center"
-                style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 90px 1fr 36px'}}>
+                style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 90px 1fr 140px 36px'}}>
                 <div className="px-2 py-2">
                   <select className="select text-xs w-full" value={line.account_code}
                     onChange={e=>{
@@ -450,6 +504,15 @@ function CreateRecurringForm({ onBack }) {
                   <input className="input text-xs w-full" placeholder="بيان" value={line.description}
                     onChange={e=>setLine(idx,{description:e.target.value})}/>
                 </div>
+                {/* المتعامل */}
+                <div className="px-2 py-2">
+                  <InlinePartyPicker
+                    value={line.party_id}
+                    name={line.party_name}
+                    role={line.party_role}
+                    onChange={p=>setLine(idx,p)}
+                  />
+                </div>
                 <div className="px-1 py-2 text-center">
                   {lines.length>2&&(
                     <button onClick={()=>setLines(p=>p.filter((_,i)=>i!==idx))}
@@ -460,7 +523,7 @@ function CreateRecurringForm({ onBack }) {
             ))}
 
             <div className="px-3 py-2 border-t border-slate-100">
-              <button onClick={()=>setLines(p=>[...p,{account_code:'',account_name:'',debit_pct:'',credit_pct:'',description:'',branch_code:'',cost_center:'',project_code:'',tax_type_code:''}])}
+              <button onClick={()=>setLines(p=>[...p,{account_code:'',account_name:'',debit_pct:'',credit_pct:'',description:'',branch_code:'',cost_center:'',project_code:'',tax_type_code:'',party_id:'',party_name:'',party_role:''}])}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ إضافة سطر</button>
             </div>
           </div>
@@ -578,7 +641,7 @@ function RecurringDetail({ entry: initEntry, onBack, onRefresh }) {
   const handleStatus = async (newStatus) => {
     try {
       await recurringApi.setStatus(entry.id, newStatus)
-      toast(`تم تغيير الحالة إلى ${STATUS_CONFIG[newStatus]?.label}`,'success')
+      toast('تم تغيير الحالة إلى ' + STATUS_CONFIG[newStatus]?.label,'success')
       refresh()
     } catch(e) { toast(e.message,'error') }
   }
