@@ -28,7 +28,7 @@ export function printJE(je, jeTypeName, userName) {
         ${l.expense_classification_name ? '<span class="dim-tag exp">🏷️ ' + l.expense_classification_name + '</span>' : ''}
       </td>
       <td class="party-cell">
-        ${l.party_id ? '<span class="party-tag">🤝 ' + (l.party_name || l.party_code || '') + '</span>' + (l.party_role ? '<br/><span class="party-role">' + l.party_role + '</span>' : '') : '—'}
+        ${(l.party_id || l.party_name) ? '<span class="party-tag">🤝 ' + (l.party_name || l.party_code || l.party_id || '') + '</span>' + (l.party_role ? '<br/><span class="party-role">' + l.party_role + '</span>' : '') : '—'}
       </td>
     </tr>
   `).join('')
