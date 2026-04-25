@@ -3751,6 +3751,10 @@ function BankReconciliationSession({banks, showToast, onNavigateToBank}) {
       <button onclick="window.print()" style="background:#064e3b;color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px">🖨️ طباعة / PDF</button>
       <button onclick="window.close()" style="margin-right:10px;background:#f1f5f9;border:1px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer">✕ إغلاق</button>
     </div>
+    </div></body></html>`)
+    w.document.close()
+  }
+
 // ══ DASHBOARD ═════════════════════════════════════════════
 function DashboardTab({showToast,setTab,openView}) {
   const [data,    setData]    = useState(null)
