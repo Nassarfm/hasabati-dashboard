@@ -3806,7 +3806,7 @@ function DashboardTab({showToast,setTab,openView}) {
         const r=await api.treasury.lowBalanceAlerts()
         const alerts=r?.data||[]
         const newOnes=alerts.filter(a=>!prev.some(p=>p.id===a.id))
-        if(newOnes.length>0) showToast(`⚠️ ${newOnes.length} حساب رصيده منخفض!`,'warning')
+        if(newOnes.length>0) showToast(`[!] ${newOnes.length} حساب رصيده منخفض!`,'warning')
         prev=alerts
       }catch{}
     }
@@ -4288,7 +4288,7 @@ function BankAccountsTab({showToast,openView}) {
               <div className={`text-xs mt-0.5 font-semibold ${glCheck.all_matched?'text-emerald-700':'text-red-700'}`}>
                 {glCheck.all_matched
                   ? `✅ جميع الأرصدة متطابقة (${glCheck.total_accounts} حساب)`
-                  : `⚠️ ${glCheck.mismatches} حساب غير متطابق — فرق إجمالي: ${fmt(glCheck.total_diff,2)} ر.س`}
+                  : `[!] ${glCheck.mismatches} حساب غير متطابق — فرق إجمالي: ${fmt(glCheck.total_diff,2)} ر.س`}
               </div>
             )}
             {!glCheck&&<div className="text-xs text-slate-400 mt-0.5">اضغط للتحقق من التطابق بين رصيد الخزينة والأستاذ العام</div>}
