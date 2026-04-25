@@ -531,7 +531,7 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimName
     <div class="serial-block">
       <div class="num">${tx.serial||'مسودة'}</div>
       <div class="date">${fmtDate(tx.tx_date)}</div>
-      ${tx.je_serial?`<div style="font-size:10px;color:#16a34a;margin-top:2px">قيد: ${tx.je_serial}</div>`:''}
+      ${tx.je_serial?'<div style="font-size:10px;color:#16a34a;margin-top:2px">قيد: ' + tx.je_serial + '</div>':''}
     </div>
   </div>
 
@@ -549,7 +549,7 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimName
       <span style="color:#1d4ed8;">الإجمالي: <strong>${fmt(parseFloat(tx.amount||0)+parseFloat(tx.vat_amount||0),3)}</strong> ر.س</span>
     </div>
     `:''}
-    ${tx.je_serial?`<div class="je">رقم القيد المحاسبي: ${tx.je_serial}</div>`:''}
+    ${tx.je_serial?'<div class="je">رقم القيد المحاسبي: ' + tx.je_serial + '</div>':''}
   </div>
 
     <div class="info-grid">
@@ -576,9 +576,9 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimName
     ` : ''}
 
     <div class="info-grid">
-    ${tx.branch_code?`<div class="info-item"><div class="lbl">الفرع / Branch</div><div class="val">${branchLabel}</div></div>`:''}
-    ${tx.cost_center?`<div class="info-item"><div class="lbl">مركز التكلفة / Cost Center</div><div class="val">${costCenterLabel}</div></div>`:''}
-    ${tx.project_code?`<div class="info-item"><div class="lbl">المشروع / Project</div><div class="val">${projectLabel}</div></div>`:''}
+    ${tx.branch_code?'<div class="info-item"><div class="lbl">الفرع / Branch</div><div class="val">' + branchLabel + '</div></div>':''}
+    ${tx.cost_center?'<div class="info-item"><div class="lbl">مركز التكلفة / Cost Center</div><div class="val">' + costCenterLabel + '</div></div>':''}
+    ${tx.project_code?'<div class="info-item"><div class="lbl">المشروع / Project</div><div class="val">' + projectLabel + '</div></div>':''}
   </div>
 
   ${(()=>{
@@ -886,7 +886,7 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
 
   return (
     <SlideOver open={!!tx} onClose={onClose} size="2xl"
-      title={`${TX_LABELS[tx.tx_type]||'سند'} — ${tx.serial||'مسودة'}`}
+      title={'${TX_LABELS[tx.tx_type]||\'سند\'} — ' + tx.serial||'مسودة'}
       subtitle={`${fmtDate(tx.tx_date)} | ${tx.description||''}`}
       footer={
         <div className="flex items-center justify-between w-full">
@@ -1378,7 +1378,7 @@ function CashFocusedPage({showToast, openView}) {
     setBulkPosting(true)
     try{
       const r = await api.treasury.bulkPostCash([...selectedIds])
-      showToast(r?.message||`✅ تم ترحيل ${r?.data?.posted?.length||0} سند`)
+      showToast(r?.message||'✅ تم ترحيل ' + r?.data?.posted?.length||0 + ' سند')
       setSelectedIds(new Set())
       load()
     }catch(e){showToast(e.message,'error')}
@@ -1390,8 +1390,8 @@ function CashFocusedPage({showToast, openView}) {
       {/* KPI خاص بالعمليات النقدية */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          {l:'إجمالي القبض (RV)', v:`${fmt(totalRV,2)} ر.س`, i:'📥', c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700'},
-          {l:'إجمالي الصرف (PV)', v:`${fmt(totalPV,2)} ر.س`, i:'📤', c:'bg-red-50 border-red-200',         t:'text-red-700'},
+          {l:'إجمالي القبض (RV)', v:(fmt(totalRV,2)) + ' ر.س', i:'📥', c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700'},
+          {l:'إجمالي الصرف (PV)', v:(fmt(totalPV,2)) + ' ر.س', i:'📤', c:'bg-red-50 border-red-200',         t:'text-red-700'},
           {l:'مُرحَّل',           v:posted,                  i:'✅', c:'bg-blue-50 border-blue-200',        t:'text-blue-700', s:'قيود محاسبية'},
           {l:'مسودة / في انتظار',v:drafts,                   i:'📋', c:'bg-amber-50 border-amber-200',      t:'text-amber-700', s:'في انتظار الترحيل'},
         ].map((k,i)=>(
@@ -1530,8 +1530,8 @@ function BankFocusedPage({showToast, openView}) {
       {/* KPI */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          {l:'إجمالي الدفعات (BP)', v:`${fmt(totalBP,2)} ر.س`, i:'💸', c:'bg-red-50 border-red-200',         t:'text-red-700'},
-          {l:'إجمالي القبض (BR)',   v:`${fmt(totalBR,2)} ر.س`, i:'🏦', c:'bg-blue-50 border-blue-200',        t:'text-blue-700'},
+          {l:'إجمالي الدفعات (BP)', v:(fmt(totalBP,2)) + ' ر.س', i:'💸', c:'bg-red-50 border-red-200',         t:'text-red-700'},
+          {l:'إجمالي القبض (BR)',   v:(fmt(totalBR,2)) + ' ر.س', i:'🏦', c:'bg-blue-50 border-blue-200',        t:'text-blue-700'},
           {l:'مُرحَّل',             v:posted,                  i:'✅', c:'bg-emerald-50 border-emerald-200',   t:'text-emerald-700', s:'قيود محاسبية'},
           {l:'مسودة',               v:drafts,                  i:'📋', c:'bg-amber-50 border-amber-200',       t:'text-amber-700'},
         ].map((k,i)=>(
@@ -1655,7 +1655,7 @@ function TransfersFocusedPage({showToast, openView}) {
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
         {[
-          {l:'إجمالي التحويلات', v:`${fmt(total,2)} ر.س`, i:'🔄', c:'bg-purple-50 border-purple-200', t:'text-purple-700'},
+          {l:'إجمالي التحويلات', v:(fmt(total,2)) + ' ر.س', i:'🔄', c:'bg-purple-50 border-purple-200', t:'text-purple-700'},
           {l:'مُرحَّل',          v:posted,                 i:'✅', c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700'},
           {l:'مسودة',            v:drafts,                 i:'📋', c:'bg-amber-50 border-amber-200', t:'text-amber-700'},
         ].map((k,i)=>(
@@ -1827,14 +1827,14 @@ function ReconciliationSection({showToast}) {
         >
           {autoMatching
             ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>جارٍ المطابقة...</>
-            : <>✨ مطابقة تلقائية {unmatched>0&&`(${unmatched} سطر)`}</>}
+            : <>✨ مطابقة تلقائية {unmatched>0&&'(' + unmatched + ' سطر)'}</>}
         </button>
       </div>
 
       <KPIBar cards={[
-        {icon:'📄', label:'رصيد الكشف',  value:`${fmt(stmtBal,2)} ر.س`, iconBg:'bg-blue-100',  color:'text-blue-700',  bg:'bg-blue-50 border-blue-200'},
-        {icon:'📒', label:'رصيد الدفاتر', value:`${fmt(bookBal,2)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-800'},
-        {icon:'📊', label:'الفرق', value:`${diff>=0?'+':''}${fmt(diff,2)} ر.س`,
+        {icon:'📄', label:'رصيد الكشف',  value:(fmt(stmtBal,2)) + ' ر.س', iconBg:'bg-blue-100',  color:'text-blue-700',  bg:'bg-blue-50 border-blue-200'},
+        {icon:'📒', label:'رصيد الدفاتر', value:(fmt(bookBal,2)) + ' ر.س', iconBg:'bg-slate-100', color:'text-slate-800'},
+        {icon:'📊', label:'الفرق', value:'${diff>=0?\'+\':\'\'}' + fmt(diff,2) + ' ر.س',
           iconBg:Math.abs(diff)<0.01?'bg-emerald-100':'bg-red-100',
           color:Math.abs(diff)<0.01?'text-emerald-700':'text-red-600',
           bg:Math.abs(diff)<0.01?'bg-emerald-50 border-emerald-200':'bg-red-50 border-red-200'},
@@ -1901,8 +1901,8 @@ function ReconciliationSection({showToast}) {
                     return {date:cols[0]||'',description:cols[1]||'',reference:cols[2]||'',debit:parseFloat(cols[3]||0)||0,credit:parseFloat(cols[4]||0)||0,running_balance:cols[5]?parseFloat(cols[5]):undefined}
                   }).filter(r=>r.date)
                   if(!parsed.length){showToast('لا توجد بيانات صالحة في ملف CSV','error');return}
-                  if(!window.confirm(`استيراد ${parsed.length} سطر؟`)) return
-                  try{await api.treasury.importStatementLines(selected.id, parsed);showToast(`✅ تم استيراد ${parsed.length} سطر`);openSession(selected)}
+                  if(!window.confirm('استيراد ' + parsed.length + ' سطر؟')) return
+                  try{await api.treasury.importStatementLines(selected.id, parsed);showToast('✅ تم استيراد ' + parsed.length + ' سطر');openSession(selected)}
                   catch(err){showToast('خطأ: '+err.message,'error')}
                   e.target.value=''
                 }}/>
@@ -1923,9 +1923,9 @@ function ReconciliationSection({showToast}) {
                       running_balance:r[5]?parseFloat(r[5]):undefined,
                     })).filter(r=>r.date)
                     if(!parsed.length){showToast('لا توجد بيانات صالحة','error');return}
-                    if(!window.confirm(`استيراد ${parsed.length} سطر؟`)) return
+                    if(!window.confirm('استيراد ' + parsed.length + ' سطر؟')) return
                     await api.treasury.importStatementLines(selected.id, parsed)
-                    showToast(`✅ تم استيراد ${parsed.length} سطر`); openSession(selected)
+                    showToast('✅ تم استيراد ' + parsed.length + ' سطر'); openSession(selected)
                   }catch(err){showToast('خطأ: '+err.message,'error')}
                   e.target.value=''
                 }}/>
@@ -1946,9 +1946,9 @@ function ReconciliationSection({showToast}) {
                       return {date:`${y}-${mo}-${d}`,description:desc,reference:m61[6]?.trim()||'',debit:isCredit?0:amt,credit:isCredit?amt:0}
                     }).filter(Boolean)
                     if(!parsed.length){showToast('لم يتم تحليل أي حركات','error');return}
-                    if(!window.confirm(`استيراد ${parsed.length} حركة؟`)) return
+                    if(!window.confirm('استيراد ' + parsed.length + ' حركة؟')) return
                     await api.treasury.importStatementLines(selected.id, parsed)
-                    showToast(`✅ تم استيراد ${parsed.length} حركة`); openSession(selected)
+                    showToast('✅ تم استيراد ' + parsed.length + ' حركة'); openSession(selected)
                   }catch(err){showToast('خطأ: '+err.message,'error')}
                   e.target.value=''
                 }}/>
@@ -2225,8 +2225,8 @@ function BankFeesTab({showToast}) {
 
   return <div className="space-y-4">
     <KPIBar cards={[
-      {icon:'💸', label:'إجمالي الرسوم', value:`${fmt(total,2)} ر.س`, iconBg:'bg-red-100', color:'text-red-700', bg:'bg-red-50 border-red-200'},
-      {icon:'📅', label:'رسوم هذا الشهر', value:`${fmt(totalMonth,2)} ر.س`, iconBg:'bg-amber-100', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
+      {icon:'💸', label:'إجمالي الرسوم', value:(fmt(total,2)) + ' ر.س', iconBg:'bg-red-100', color:'text-red-700', bg:'bg-red-50 border-red-200'},
+      {icon:'📅', label:'رسوم هذا الشهر', value:(fmt(totalMonth,2)) + ' ر.س', iconBg:'bg-amber-100', color:'text-amber-700', bg:'bg-amber-50 border-amber-200'},
       {icon:'🔢', label:'عدد العمليات', value:items.length, iconBg:'bg-slate-100', color:'text-slate-800'},
     ]}/>
 
@@ -2377,11 +2377,11 @@ function RecurringTab({showToast,openView}) {
   }
 
   const execute = async(item)=>{
-    if(!confirm(`تنفيذ "${item.name}" الآن؟ سيُنشأ سند مسودة بمبلغ ${fmt(item.amount,2)} ر.س`)) return
+    if(!confirm('تنفيذ "${item.name}" الآن؟ سيُنشأ سند مسودة بمبلغ ' + fmt(item.amount,2) + ' ر.س')) return
     setExecuting(item.id)
     try{
       const r = await api.treasury.executeRecurring(item.id)
-      showToast(`✅ تم إنشاء ${r?.data?.serial||'السند'}`)
+      showToast('✅ تم إنشاء ' + r?.data?.serial||'السند')
       load()
     }catch(e){showToast(e.message,'error')}finally{setExecuting(null)}
   }
@@ -2400,7 +2400,7 @@ function RecurringTab({showToast,openView}) {
     <KPIBar cards={[
       {icon:'🔄', label:'قوالب نشطة', value:items.filter(i=>i.is_active).length, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
       {icon:'⏰', label:'مستحقة خلال 7 أيام', value:dueSoon.length, iconBg:'bg-amber-100', color:'text-amber-700', bg:dueSoon.length>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
-      {icon:'📅', label:'مدفوعات شهرية', value:`${fmt(totalMonthly,2)} ر.س`, sub:'القوالب الشهرية فقط', iconBg:'bg-red-100', color:'text-red-600'},
+      {icon:'📅', label:'مدفوعات شهرية', value:(fmt(totalMonthly,2)) + ' ر.س', sub:'القوالب الشهرية فقط', iconBg:'bg-red-100', color:'text-red-600'},
     ]}/>
 
     {dueSoon.length>0&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
@@ -2686,7 +2686,7 @@ function ReportsSection({showToast}) {
 
     } catch(e){
       console.error('Report error:', e)
-      showToast(`خطأ في التقرير: ${e.message}`,'error')
+      showToast('خطأ في التقرير: ' + e.message,'error')
     }
     finally{ setLoading(false) }
   }
@@ -2764,9 +2764,9 @@ function ReportsSection({showToast}) {
       const netTotal = data.net ?? (totalIn - totalOut)
       return <div className="space-y-4">
         <KPIBar cards={[
-          {icon:'📥', label:'إجمالي التدفقات الداخلة', value:`${fmt(totalIn,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
-          {icon:'📤', label:'إجمالي التدفقات الخارجة', value:`${fmt(totalOut,2)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
-          {icon:'📊', label:'الصافي', value:`${netTotal>=0?'+':''}${fmt(netTotal,2)} ر.س`, iconBg:netTotal>=0?'bg-emerald-100':'bg-red-100', color:netTotal>=0?'text-emerald-700':'text-red-600', bg:netTotal>=0?'bg-emerald-50 border-emerald-200':'bg-red-50 border-red-200'},
+          {icon:'📥', label:'إجمالي التدفقات الداخلة', value:(fmt(totalIn,2)) + ' ر.س', iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+          {icon:'📤', label:'إجمالي التدفقات الخارجة', value:(fmt(totalOut,2)) + ' ر.س', iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
+          {icon:'📊', label:'الصافي', value:'${netTotal>=0?\'+\':\'\'}' + fmt(netTotal,2) + ' ر.س', iconBg:netTotal>=0?'bg-emerald-100':'bg-red-100', color:netTotal>=0?'text-emerald-700':'text-red-600', bg:netTotal>=0?'bg-emerald-50 border-emerald-200':'bg-red-50 border-red-200'},
         ]}/>
         <div className="bg-white rounded-2xl border border-slate-200 p-4">
           <div className="flex items-center justify-between mb-4">
@@ -2786,7 +2786,7 @@ function ReportsSection({showToast}) {
                 <YAxis tick={{fontSize:10}}/>
                 <Tooltip
                   formatter={(v,n)=>[fmt(v,0)+' ر.س', n==='inflow'?'داخل':n==='outflow'?'خارج':'صافي']}
-                  labelFormatter={l=>`الفترة: ${l}`} contentStyle={{fontSize:11,direction:'rtl'}}/>
+                  labelFormatter={l=>'الفترة: ' + l} contentStyle={{fontSize:11,direction:'rtl'}}/>
                 <Bar dataKey="inflow"  fill="#10b981" radius={[3,3,0,0]} name="داخل"/>
                 <Bar dataKey="outflow" fill="#ef4444" radius={[3,3,0,0]} name="خارج"/>
                 <Bar dataKey="net"     fill="#3b82f6" radius={[3,3,0,0]} name="صافي"/>
@@ -2890,7 +2890,7 @@ function ReportsSection({showToast}) {
                   </td>
                   <td className="px-3 py-2.5">
                     <span className={`font-bold font-mono ${c.days_overdue>90?'text-red-700':c.days_overdue>30?'text-red-500':c.days_overdue>0?'text-orange-500':c.days_overdue===0?'text-amber-600':'text-blue-600'}`}>
-                      {c.days_overdue<0?`-${Math.abs(c.days_overdue)} قادماً`:c.days_overdue===0?'اليوم':`${c.days_overdue} يوم`}
+                      {c.days_overdue<0?'-' + Math.abs(c.days_overdue) + ' قادماً':c.days_overdue===0?'اليوم':'' + c.days_overdue + ' يوم'}
                     </span>
                   </td>
                 </tr>
@@ -3000,10 +3000,10 @@ function ReportsSection({showToast}) {
       return <div className="space-y-4">
         <KPIBar cards={[
           {icon:'🏦', label:acc.account_name||'الحساب', value:acc.account_code||'', iconBg:'bg-blue-100', color:'text-blue-700'},
-          {icon:'💰', label:'الرصيد الافتتاحي', value:`${fmt(data.opening||0,3)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-700'},
-          {icon:'📥', label:'إجمالي المدين', value:`${fmt(data.total_debit||0,3)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
-          {icon:'📤', label:'إجمالي الدائن', value:`${fmt(data.total_credit||0,3)} ر.س`, iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
-          {icon:'🔵', label:'الرصيد الختامي', value:`${fmt(data.closing||0,3)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-800', bg:'bg-blue-50 border-blue-200'},
+          {icon:'💰', label:'الرصيد الافتتاحي', value:(fmt(data.opening||0,3)) + ' ر.س', iconBg:'bg-slate-100', color:'text-slate-700'},
+          {icon:'📥', label:'إجمالي المدين', value:(fmt(data.total_debit||0,3)) + ' ر.س', iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+          {icon:'📤', label:'إجمالي الدائن', value:(fmt(data.total_credit||0,3)) + ' ر.س', iconBg:'bg-red-100', color:'text-red-600', bg:'bg-red-50 border-red-200'},
+          {icon:'🔵', label:'الرصيد الختامي', value:(fmt(data.closing||0,3)) + ' ر.س', iconBg:'bg-blue-100', color:'text-blue-800', bg:'bg-blue-50 border-blue-200'},
         ]}/>
         <div className="flex justify-end gap-2">
           <button onClick={()=>{
@@ -3045,7 +3045,7 @@ function ReportsSection({showToast}) {
               <div class="kpi"><div class="lbl">الرصيد الختامي</div><div class="val" style="color:#1e40af">${fmt(data.closing||0,3)}</div></div>
             </div>
             <table>
-              <thead><tr>${['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+              <thead><tr>${['#','Type','Date','Party','Description','Ref','Debit','Credit','Balance'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
               <tbody>
                 <tr style="background:#f0f9ff"><td colspan="9" style="text-align:center;font-weight:700;padding:8px">رصيد افتتاحي: ${fmt(data.opening||0,3)} ر.س</td></tr>
                 ${rows.map((r,i)=>`<tr>
@@ -3077,14 +3077,14 @@ function ReportsSection({showToast}) {
           <button onClick={()=>exportXLS(
             rows.map(r=>[r.serial,r.tx_type,fmtDate(r.tx_date),r.party||'',r.description||'',r.reference||'',r.debit>0?r.debit:0,r.credit>0?r.credit:0,r.running_balance]),
             ['الرقم','النوع','التاريخ','الطرف','البيان','المرجع','مدين','دائن','الرصيد'],
-            `كشف_${acc.account_name||'حساب'}`
+            'كشف_' + acc.account_name||'حساب'
           )} className="px-3 py-2 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800">📥 Excel</button>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3 text-white font-bold text-sm flex justify-between" style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
             <span>📄 كشف حساب: {acc.account_name}</span>
             <span className="font-mono text-blue-200 text-xs">
-              {filters.date_from&&`من ${fmtDate(filters.date_from)}`} {filters.date_to&&`إلى ${fmtDate(filters.date_to)}`}
+              {filters.date_from&&'من ' + fmtDate(filters.date_from)} {filters.date_to&&'إلى ' + fmtDate(filters.date_to)}
             </span>
           </div>
           <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-xs font-bold text-slate-600">
@@ -3362,8 +3362,8 @@ function BankReconciliationSession({banks, showToast, onNavigateToBank}) {
         : 'يوجد فرق يستلزم المراجعة'}</div>
       <div class="diff">
         ${isBalanced
-          ? `الرصيد المعدّل حسب البنك = الرصيد المعدّل حسب الدفاتر = <strong>${fmt(adjustedBankBal,3)} ر.س</strong>`
-          : `الفرق: <strong style="color:#dc2626">${fmt(finalDiff,3)} ر.س</strong> — يرجى مراجعة الحركات غير المسوّاة`}
+          ? 'الرصيد المعدّل حسب البنك = الرصيد المعدّل حسب الدفاتر = <strong>' + fmt(adjustedBankBal,3) + ' ر.س</strong>'
+          : 'الفرق: <strong style="color:#dc2626">' + fmt(finalDiff,3) + ' ر.س</strong> — يرجى مراجعة الحركات غير المسوّاة'}
       </div>
     </div>
 
@@ -3561,9 +3561,9 @@ function BankReconciliationSession({banks, showToast, onNavigateToBank}) {
               </div>
               <div className="divide-y divide-slate-100">
                 {[
-                  {label:`رصيد الكشف في ${fmtDate(session.stmtDate)}`, value:fmt(session.stmtBal,3), color:'text-blue-700'},
-                  {label:`＋ إيداعات في الطريق (${session.depositsInTransit.length})`, value:fmt(session.totalDepositsTransit,3), color:'text-emerald-600', sub:'مدفوعات في الدفاتر لم تظهر بالكشف'},
-                  {label:`－ دفعات/شيكات معلقة (${session.outstandingPayments.length})`, value:`(${fmt(session.totalOutstandingPay,3)})`, color:'text-red-600', sub:'دفعات في الدفاتر لم تُصرف'},
+                  {label:'رصيد الكشف في ' + fmtDate(session.stmtDate), value:fmt(session.stmtBal,3), color:'text-blue-700'},
+                  {label:'＋ إيداعات في الطريق (' + session.depositsInTransit.length + ')', value:fmt(session.totalDepositsTransit,3), color:'text-emerald-600', sub:'مدفوعات في الدفاتر لم تظهر بالكشف'},
+                  {label:'－ دفعات/شيكات معلقة (' + session.outstandingPayments.length + ')', value:'(' + fmt(session.totalOutstandingPay,3) + ')', color:'text-red-600', sub:'دفعات في الدفاتر لم تُصرف'},
                 ].map((item,i)=>(
                   <div key={i} className="flex justify-between items-center px-4 py-3">
                     <div>
@@ -3587,7 +3587,7 @@ function BankReconciliationSession({banks, showToast, onNavigateToBank}) {
               </div>
               <div className="divide-y divide-slate-100">
                 {[
-                  {label:`رصيد الدفاتر في ${fmtDate(session.stmtDate)}`, value:fmt(session.bookBal,3), color:'text-red-700'},
+                  {label:'رصيد الدفاتر في ' + fmtDate(session.stmtDate), value:fmt(session.bookBal,3), color:'text-red-700'},
                   {label:'＋ إيرادات أضافها البنك لم تُسجَّل', value:'0.000', color:'text-emerald-600', sub:'Credit Memos'},
                   {label:'－ رسوم بنكية لم تُسجَّل', value:'(0.000)', color:'text-red-600', sub:'Bank Charges'},
                 ].map((item,i)=>(
@@ -3707,7 +3707,7 @@ function BankReconciliationSession({banks, showToast, onNavigateToBank}) {
       <tr><td class="lbl">رصيد الدفاتر / Book Balance</td><td class="val" style="color:#1e40af">${fmt(bookBal,3)} ر.س</td></tr>
       <tr style="background:#f0fdf4"><td class="lbl"><strong>الفرق / Difference</strong></td>
         <td class="val ${diff===0?'diff-zero':diff>0?'diff-pos':'diff-neg'}" style="font-size:14px">
-          ${diff===0?'✅ متطابق':diff>0?`+${fmt(diff,3)} ر.س`:fmt(diff,3)+' ر.س'}
+          ${diff===0?'✅ متطابق':diff>0?'+' + fmt(diff,3) + ' ر.س':fmt(diff,3)+' ر.س'}
         </td>
       </tr>
     </table>
@@ -3806,7 +3806,7 @@ function DashboardTab({showToast,setTab,openView}) {
         const r=await api.treasury.lowBalanceAlerts()
         const alerts=r?.data||[]
         const newOnes=alerts.filter(a=>!prev.some(p=>p.id===a.id))
-        if(newOnes.length>0) showToast(`[!] ${newOnes.length} حساب رصيده منخفض!`,'warning')
+        if(newOnes.length>0) showToast(newOnes.length + ' حساب رصيده منخفض!','warning')
         prev=alerts
       }catch{}
     }
@@ -4090,10 +4090,10 @@ function DashboardTab({showToast,setTab,openView}) {
                     <div className="flex items-end gap-0.5 h-28">
                       <div className="w-3 bg-emerald-400 rounded-t transition-all hover:bg-emerald-500"
                         style={{height:`${Math.round(row.receipts/maxVal*100)}%`,minHeight:'2px'}}
-                        title={`قبض: ${fmt(row.receipts,0)}`}/>
+                        title={'قبض: ' + fmt(row.receipts,0)}/>
                       <div className="w-3 bg-red-300 rounded-t transition-all hover:bg-red-400"
                         style={{height:`${Math.round(row.payments/maxVal*100)}%`,minHeight:'2px'}}
-                        title={`صرف: ${fmt(row.payments,0)}`}/>
+                        title={'صرف: ' + fmt(row.payments,0)}/>
                     </div>
                     <div className="text-[8px] text-slate-300 rotate-45 origin-right"
                       style={{writingMode:'initial'}}>
@@ -4270,9 +4270,9 @@ function BankAccountsTab({showToast,openView}) {
   return <div className="space-y-4">
     <ToggleModal/>
     <KPIBar cards={[
-      {icon:'🏦', label:'الحسابات البنكية', value:banks.length, sub:`إجمالي: ${fmt(totalBank,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
-      {icon:'💵', label:'الصناديق النقدية', value:funds.length, sub:`إجمالي: ${fmt(totalFund,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
-      {icon:'💰', label:'إجمالي الأرصدة', value:`${fmt(totalBank+totalFund,2)}`, sub:'ر.س', iconBg:'bg-slate-100', color:'text-slate-800'},
+      {icon:'🏦', label:'الحسابات البنكية', value:banks.length, sub:'إجمالي: ' + fmt(totalBank,2) + ' ر.س', iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
+      {icon:'💵', label:'الصناديق النقدية', value:funds.length, sub:'إجمالي: ' + fmt(totalFund,2) + ' ر.س', iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+      {icon:'💰', label:'إجمالي الأرصدة', value:fmt(totalBank+totalFund,2), sub:'ر.س', iconBg:'bg-slate-100', color:'text-slate-800'},
       {icon:'⚠️', label:'تنبيهات الرصيد', value:alerts.length, sub:alerts.length>0?'رصيد منخفض':'جميع الأرصدة سليمة', iconBg:'bg-amber-100', color:alerts.length>0?'text-amber-600':'text-emerald-600', bg:alerts.length>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
     ]}/>
 
@@ -4287,8 +4287,8 @@ function BankAccountsTab({showToast,openView}) {
             {glCheck&&(
               <div className={`text-xs mt-0.5 font-semibold ${glCheck.all_matched?'text-emerald-700':'text-red-700'}`}>
                 {glCheck.all_matched
-                  ? `✅ جميع الأرصدة متطابقة (${glCheck.total_accounts} حساب)`
-                  : `[!] ${glCheck.mismatches} حساب غير متطابق — فرق إجمالي: ${fmt(glCheck.total_diff,2)} ر.س`}
+                  ? '✅ جميع الأرصدة متطابقة (' + glCheck.total_accounts + ' حساب)'
+                  : '[!] ${glCheck.mismatches} حساب غير متطابق — فرق إجمالي: ' + fmt(glCheck.total_diff,2) + ' ر.س'}
               </div>
             )}
             {!glCheck&&<div className="text-xs text-slate-400 mt-0.5">اضغط للتحقق من التطابق بين رصيد الخزينة والأستاذ العام</div>}
@@ -4751,7 +4751,7 @@ function TransferSlideOver({tx, accounts, onClose, onPosted, showToast}) {
 
   return (
     <SlideOver open={!!tx} onClose={onClose} size="xl"
-      title={`تحويل داخلي — ${tx.serial||'مسودة'}`}
+      title={'تحويل داخلي — ' + tx.serial||'مسودة'}
       subtitle={`${fmtDate(tx.tx_date)} | ${tx.description||''}`}
       footer={
         <div className="flex gap-2 flex-wrap">
@@ -5203,7 +5203,7 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
     }catch(e){
       const msg = e.message||'خطأ غير معروف'
       setSaveError(msg)                             // يُعرض inline في الصفحة
-      showToast(`❌ فشل الحفظ: ${msg}`, 'error')   // toast أيضاً
+      showToast('❌ فشل الحفظ: ' + msg, 'error')   // toast أيضاً
       console.error('[BankAccountPage save]', e)
     }
     finally{setSaving(false)}
@@ -5229,7 +5229,7 @@ function BankAccountPage({account, onBack, onSaved, showToast}) {
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 text-sm">← رجوع</button>
         <div>
-          <h2 className="text-xl font-bold text-slate-800">{isEdit?`تعديل ${isCashFund?'صندوق':'حساب بنكي'}`:(isCashFund?'💵 صندوق نقدي جديد':'🏦 حساب بنكي جديد')}</h2>
+          <h2 className="text-xl font-bold text-slate-800">{isEdit?'تعديل ' + isCashFund?'صندوق':'حساب بنكي':(isCashFund?'💵 صندوق نقدي جديد':'🏦 حساب بنكي جديد')}</h2>
           <p className="text-xs text-slate-400">بيانات الحساب والربط بدليل الحسابات</p>
         </div>
         {isEdit&&<button onClick={()=>setDeactivateModal(true)}
@@ -5509,9 +5509,9 @@ function applyTaxToLines(lines, lineId, taxCode, taxTypesParam) {
     is_tax_line:    true,
     account_code:   taxAccCode,
     account_name:   isDebit
-      ? `ضريبة مدخلات — ${tx.name_ar} (${tx.rate}%)`
-      : `ضريبة مخرجات — ${tx.name_ar} (${tx.rate}%)`,
-    description:    `ضريبة ${tx.name_ar} ${tx.rate}% — تلقائي`,
+      ? 'ضريبة مدخلات — ${tx.name_ar} (' + tx.rate + '%)'
+      : 'ضريبة مخرجات — ${tx.name_ar} (' + tx.rate + '%)',
+    description:    'ضريبة ${tx.name_ar} ' + tx.rate + '% — تلقائي',
     debit:          isDebit  ? vatAmt : 0,
     credit:         !isDebit ? vatAmt : 0,
     currency_code:  parent.currency_code || 'SAR',
@@ -5672,12 +5672,12 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
     }
     try{
       await api.treasury.createCashTransaction(formData)
-      onSaved(`تم إنشاء ${typeLabel} ✅`)
+      onSaved('تم إنشاء ' + typeLabel + ' ✅')
     }
     catch(e){
       const msg = e.message||'خطأ غير معروف'
       setSaveError(msg)
-      showToast(`❌ فشل الحفظ: ${msg}`, 'error')
+      showToast('❌ فشل الحفظ: ' + msg, 'error')
       console.error('[CashVoucherPage save]', e)
     }
     finally{setSaving(false)}
@@ -5734,7 +5734,7 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
           <div className={`text-xl font-bold mb-2 ${
             periodStatus==='closed'?'text-red-700':periodStatus==='error'?'text-orange-700':
             periodStatus==='not_found'?'text-amber-700':'text-slate-600'}`}>
-            {periodStatus==='closed'    ?`🔒 الفترة "${periodName_}" مغلقة`:
+            {periodStatus==='closed'    ?'🔒 الفترة "' + periodName_ + '" مغلقة':
              periodStatus==='not_found' ?'⚠️ لا توجد فترة مالية لهذا التاريخ':
              periodStatus==='error'     ?'⚠️ تعذّر التحقق من الفترة':
                                          '📅 اختر تاريخاً للبدء'}
@@ -6016,7 +6016,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
       if(errs.amount)              missing.push('المبلغ')
       if(errs.counterpart_account) missing.push('الحساب المقابل')
       if(errs.description)         missing.push('البيان')
-      showToast(`الحقول المطلوبة: ${missing.join(' ، ')}`, 'error')
+      showToast('الحقول المطلوبة: ' + missing.join(' ، '), 'error')
       return
     }
     if(!validateDims()) return
@@ -6029,12 +6029,12 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
     }
     try{
       await api.treasury.createBankTransaction(formDataBT)
-      onSaved(`تم إنشاء ${labels[type]} ✅`)
+      onSaved('تم إنشاء ' + labels[type] + ' ✅')
     }
     catch(e){
       const msg = e.message||'خطأ غير معروف'
       setSaveError(msg)
-      showToast(`❌ فشل الحفظ: ${msg}`, 'error')
+      showToast('❌ فشل الحفظ: ' + msg, 'error')
     }
     finally{setSaving(false)}
   }
@@ -6065,7 +6065,7 @@ function BankTxPage({type,onBack,onSaved,showToast}) {
           <div className={`text-xl font-bold mb-2 ${
             periodStatusBT==='closed'?'text-red-700':periodStatusBT==='error'?'text-orange-700':
             periodStatusBT==='not_found'?'text-amber-700':'text-slate-600'}`}>
-            {periodStatusBT==='closed'    ?`🔒 الفترة "${periodNameBT}" مغلقة`:
+            {periodStatusBT==='closed'    ?'🔒 الفترة "' + periodNameBT + '" مغلقة':
              periodStatusBT==='not_found' ?'⚠️ لا توجد فترة مالية لهذا التاريخ':
              periodStatusBT==='error'     ?'⚠️ تعذّر التحقق من الفترة':
                                            '📅 اختر تاريخاً للبدء'}
@@ -6276,7 +6276,7 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
     catch(e){
       const msg = e.message || 'حدث خطأ غير متوقع'
       setSaveError(msg)
-      showToast(`❌ فشل الحفظ: ${msg}`, 'error')
+      showToast('❌ فشل الحفظ: ' + msg, 'error')
     }
     finally{setSaving(false)}
   }
@@ -6307,7 +6307,7 @@ function InternalTransferPage({onBack,onSaved,showToast}) {
           <div className={`text-xl font-bold mb-2 ${
             periodStatusIT==='closed'?'text-red-700':periodStatusIT==='error'?'text-orange-700':
             periodStatusIT==='not_found'?'text-amber-700':'text-slate-600'}`}>
-            {periodStatusIT==='closed'    ?`🔒 الفترة "${periodNameIT}" مغلقة`:
+            {periodStatusIT==='closed'    ?'🔒 الفترة "' + periodNameIT + '" مغلقة':
              periodStatusIT==='not_found' ?'⚠️ لا توجد فترة مالية لهذا التاريخ':
              periodStatusIT==='error'     ?'⚠️ تعذّر التحقق من الفترة':
                                            '📅 اختر تاريخاً للبدء'}
@@ -6397,9 +6397,9 @@ function ChecksTab({showToast}) {
   return <div className="space-y-4">
     <KPIBar cards={[
       {icon:'📝', label:'إجمالي الشيكات', value:items.length, iconBg:'bg-slate-100', color:'text-slate-800'},
-      {icon:'🔵', label:'صادرة', value:items.filter(x=>x.status==='issued').length, sub:`${fmt(totalIssued,2)} ر.س`, iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
+      {icon:'🔵', label:'صادرة', value:items.filter(x=>x.status==='issued').length, sub:(fmt(totalIssued,2)) + ' ر.س', iconBg:'bg-blue-100', color:'text-blue-700', bg:'bg-blue-50 border-blue-200'},
       {icon:'⚠️', label:'متأخرة', value:overdueItems.length, sub:overdueItems.length>0?'تجاوزت تاريخ الاستحقاق':'لا يوجد تأخر', iconBg:'bg-amber-100', color:'text-amber-700', bg:overdueItems.length>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
-      {icon:'✅', label:'محصّلة', value:items.filter(x=>x.status==='cleared').length, sub:`${fmt(totalCleared,2)} ر.س`, iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
+      {icon:'✅', label:'محصّلة', value:items.filter(x=>x.status==='cleared').length, sub:(fmt(totalCleared,2)) + ' ر.س', iconBg:'bg-emerald-100', color:'text-emerald-700', bg:'bg-emerald-50 border-emerald-200'},
     ]}/>
 
     {overdueItems.length>0&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
@@ -6561,10 +6561,10 @@ function PettyCashTab({showToast}) {
 
   return <div className="space-y-4">
     <KPIBar cards={[
-      {icon:'🗄️', label:'إجمالي صناديق العهدة', value:funds.length, sub:`رصيد: ${fmt(totalFundBalance,2)} ر.س`, iconBg:'bg-purple-100', color:'text-purple-700', bg:'bg-purple-50 border-purple-200'},
+      {icon:'🗄️', label:'إجمالي صناديق العهدة', value:funds.length, sub:'رصيد: ' + fmt(totalFundBalance,2) + ' ر.س', iconBg:'bg-purple-100', color:'text-purple-700', bg:'bg-purple-50 border-purple-200'},
       {icon:'⚠️', label:'تحتاج تعبئة', value:needReplenish, iconBg:'bg-amber-100', color:'text-amber-700', bg:needReplenish>0?'bg-amber-50 border-amber-200':'bg-white border-slate-200'},
       {icon:'💸', label:'مصاريف مسودة', value:draftExpenses, sub:'في انتظار الترحيل', iconBg:'bg-red-100', color:'text-red-600'},
-      {icon:'📊', label:'إجمالي المصاريف', value:`${fmt(totalExpenses,2)} ر.س`, iconBg:'bg-slate-100', color:'text-slate-800'},
+      {icon:'📊', label:'إجمالي المصاريف', value:(fmt(totalExpenses,2)) + ' ر.س', iconBg:'bg-slate-100', color:'text-slate-800'},
     ]}/>
     <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
       {[{id:'funds',l:'🗄️ الصناديق'},{id:'expenses',l:'💸 المصاريف النثرية'},{id:'replenishments',l:'📋 طلبات الاسترداد'}].map(t=>(
@@ -6754,7 +6754,7 @@ function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
     if(!form.limit_amount||parseFloat(form.limit_amount)<=0) errs.push('الحد الأقصى (يجب أن يكون أكبر من صفر)')
     if(!form.gl_account_code)     errs.push('حساب الأستاذ العام')
     if(errs.length>0){
-      showToast(`الحقول التالية مطلوبة: ${errs.join(' — ')}`, 'error')
+      showToast('الحقول التالية مطلوبة: ' + errs.join(' — '), 'error')
       return
     }
     setSaving(true)
@@ -6763,7 +6763,7 @@ function PettyCashFundModal({fund, bankAccounts, onClose, onSaved, showToast}) {
       else       await api.treasury.createPettyCashFund(form)
       onSaved()
     } catch(e) {
-      showToast(`❌ فشل الحفظ: ${e.message||'خطأ غير معروف'}`, 'error')
+      showToast('❌ فشل الحفظ: ' + e.message||'خطأ غير معروف', 'error')
       console.error('[PettyCashFundModal save]', e)
     }
     finally { setSaving(false) }
@@ -7103,7 +7103,7 @@ function GLImportPage({showToast}) {
       const errors   = r?.data?.errors||[]
       setDone(imported.map(i=>i.je_id))
       setSelected(new Set())
-      showToast(r?.message||`تم استيراد ${imported.length} قيد ✅`)
+      showToast(r?.message||'تم استيراد ' + imported.length + ' قيد ✅')
       // نعيد التحميل لإزالة المُستورَدة
       await load()
     } catch(e){ showToast(e.message,'error') }
@@ -7176,7 +7176,7 @@ function GLImportPage({showToast}) {
             {selected.size > 0 && (
               <button onClick={handleImport} disabled={importing}
                 className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50">
-                {importing?'⏳ جارٍ الاستيراد...':`📥 استيراد ${selected.size} قيد محدد`}
+                {importing?'⏳ جارٍ الاستيراد...':'📥 استيراد ' + selected.size + ' قيد محدد'}
               </button>
             )}
           </div>
@@ -7317,7 +7317,7 @@ function SmartBankImportPage({showToast}) {
         return Object.fromEntries(hdrs.map((h,i)=>[h, vals[i]||'']))
       }).filter(r=>Object.values(r).some(v=>v))
       setRawRows(rows)
-      showToast(`✅ تم قراءة ${rows.length} صف من الملف`)
+      showToast('✅ تم قراءة ' + rows.length + ' صف من الملف')
       setStep(2)
     }
     reader.readAsText(file, 'UTF-8')
@@ -7349,7 +7349,7 @@ function SmartBankImportPage({showToast}) {
   // ── Create Drafts ────────────────────────────────────────
   const handleCreate = async () => {
     const confirmed = window.confirm(
-      `هل تريد إنشاء ${preview.length} سند مسودة؟\n\nدفعات: ${summary?.payments||0}\nمقبوضات: ${summary?.receipts||0}`
+      'هل تريد إنشاء ${preview.length} سند مسودة؟\n\nدفعات: ${summary?.payments||0}\nمقبوضات: ' + summary?.receipts||0
     )
     if(!confirmed) return
     setSaving(true)
@@ -7694,7 +7694,7 @@ function SmartBankImportPage({showToast}) {
             <button onClick={handleCreate} disabled={saving}
               className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
               {saving?'⏳ جارٍ إنشاء السندات...':
-                `✅ إنشاء ${preview.length} سند مسودة (PAY + REC)`}
+                '✅ إنشاء ' + preview.length + ' سند مسودة (PAY + REC)'}
             </button>
           </div>
         </div>
@@ -8095,7 +8095,7 @@ function CashFlowPage({showToast}) {
           {[
             {l:'إجمالي التدفقات الداخلة', v:data.summary.total_cash_in,  c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700', i:'📥'},
             {l:'إجمالي التدفقات الخارجة', v:data.summary.total_cash_out, c:'bg-red-50 border-red-200',         t:'text-red-600',     i:'📤'},
-            {l:'صافي التدفق النقدي',      v:data.summary.net_flow,       c:`${data.summary.net_flow>=0?'bg-blue-50 border-blue-200':'bg-amber-50 border-amber-200'}`, t:`${data.summary.net_flow>=0?'text-blue-700':'text-amber-700'}`, i:'⚖️'},
+            {l:'صافي التدفق النقدي',      v:data.summary.net_flow,       c:(data.summary.net_flow>=0?'bg-blue-50 border-blue-200':'bg-amber-50 border-amber-200'), t:(data.summary.net_flow>=0?'text-blue-700':'text-amber-700'), i:'⚖️'},
             {l:'الرصيد الحالي',           v:data.summary.current_balance,c:'bg-slate-50 border-slate-200',     t:'text-slate-700',   i:'🏦'},
           ].map((k,i)=>(
             <div key={i} className={`rounded-2xl border p-5 ${k.c}`}>
@@ -8160,19 +8160,19 @@ function CashFlowPage({showToast}) {
                           <div className="flex flex-col items-center justify-end" style={{height:'100%',width:'30%'}}>
                             <div className="w-full bg-emerald-400 rounded-t hover:bg-emerald-500 transition-all cursor-pointer"
                               style={{height:`${Math.max(2,Math.round(m.cash_in/maxVal*140))}px`}}
-                              title={`داخل: ${fmt(m.cash_in,3)}`}/>
+                              title={'داخل: ' + fmt(m.cash_in,3)}/>
                           </div>
                           {/* Cash Out */}
                           <div className="flex flex-col items-center justify-end" style={{height:'100%',width:'30%'}}>
                             <div className="w-full bg-red-400 rounded-t hover:bg-red-500 transition-all cursor-pointer"
                               style={{height:`${Math.max(2,Math.round(m.cash_out/maxVal*140))}px`}}
-                              title={`خارج: ${fmt(m.cash_out,3)}`}/>
+                              title={'خارج: ' + fmt(m.cash_out,3)}/>
                           </div>
                           {/* Net */}
                           <div className="flex flex-col items-center justify-end" style={{height:'100%',width:'30%'}}>
                             <div className={`w-full rounded-t hover:opacity-80 transition-all ${m.net>=0?'bg-blue-500':'bg-amber-400'}`}
                               style={{height:`${Math.max(2,Math.round(Math.abs(m.net)/maxVal*140))}px`}}
-                              title={`صافي: ${fmt(m.net,3)}`}/>
+                              title={'صافي: ' + fmt(m.net,3)}/>
                           </div>
                         </div>
                         <div className="text-[10px] text-slate-500 font-semibold text-center">
@@ -8396,7 +8396,7 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
         l.description, l.vendor_name||'', parseFloat(l.amount)||0, parseFloat(l.vat_amount)||0,
       ]),
       ['#','كود الحساب','اسم الحساب','البيان','المورد','المبلغ','الضريبة'],
-      `مصروف_نثري_${form.expense_date}`
+      'مصروف_نثري_' + form.expense_date
     )
   }
 
