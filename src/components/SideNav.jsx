@@ -89,18 +89,23 @@ const MODULES = [
       {
         id: 'tr_master', ar: 'البيانات الأساسية', en: 'Master Data', type:'section',
         children: [
-          { id:'treasury_accounts', icon:'🏦', ar:'الحسابات البنكية',   en:'Bank Accounts' },
-          { id:'treasury_petty',    icon:'👜', ar:'العهدة النثرية',     en:'Petty Cash'    },
-          { id:'treasury_recurring',icon:'🔁', ar:'المعاملات المتكررة', en:'Recurring'     },
+          { id:'treasury_accounts', icon:'🏦', ar:'الحسابات البنكية', en:'Bank Accounts' },
         ]
       },
       {
         id: 'tr_operations', ar: 'العمليات', en: 'Operations', type:'section',
         children: [
-          { id:'treasury_cash',      icon:'💵', ar:'سندات القبض والصرف', en:'Cash Vouchers'    },
-          { id:'treasury_bank',      icon:'🏛️', ar:'حركات البنوك',       en:'Bank Transactions'},
-          { id:'treasury_transfers', icon:'🔄', ar:'التحويلات الداخلية', en:'Internal Transfers'},
-          { id:'treasury_checks',    icon:'📝', ar:'إدارة الشيكات',      en:'Cheques'          },
+          { id:'treasury_cash',      icon:'💵', ar:'سندات القبض والصرف', en:'Cash Vouchers'     },
+          { id:'treasury_bank',      icon:'🏛️', ar:'حركات البنوك',       en:'Bank Transactions' },
+          { id:'treasury_transfers', icon:'🔄', ar:'التحويلات الداخلية', en:'Internal Transfers' },
+          { id:'treasury_checks',    icon:'📝', ar:'إدارة الشيكات',      en:'Cheques'           },
+          { id:'treasury_recurring', icon:'🔁', ar:'المعاملات المتكررة', en:'Recurring'         },
+        ]
+      },
+      {
+        id: 'tr_petty_section', ar: 'العهدة النثرية', en: 'Petty Cash', type:'section',
+        children: [
+          { id:'treasury_petty', icon:'👜', ar:'صناديق ومصاريف العهدة', en:'Petty Cash Funds & Expenses' },
         ]
       },
       {
@@ -690,16 +695,32 @@ export default function SideNav({ activePage, onNavigate }) {
               </div>
               <button
                 onClick={signOut}
-                title="تسجيل الخروج"
+                title="تسجيل الخروج / Sign Out"
                 style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'rgba(100,130,180,0.5)', fontSize: 17,
-                  padding: 4, borderRadius: 7, lineHeight: 1,
-                  transition: 'color 0.2s',
+                  background: 'none', border: '1px solid rgba(248,113,113,0.3)',
+                  cursor: 'pointer', color: 'rgba(248,113,113,0.6)',
+                  fontSize: 13, padding: '4px 8px', borderRadius: 8,
+                  lineHeight: 1, transition: 'all 0.2s', display:'flex',
+                  alignItems:'center', gap: 4,
                 }}
-                onMouseEnter={e => e.currentTarget.style.color='#f87171'}
-                onMouseLeave={e => e.currentTarget.style.color='rgba(100,130,180,0.5)'}
-              >⬚</button>
+                onMouseEnter={e => {
+                  e.currentTarget.style.color='#f87171'
+                  e.currentTarget.style.background='rgba(248,113,113,0.15)'
+                  e.currentTarget.style.borderColor='rgba(248,113,113,0.6)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.color='rgba(248,113,113,0.6)'
+                  e.currentTarget.style.background='none'
+                  e.currentTarget.style.borderColor='rgba(248,113,113,0.3)'
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                <span style={{fontSize:10, fontWeight:600}}>خروج</span>
+              </button>
             </>
           )}
         </div>
