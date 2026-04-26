@@ -6735,7 +6735,7 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToa
         <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium">← رجوع</button>
         <div className="flex-1">
           <h2 className="text-xl font-bold text-red-700 flex items-center gap-2">
-            💸 {exp.serial}
+            <span>{'💸'} {exp.serial}</span>
             <span className={'text-sm px-3 py-1 rounded-full font-semibold '+(statusColor[exp.status]||'bg-slate-100 text-slate-500')}>{statusMap[exp.status]||exp.status}</span>
           </h2>
           <p className="text-xs text-slate-400">{exp.description}</p>
@@ -6753,7 +6753,7 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToa
               {loading?'⏳ جارٍ...':'✅ ترحيل'}
             </button>
           )}
-        )}
+        </div>
       </div>
 
       {/* بيانات رئيسية */}
