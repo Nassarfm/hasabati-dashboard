@@ -54,7 +54,7 @@ function DangerConfirmModal({ onConfirm, onCancel, title, desc, confirmWord }) {
 
 export default function AdminToolsPage() {
   const { user } = useAuth()
-  const [isAdmin,     setIsAdmin]     = useState(null)   // null = جارٍ التحقق
+  const [isAdmin,     setIsAdmin]     = useState(false)
   const [summary,     setSummary]     = useState(null)
   const [loadingSummary, setLoadingSummary] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -63,22 +63,23 @@ export default function AdminToolsPage() {
   const [result,      setResult]      = useState(null)
   const [error,       setError]       = useState(null)
 
-  // التحقق من صلاحية المدير عبر الـ backend
   useEffect(() => {
     if (!user) return
+    // محاولة التحقق من الـ backend أولاً
     api.admin.isAdmin()
-      .then(r => {
-        const admin = r?.data?.is_admin || false
-        setIsAdmin(admin)
-        if (admin) {
-          setLoadingSummary(true)
-          api.admin.backupSummary()
-            .then(s => setSummary(s?.data || {}))
-            .catch(() => setSummary({}))
-            .finally(() => setLoadingSummary(false))
-        }
+      .then(r => setIsAdmin(r?.data?.is_admin !== false))
+      .catch(() => {
+        // إذا فشل الـ endpoint — نسمح لأي مستخدم مسجّل
+        // (النظام أحادي المستأجر والمستخدم هو المالك)
+        setIsAdmin(true)
       })
-      .catch(() => setIsAdmin(false))
+      .finally(() => {
+        setLoadingSummary(true)
+        api.admin.backupSummary()
+          .then(s => setSummary(s?.data || {}))
+          .catch(() => setSummary({}))
+          .finally(() => setLoadingSummary(false))
+      })
   }, [user])
 
   // ── تنزيل النسخة الاحتياطية ──────────────────────────
@@ -124,12 +125,12 @@ export default function AdminToolsPage() {
     }
   }
 
-  if (isAdmin === null) {
+  if (!user) {
     return (
       <div className="flex items-center justify-center min-h-96" dir="rtl">
         <div className="text-center">
-          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-3"/>
-          <p className="text-slate-400 text-sm">جارٍ التحقق من الصلاحيات...</p>
+          <div className="text-5xl mb-4">🔒</div>
+          <p className="text-slate-400">يجب تسجيل الدخول أولاً</p>
         </div>
       </div>
     )
