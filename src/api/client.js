@@ -550,7 +550,8 @@ export const api = {
     backupSummary:      ()  => get('/admin/backup/summary'),
     resetTransactions:  ()  => post('/admin/reset/transactions', { confirm: 'RESET' }),
   },
-}
+  // ── قاعدة المعرفة والمستندات ─────────────────────────────
+  knowledge: {
     listDocuments:  (p={})   => get('/knowledge/documents', p),
     createDocument: (b)      => post('/knowledge/documents', b),
     deleteDocument: (id)     => del('/knowledge/documents/' + id),
