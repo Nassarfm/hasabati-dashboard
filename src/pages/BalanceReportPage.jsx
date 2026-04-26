@@ -29,15 +29,16 @@ function buildHierarchy(rows, coaMap) {
     const l1 = code.length >= 2 ? code.slice(0, 2) : code
     const l2 = code.length >= 4 ? code.slice(0, 4) : code
 
-    // اسم المجموعة: من COA أو من اسم الحساب المختصر أو الكود
-    const l1Name = coaMap[l1] || coaMap[l1+'0'] || coaMap[l1+'00'] || ('المجموعة ' + l1)
-    const l2Name = coaMap[l2] || coaMap[l2+'0'] || coaMap[l2+'00'] || (r.parent_name || r.sub_group || ('حسابات ' + l2))
+    // اسم المجموعة: من COA أو من البيانات أو من الكود
+    const l1Name = coaMap[l1] || r.group_name   || r.parent_group || ('المجموعة ' + l1)
+    const l2Name = coaMap[l2] || r.sub_group     || r.parent_name  || (coaMap[l2+'01'] ? coaMap[l2+'01'] : ('حسابات ' + l2))
 
-    if (!groups[l1]) groups[l1] = { code: l1, name: l1Name, total: 0, sub: {} }
-    if (!groups[l1].sub[l2]) groups[l1].sub[l2] = { code: l2, name: l2Name, total: 0, rows: [] }
+    // ← children (ليس sub) لتتوافق مع BSSection
+    if (!groups[l1]) groups[l1] = { code: l1, name: l1Name, total: 0, children: {} }
+    if (!groups[l1].children[l2]) groups[l1].children[l2] = { code: l2, name: l2Name, total: 0, rows: [] }
 
-    groups[l1].sub[l2].rows.push(r)
-    groups[l1].sub[l2].total += r.amount || 0
+    groups[l1].children[l2].rows.push(r)
+    groups[l1].children[l2].total += r.amount || 0
     groups[l1].total += r.amount || 0
   })
   return Object.values(groups).sort((a, b) => a.code.localeCompare(b.code))
@@ -149,7 +150,7 @@ function BSSection({ label, icon, color, rows, total, cmpRows, cmpTotal, showCmp
                   </div>
                 </button>
 
-                {g1Open && Object.values(g1.sub).sort((a,b)=>a.code.localeCompare(b.code)).map(g2 => {
+                {g1Open && Object.values(g1.children||{}).sort((a,b)=>a.code.localeCompare(b.code)).map(g2 => {
                   const g2Open = !cls2[g2.code]
                   const cmpG2 = (cmpRows||[]).filter(r=>String(r.account_code).startsWith(g2.code)).reduce((s,r)=>s+(r.amount||0),0)
                   return (
@@ -346,18 +347,27 @@ function BalanceReport() {
     const mkSection = (label, rows) => {
       const grps = buildHierarchy(rows||[], coaMap)
       return grps.map(g1=>`
-        <tr style="background:#e2e8f0"><td colspan="3" style="padding:6px 10px;font-weight:800;font-size:11px;color:#1e293b">
-          ${g1.name}</td>
-          <td style="padding:6px 10px;font-family:monospace;font-weight:700;text-align:left">${fmN(g1.total)}</td></tr>
+        <tr style="background:#dbeafe;border-top:2px solid #1e3a5f">
+          <td colspan="3" style="padding:7px 12px;font-weight:800;font-size:12px;color:#1e3a5f">
+            ${g1.name}
+          </td>
+          <td style="padding:7px 12px;font-family:monospace;font-weight:800;text-align:left;color:#1e3a5f">${fmN(g1.total)}</td>
+        </tr>
         ${Object.values(g1.children||{}).map(g2=>`
-          <tr style="background:#f8fafc"><td></td><td colspan="2" style="padding:5px 10px 5px 20px;font-weight:600;font-size:10px;color:#475569">
-            ${g2.name}</td>
-            <td style="padding:5px 10px;font-family:monospace;text-align:left;font-size:10px">${fmN(g2.total)}</td></tr>
+          <tr style="background:#f1f5f9">
+            <td></td>
+            <td colspan="2" style="padding:5px 12px;font-weight:700;font-size:11px;color:#374151">
+              ${g2.name}
+            </td>
+            <td style="padding:5px 12px;font-family:monospace;font-weight:600;text-align:left;font-size:11px">${fmN(g2.total)}</td>
+          </tr>
           ${g2.rows.map((r,i)=>`
-            <tr style="background:${i%2===0?'#fff':'#f9fafb'}">
-              <td></td><td style="padding:5px 10px;font-family:monospace;color:#1d4ed8;font-size:10px">${r.account_code}</td>
-              <td style="padding:5px 10px;font-size:10px">${r.account_name}</td>
-              <td style="padding:5px 10px;font-family:monospace;text-align:left;font-size:10px;${(r.amount||0)<0?'color:#dc2626':''}">${fmN(r.amount)}</td></tr>
+            <tr style="background:${i%2===0?'#ffffff':'#f9fafb'}">
+              <td></td>
+              <td style="padding:4px 12px 4px 24px;font-family:monospace;color:#1d4ed8;font-size:11px">${r.account_code}</td>
+              <td style="padding:4px 12px;font-size:11px;color:#1e293b">${r.account_name}</td>
+              <td style="padding:4px 12px;font-family:monospace;text-align:left;font-size:11px;${(r.amount||0)<0?'color:#dc2626':'color:#1e293b'}">${fmN(r.amount)}</td>
+            </tr>
           `).join('')}
         `).join('')}
       `).join('')
@@ -422,9 +432,12 @@ function BalanceReport() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-bold text-slate-500 block mb-1.5">القيود</label>
-            <select className="select w-44" value={status} onChange={e=>setStatus(e.target.value)}>
-              <option value="posted">المرحّلة فقط</option>
+            <label className="text-xs font-bold text-slate-500 block mb-1.5">
+              القيود
+              <span className="font-normal text-amber-500 mr-1">(يحتاج دعم backend)</span>
+            </label>
+            <select className="select w-48" value={status} onChange={e=>setStatus(e.target.value)}>
+              <option value="posted">المرحّلة فقط ✅</option>
               <option value="all">المرحّلة + غير المرحّلة</option>
               <option value="draft">المسودات فقط</option>
             </select>
