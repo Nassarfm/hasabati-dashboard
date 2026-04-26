@@ -10,7 +10,7 @@ import { AccountPicker, PartyPicker, DimensionPicker } from '../../components/pi
 
 // ── shared utils ──
 const fmt = (n,d=2)=>(parseFloat(n||0)).toLocaleString("ar-SA",{minimumFractionDigits:d,maximumFractionDigits:d})
-const fmtDate = d=>d?new Date(d.toString().replace(/\/g,"-")).toLocaleDateString("ar-SA"):"-"
+const fmtDate = d => d ? new Date(String(d).slice(0,10)).toLocaleDateString('ar-SA') : '—'
 const today = ()=>new Date().toISOString().slice(0,10)
 
 function PettyCashTab({showToast}) {
