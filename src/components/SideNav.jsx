@@ -84,30 +84,36 @@ const MODULES = [
   {
     id: 'treasury', icon: '🏦', ar: 'الخزينة والبنوك', en: 'Treasury',
     items: [
-      { id:'treasury',          icon:'📊', ar:'لوحة التحكم',          en:'Dashboard', type:'item', pin:true },
-      { id:'treasury_settings', icon:'⚙️', ar:'الإعدادات',            en:'Settings',  type:'item', pin:true },
+      // 1. لوحة التحكم
+      { id:'treasury', icon:'📊', ar:'لوحة التحكم', en:'Dashboard', type:'item', pin:true },
+      // 2. الإعدادات
+      { id:'treasury_settings', icon:'⚙️', ar:'الإعدادات', en:'Settings', type:'item', pin:true },
+      // 3. البيانات الأساسية
       {
         id: 'tr_master', ar: 'البيانات الأساسية', en: 'Master Data', type:'section',
         children: [
           { id:'treasury_accounts', icon:'🏦', ar:'الحسابات البنكية', en:'Bank Accounts' },
         ]
       },
+      // 4. العمليات
       {
         id: 'tr_operations', ar: 'العمليات', en: 'Operations', type:'section',
         children: [
-          { id:'treasury_cash',      icon:'💵', ar:'سندات القبض والصرف', en:'Cash Vouchers'     },
-          { id:'treasury_bank',      icon:'🏛️', ar:'حركات البنوك',       en:'Bank Transactions' },
-          { id:'treasury_transfers', icon:'🔄', ar:'التحويلات الداخلية', en:'Internal Transfers' },
-          { id:'treasury_checks',    icon:'📝', ar:'إدارة الشيكات',      en:'Cheques'           },
-          { id:'treasury_recurring', icon:'🔁', ar:'المعاملات المتكررة', en:'Recurring'         },
+          { id:'treasury_cash',      icon:'💵', ar:'سندات القبض والصرف', en:'Cash Vouchers'      },
+          { id:'treasury_bank',      icon:'🏛️', ar:'حركات البنوك',       en:'Bank Transactions'  },
+          { id:'treasury_transfers', icon:'🔄', ar:'التحويلات الداخلية', en:'Internal Transfers'  },
+          { id:'treasury_checks',    icon:'📝', ar:'إدارة الشيكات',      en:'Cheques'            },
+          { id:'treasury_recurring', icon:'🔁', ar:'المعاملات المتكررة', en:'Recurring'          },
         ]
       },
+      // 5. العهدة النثرية
       {
         id: 'tr_petty_section', ar: 'العهدة النثرية', en: 'Petty Cash', type:'section',
         children: [
-          { id:'treasury_petty', icon:'👜', ar:'صناديق ومصاريف العهدة', en:'Petty Cash Funds & Expenses' },
+          { id:'treasury_petty', icon:'👜', ar:'صناديق ومصاريف العهدة', en:'Funds & Expenses' },
         ]
       },
+      // 6. التقارير
       {
         id: 'tr_reports', ar: 'التقارير', en: 'Reports', type:'section',
         children: [
@@ -117,8 +123,10 @@ const MODULES = [
         ]
       },
       { type:'divider' },
-      { id:'workflow_treasury',  icon:'🔀', ar:'مخطط سير العمل',    en:'Workflow', type:'item', badge:'WF' },
-      { id:'knowledge_treasury', icon:'📚', ar:'المستندات والمعرفة', en:'Docs & KB', type:'item', badge:'KB' },
+      // 7. مخطط سير العمل
+      { id:'workflow_treasury',   icon:'🔀', ar:'مخطط سير العمل',    en:'Workflow', type:'item', badge:'WF' },
+      // 8. المستندات والمعرفة
+      { id:'knowledge_treasury',  icon:'📚', ar:'المستندات والمعرفة', en:'Docs & KB', type:'item', badge:'KB' },
     ]
   },
 
