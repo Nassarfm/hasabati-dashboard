@@ -308,9 +308,12 @@ export const api = {
 
     // مصاريف العهدة (PET)
     listPettyCashExpenses:  (p={}) => get('/treasury/petty-cash/expenses', p),
-    createPettyCashExpense: (b)     => post('/treasury/petty-cash/expenses', b),
-    updatePettyCashExpense: (id, b) => put(`/treasury/petty-cash/expenses/${id}`, b),
-    postPettyCashExpense:   (id)    => post(`/treasury/petty-cash/expenses/${id}/post`, {}),
+    createPettyCashExpense:   (b)     => post('/treasury/petty-cash/expenses', b),
+    updatePettyCashExpense:   (id, b) => put(`/treasury/petty-cash/expenses/${id}`, b),
+    submitPettyCashExpense:   (id)    => post(`/treasury/petty-cash/expenses/${id}/submit`, {}),
+    approvePettyCashExpense:  (id)    => post(`/treasury/petty-cash/expenses/${id}/approve`, {}),
+    rejectPettyCashExpense:   (id, b) => post(`/treasury/petty-cash/expenses/${id}/reject`, b),
+    postPettyCashExpense:     (id)    => post(`/treasury/petty-cash/expenses/${id}/post`, {}),
 
     // إعادة التعبئة (PCR)
     listReplenishments:  (p={})   => get('/treasury/petty-cash/replenishments', p),

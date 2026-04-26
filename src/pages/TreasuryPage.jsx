@@ -6714,47 +6714,311 @@ function PettyCashTab({showToast}) {
 
 // ══ PETTY CASH EXPENSE VIEW — استعراض المصروف ═══════════
 function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToast}) {
-  const [exp, setExp] = useState(expense)
+  const [exp, setExp]     = useState(expense)
   const [loading, setLoading] = useState(false)
+  const [action, setAction]   = useState('')  // which button is loading
 
-  const doPost = async() => {
-    if(!confirm('هل تريد ترحيل هذا المصروف؟')) return
-    setLoading(true)
+  const doAction = async(actionFn, actionName, nextStatus, confirmMsg) => {
+    if(confirmMsg && !confirm(confirmMsg)) return
+    setLoading(true); setAction(actionName)
     try {
-      await api.treasury.postPettyCashExpense(exp.id)
-      showToast('تم الترحيل ✅')
-      onPosted()
+      await actionFn()
+      setExp(p=>({...p, status: nextStatus}))
+      showToast({
+        submit: 'تم الإرسال للمراجعة ✅',
+        approve: 'تم الاعتماد ✅',
+        post: 'تم الترحيل ✅',
+        reject: 'تم الرفض',
+      }[actionName] || 'تم ✅')
+      if(actionName==='post') onPosted()
     } catch(e) { showToast(e.message,'error') }
-    finally { setLoading(false) }
+    finally { setLoading(false); setAction('') }
   }
 
-  const statusMap = {draft:'مسودة',review:'قيد المراجعة',approved:'معتمد',posted:'مُرحَّل',rejected:'مرفوض'}
-  const statusColor = {draft:'bg-amber-100 text-amber-700',review:'bg-blue-100 text-blue-700',approved:'bg-emerald-100 text-emerald-700',posted:'bg-slate-100 text-slate-600',rejected:'bg-red-100 text-red-700'}
+  const STATUS = {
+    draft:    { label:'مسودة',      color:'bg-amber-100 text-amber-700',   icon:'📋' },
+    review:   { label:'قيد المراجعة',color:'bg-blue-100 text-blue-700',    icon:'👁' },
+    approved: { label:'معتمد',      color:'bg-emerald-100 text-emerald-700',icon:'✅' },
+    posted:   { label:'مُرحَّل',    color:'bg-slate-100 text-slate-600',   icon:'📤' },
+    rejected: { label:'مرفوض',      color:'bg-red-100 text-red-700',       icon:'❌' },
+  }
+  const st = STATUS[exp.status] || STATUS.draft
+  const fund = (funds||[]).find(f=>f.id===exp.fund_id)
+
+  // ── طباعة احترافية ─────────────────────────────────────
+  const handlePrint = () => {
+    const w = window.open('','_blank','width=900,height=750')
+    const fmN = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:3})
+    const lines = exp.lines || exp.expense_lines || []
+    const total = parseFloat(exp.total_amount||0)
+    const vat   = parseFloat(exp.vat_total||0)
+
+    w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">' +
+      '<title>مصروف نثري — '+exp.serial+'</title>' +
+      '<style>*{box-sizing:border-box;margin:0;padding:0}' +
+      'body{font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#1e293b;padding:24px;direction:rtl}' +
+      '@media print{.np{display:none!important}@page{margin:10mm;size:A4}}' +
+      '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #7f1d1d;padding-bottom:14px;margin-bottom:16px}' +
+      '.co-name{font-size:20px;font-weight:900;color:#7f1d1d}' +
+      '.co-sub{font-size:10px;color:#64748b;margin-top:2px}' +
+      '.serial{font-size:16px;font-weight:800;color:#7f1d1d;font-family:monospace}' +
+      '.stamp{display:inline-block;border:3px solid;border-radius:4px;font-size:14px;font-weight:900;padding:3px 12px;transform:rotate(-8deg);letter-spacing:2px;opacity:.85;margin-top:4px}' +
+      '.stamp-draft{border-color:#f59e0b;color:#f59e0b}' +
+      '.stamp-review{border-color:#3b82f6;color:#3b82f6}' +
+      '.stamp-approved{border-color:#16a34a;color:#16a34a}' +
+      '.stamp-posted{border-color:#64748b;color:#64748b}' +
+      '.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:14px}' +
+      '.m-lbl{font-size:9px;color:#94a3b8;margin-bottom:2px;font-weight:600}' +
+      '.m-val{font-size:11px;font-weight:700;color:#1e293b}' +
+      '.desc-box{background:#fff7ed;border-right:4px solid #dc2626;padding:9px 12px;margin-bottom:14px;border-radius:0 6px 6px 0}' +
+      '.party-box{background:#f0fdfa;border:1px solid #5eead4;border-radius:8px;padding:9px 12px;margin-bottom:14px;display:flex;align-items:center;gap:10px}' +
+      'table{width:100%;border-collapse:collapse;margin-bottom:0}' +
+      'thead tr{background:#7f1d1d;color:white}' +
+      'th{padding:8px 10px;text-align:right;font-size:10px;font-weight:600}' +
+      'td{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:11px}' +
+      'tr:nth-child(even) td{background:#fef2f2}' +
+      '.tot td{background:#7f1d1d!important;color:white;font-weight:700;font-size:12px}' +
+      '.workflow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px;border-top:1px solid #e2e8f0;padding-top:16px}' +
+      '.wf-box{text-align:center}' +
+      '.wf-lbl{font-size:10px;color:#64748b;margin-bottom:4px}' +
+      '.wf-name{font-size:11px;font-weight:700;min-height:16px;color:#1e293b}' +
+      '.wf-line{border-top:2px solid #1e293b;width:100%;margin:0 auto 5px}' +
+      '.wf-date{font-size:9px;color:#94a3b8}' +
+      '</style></head><body>' +
+
+      '<div class="hdr">' +
+        '<div>' +
+          '<div class="co-name">حساباتي — ERP</div>' +
+          '<div class="co-sub">نظام المحاسبة والإدارة المالية</div>' +
+        '</div>' +
+        '<div style="text-align:left">' +
+          '<div class="stamp stamp-'+exp.status+'">'+st.icon+' '+st.label+'</div>' +
+          '<div class="serial" style="margin-top:6px">'+exp.serial+'</div>' +
+          '<div style="font-size:10px;color:#64748b">مصروف نثري / Petty Cash</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="meta">' +
+        '<div><div class="m-lbl">الصندوق</div><div class="m-val">'+(exp.fund_name||fund?.fund_name||'—')+'</div></div>' +
+        '<div><div class="m-lbl">التاريخ</div><div class="m-val">'+exp.expense_date+'</div></div>' +
+        '<div><div class="m-lbl">المبلغ</div><div class="m-val" style="color:#7f1d1d">'+fmN(total)+' ر.س</div></div>' +
+        '<div><div class="m-lbl">المرجع</div><div class="m-val">'+(exp.reference||'—')+'</div></div>' +
+      '</div>' +
+
+      '<div class="desc-box">' +
+        '<div style="font-size:9px;color:#94a3b8;margin-bottom:3px">البيان / Description</div>' +
+        '<div style="font-weight:700;font-size:13px">'+exp.description+'</div>' +
+      '</div>' +
+
+      (exp.party_name||exp.party_id ? '<div class="party-box"><span style="font-size:20px">🤝</span><div><div style="font-size:9px;color:#0f766e;font-weight:600">أمين العهدة</div><div style="font-weight:700;color:#134e4a">'+(exp.party_name||exp.party_id)+'</div></div></div>' : '') +
+
+      '<table>' +
+        '<thead><tr>' +
+          '<th>#</th><th>الحساب</th><th>اسم الحساب</th><th>البيان</th><th>المبلغ</th><th>الضريبة</th><th>المورد</th>' +
+        '</tr></thead>' +
+        '<tbody>' +
+        lines.map((l,i)=>'<tr><td style="text-align:center">'+(i+1)+'</td>' +
+          '<td style="font-family:monospace;color:#1d4ed8">'+(l.expense_account||l.account_code||'—')+'</td>' +
+          '<td>'+(l.expense_account_name||l.account_name||'—')+'</td>' +
+          '<td>'+(l.description||'—')+'</td>' +
+          '<td style="font-family:monospace;font-weight:700">'+fmN(l.amount||l.debit)+'</td>' +
+          '<td style="font-family:monospace;color:#92400e">'+fmN(l.vat_amount||0)+'</td>' +
+          '<td>'+(l.vendor_name||'—')+'</td></tr>'
+        ).join('') +
+        '</tbody>' +
+        '<tfoot><tr class="tot"><td colspan="4" style="text-align:right">الإجمالي</td>' +
+          '<td style="font-family:monospace">'+fmN(total)+'</td>' +
+          '<td style="font-family:monospace">'+fmN(vat)+'</td>' +
+          '<td></td>' +
+        '</tr></tfoot>' +
+      '</table>' +
+
+      '<div class="workflow">' +
+        '<div class="wf-box"><div class="wf-lbl">أنشأه</div><div class="wf-line"></div><div class="wf-name">'+(exp.created_by?.split('@')[0]||'—')+'</div><div class="wf-date">'+(exp.created_at||'')+'</div></div>' +
+        '<div class="wf-box"><div class="wf-lbl">أرسل للمراجعة</div><div class="wf-line"></div><div class="wf-name">'+(exp.submitted_by?.split('@')[0]||'')+'</div><div class="wf-date">'+(exp.submitted_at||'')+'</div></div>' +
+        '<div class="wf-box"><div class="wf-lbl">اعتمده</div><div class="wf-line"></div><div class="wf-name">'+(exp.approved_by?.split('@')[0]||'')+'</div><div class="wf-date">'+(exp.approved_at||'')+'</div></div>' +
+        '<div class="wf-box"><div class="wf-lbl">رحَّله</div><div class="wf-line"></div><div class="wf-name">'+(exp.posted_by?.split('@')[0]||'')+'</div><div class="wf-date">'+(exp.posted_at||'')+'</div></div>' +
+      '</div>' +
+
+      '<div class="np" style="text-align:center;margin-top:20px">' +
+        '<button onclick="window.print()" style="background:#7f1d1d;color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px">🖨️ طباعة / PDF</button>' +
+        '<button onclick="window.close()" style="margin-right:10px;background:#f1f5f9;border:1px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer">✕ إغلاق</button>' +
+      '</div>' +
+      '</body></html>')
+    w.document.close()
+  }
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto" dir="rtl">
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium">← رجوع</button>
+      {/* Header */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium">
+          {'←'} رجوع
+        </button>
         <div className="flex-1">
           <h2 className="text-xl font-bold text-red-700 flex items-center gap-2">
             <span>{'💸'} {exp.serial}</span>
-            <span className={'text-sm px-3 py-1 rounded-full font-semibold '+(statusColor[exp.status]||'bg-slate-100 text-slate-500')}>{statusMap[exp.status]||exp.status}</span>
+            <span className={'text-sm px-3 py-1 rounded-full font-semibold '+st.color}>{st.icon} {st.label}</span>
           </h2>
           <p className="text-xs text-slate-400">{exp.description}</p>
         </div>
-        <div className="flex gap-2">
-          {exp.status==='draft'&&onEdit&&(
-            <button onClick={()=>onEdit(exp)}
-              className="px-4 py-2.5 rounded-xl border-2 border-amber-300 text-amber-700 font-semibold text-sm hover:bg-amber-50">
-              ✏️ تعديل
-            </button>
-          )}
-          {exp.status==='draft'&&(
-            <button onClick={doPost} disabled={loading}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50">
-              {loading?'⏳ جارٍ...':'✅ ترحيل'}
-            </button>
-          )}
+
+        {/* أزرار الطباعة */}
+        <button onClick={handlePrint}
+          className="px-4 py-2.5 rounded-xl border-2 border-blue-200 text-blue-700 text-sm font-semibold hover:bg-blue-50 flex items-center gap-1.5">
+          🖨️ طباعة
+        </button>
+
+        {/* Workflow buttons */}
+        {exp.status==='draft' && onEdit && (
+          <button onClick={()=>onEdit(exp)}
+            className="px-4 py-2.5 rounded-xl border-2 border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-50">
+            ✏️ تعديل
+          </button>
+        )}
+        {exp.status==='draft' && (
+          <button onClick={()=>doAction(()=>api.treasury.submitPettyCashExpense(exp.id),'submit','review')}
+            disabled={loading} className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
+            {loading&&action==='submit'?'⏳...':'📤 إرسال للمراجعة'}
+          </button>
+        )}
+        {exp.status==='review' && (
+          <button onClick={()=>doAction(()=>api.treasury.approvePettyCashExpense(exp.id),'approve','approved')}
+            disabled={loading} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50">
+            {loading&&action==='approve'?'⏳...':'✅ اعتماد'}
+          </button>
+        )}
+        {(exp.status==='approved'||exp.status==='review') && (
+          <button onClick={()=>doAction(()=>api.treasury.postPettyCashExpense(exp.id),'post','posted','هل تريد ترحيل هذا المصروف؟')}
+            disabled={loading} className="px-4 py-2.5 rounded-xl bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50">
+            {loading&&action==='post'?'⏳...':'📒 ترحيل'}
+          </button>
+        )}
+      </div>
+
+      {/* Workflow Progress Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center gap-0">
+          {[
+            {s:'draft',    l:'مسودة',       i:'📋'},
+            {s:'review',   l:'مراجعة',      i:'👁'},
+            {s:'approved', l:'معتمد',        i:'✅'},
+            {s:'posted',   l:'مُرحَّل',     i:'📒'},
+          ].map((step, idx, arr)=>{
+            const steps = ['draft','review','approved','posted']
+            const curIdx = steps.indexOf(exp.status)
+            const stepIdx = steps.indexOf(step.s)
+            const isDone = stepIdx <= curIdx && exp.status !== 'rejected'
+            const isCur  = step.s === exp.status
+            return (
+              <div key={step.s} className="flex items-center flex-1">
+                <div className="flex flex-col items-center flex-1">
+                  <div className={'w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all '+
+                    (isCur  ? 'bg-blue-600 border-blue-600 text-white shadow-lg scale-110' :
+                     isDone ? 'bg-emerald-500 border-emerald-500 text-white' :
+                              'bg-slate-100 border-slate-200 text-slate-400')}>
+                    {step.i}
+                  </div>
+                  <span className={'text-[10px] mt-1 font-semibold '+(isDone?'text-emerald-600':isCur?'text-blue-600':'text-slate-400')}>{step.l}</span>
+                </div>
+                {idx < arr.length-1 && (
+                  <div className={'h-0.5 w-full mx-1 '+(stepIdx < curIdx?'bg-emerald-400':'bg-slate-200')}/>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* بيانات رئيسية */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          {l:'الصندوق',  v:exp.fund_name||fund?.fund_name||'—'},
+          {l:'التاريخ',  v:fmtDate(exp.expense_date)},
+          {l:'المبلغ',   v:fmt(exp.total_amount,3)+' ر.س'},
+          {l:'القيد',    v:exp.je_serial||'—'},
+        ].map(k=>(
+          <div key={k.l} className="bg-white rounded-2xl border border-slate-200 p-4">
+            <div className="text-xs text-slate-400 mb-1">{k.l}</div>
+            <div className="font-bold text-slate-800 font-mono">{k.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* أمين العهدة */}
+      {(exp.party_id||exp.party_name) && (
+        <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 flex items-center gap-3">
+          <span className="text-2xl">🤝</span>
+          <div>
+            <div className="text-xs text-teal-500 font-semibold">أمين العهدة</div>
+            <div className="font-bold text-teal-800">{exp.party_name||exp.party_id}</div>
+          </div>
+        </div>
+      )}
+
+      {/* سطور المصروفات */}
+      {(exp.lines||exp.expense_lines||[]).length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 font-bold text-white text-sm flex items-center justify-between"
+            style={{background:'linear-gradient(135deg,#7f1d1d,#dc2626)'}}>
+            <span>📋 سطور المصروفات</span>
+            <span className="text-red-200 font-mono text-sm">{fmt(exp.total_amount,3)} ر.س</span>
+          </div>
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                {['#','الحساب','اسم الحساب','البيان','المبلغ','الضريبة','المورد','الأبعاد'].map(h=>(
+                  <th key={h} className="px-3 py-2.5 text-right font-semibold text-slate-500">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(exp.lines||exp.expense_lines||[]).map((l,i)=>(
+                <tr key={i} className={i%2===0?'bg-white':'bg-slate-50/30'}>
+                  <td className="px-3 py-2.5 text-center text-slate-400">{i+1}</td>
+                  <td className="px-3 py-2.5 font-mono text-blue-600 font-bold">{l.expense_account||l.account_code||'—'}</td>
+                  <td className="px-3 py-2.5">{l.expense_account_name||l.account_name||'—'}</td>
+                  <td className="px-3 py-2.5">{l.description||'—'}</td>
+                  <td className="px-3 py-2.5 font-mono font-bold text-slate-800">{fmt(l.amount||l.debit,3)}</td>
+                  <td className="px-3 py-2.5 font-mono text-amber-600">{fmt(l.vat_amount||0,3)}</td>
+                  <td className="px-3 py-2.5">{l.vendor_name||'—'}</td>
+                  <td className="px-3 py-2.5">
+                    {(l.branch_code||l.cost_center||l.project_code) && (
+                      <div className="flex flex-wrap gap-1">
+                        {l.branch_code&&<span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{l.branch_code}</span>}
+                        {l.cost_center&&<span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{l.cost_center}</span>}
+                        {l.project_code&&<span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{l.project_code}</span>}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Audit Trail */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div className="text-xs font-bold text-slate-500 mb-3 uppercase">Audit Information</div>
+        <div className="grid grid-cols-4 gap-3 text-xs">
+          {[
+            {l:'أنشأه', v:exp.created_by, d:exp.created_at},
+            {l:'أرسله للمراجعة', v:exp.submitted_by, d:exp.submitted_at},
+            {l:'اعتمده', v:exp.approved_by, d:exp.approved_at},
+            {l:'رحَّله', v:exp.posted_by, d:exp.posted_at},
+          ].map(a=>(
+            <div key={a.l} className="border-r border-slate-100 pr-3 last:border-0">
+              <div className="text-slate-400 mb-1">{a.l}</div>
+              <div className="font-semibold text-slate-700">{a.v?.split('@')[0]||'—'}</div>
+              {a.d&&<div className="text-slate-400 mt-0.5">{new Date(a.d).toLocaleDateString('ar-SA')}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
         </div>
       </div>
 
