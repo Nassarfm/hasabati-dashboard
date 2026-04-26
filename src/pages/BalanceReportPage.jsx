@@ -1,5 +1,5 @@
 /* BalanceReportPage.jsx — عمودي هرمي قابل للطي مع مجموعات COA */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast, fmt } from '../components/UI'
 import DimensionFilter from '../components/DimensionFilter'
 import api from '../api/client'
@@ -7,20 +7,31 @@ import api from '../api/client'
 const CURRENT_YEAR = new Date().getFullYear()
 const MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 
+// ── بناء lookup من دليل الحسابات ─────────────────────────
+function buildCoaLookup(coa) {
+  const map = {}
+  ;(coa || []).forEach(a => {
+    map[String(a.code)] = a.name_ar || a.name || a.code
+  })
+  return map
+}
+
 // ── تجميع الحسابات هرمياً من account_code ─────────────────
-// مثال: 110101 → المجموعة 11 → المجموعة الفرعية 1101
-function buildHierarchy(rows) {
-  // نجمع على مستويين: level1 (أول رقمين) و level2 (أول 4 أرقام)
-  const level1 = {}   // e.g. "11" → "الأصول المتداولة"
-  const level2 = {}   // e.g. "1101" → "النقدية"
+function buildHierarchy(rows, coaMap) {
+  const level1 = {}
+  const level2 = {}
 
   rows.forEach(r => {
     const code = String(r.account_code || '')
     const l1 = code.slice(0, 2)
     const l2 = code.slice(0, 4)
 
-    if (!level1[l1]) level1[l1] = { code: l1, name: r.parent_group || r.group_name || r.account_type_label || ('المجموعة ' + l1), total: 0, children: {} }
-    if (!level1[l1].children[l2]) level1[l1].children[l2] = { code: l2, name: r.sub_group || r.parent_name || ('حسابات ' + l2), total: 0, rows: [] }
+    // البحث عن اسم الحساب الأب في دليل الحسابات
+    const l1Name = coaMap?.[l1] || r.parent_group || r.group_name || ('المجموعة ' + l1)
+    const l2Name = coaMap?.[l2] || r.sub_group    || r.parent_name || ('حسابات '   + l2)
+
+    if (!level1[l1]) level1[l1] = { code: l1, name: l1Name, total: 0, children: {} }
+    if (!level1[l1].children[l2]) level1[l1].children[l2] = { code: l2, name: l2Name, total: 0, rows: [] }
 
     level1[l1].children[l2].rows.push(r)
     level1[l1].children[l2].total += (r.amount || 0)
@@ -43,7 +54,7 @@ function ChangeCell({ curr, prev }) {
 }
 
 // ── BSSection: القسم الرئيسي (أصول / التزامات / ملكية) ───
-function BSSection({ label, icon, color, rows, total, cmpRows, cmpTotal, showCmp }) {
+function BSSection({ label, icon, color, rows, total, cmpRows, cmpTotal, showCmp, coaMap }) {
   const [open, setOpen]       = useState(true)
   const [closed1, setClosed1] = useState({})
   const [closed2, setClosed2] = useState({})
@@ -51,7 +62,7 @@ function BSSection({ label, icon, color, rows, total, cmpRows, cmpTotal, showCmp
   const toggle1 = k => setClosed1(p => ({ ...p, [k]: !p[k] }))
   const toggle2 = k => setClosed2(p => ({ ...p, [k]: !p[k] }))
 
-  const groups = buildHierarchy(rows || [])
+  const groups = buildHierarchy(rows || [], coaMap)
 
   const colsCmp = showCmp
     ? 'grid-cols-[1fr_140px_140px_90px]'
@@ -198,6 +209,14 @@ function BalanceReport() {
   const [loading,   setLoading]   = useState(false)
   const [dimFilter, setDimFilter] = useState({})
   const [key,       setKey]       = useState(0)
+  const [coaMap,    setCoaMap]    = useState({})
+
+  // جلب دليل الحسابات مرة واحدة لبناء أسماء المجموعات
+  useEffect(() => {
+    api.accounting.getCOA({ limit: 2000, postable: false })
+      .then(r => setCoaMap(buildCoaLookup(r?.data || [])))
+      .catch(() => {})
+  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -362,11 +381,11 @@ function BalanceReport() {
             </div>
 
             <BSSection label="الأصول"         icon="🏦" color="#1e3a8a"
-              rows={s?.assets?.rows || []}      total={assets}    showCmp={false} />
+              rows={s?.assets?.rows || []}      total={assets}    showCmp={false} coaMap={coaMap} />
             <BSSection label="الالتزامات"      icon="💳" color="#7f1d1d"
-              rows={s?.liabilities?.rows || []} total={liabTotal} showCmp={false} />
+              rows={s?.liabilities?.rows || []} total={liabTotal} showCmp={false} coaMap={coaMap} />
             <BSSection label="حقوق الملكية"   icon="👑" color="#581c87"
-              rows={s?.equity?.rows || []}      total={eqTotal}   showCmp={false} />
+              rows={s?.equity?.rows || []}      total={eqTotal}   showCmp={false} coaMap={coaMap} />
 
             {/* الإجمالي النهائي */}
             <div className="flex items-center justify-between px-5 py-4 text-white font-bold"
@@ -390,6 +409,13 @@ function BalanceComparison() {
   const [dataA, setDataA]   = useState(null)
   const [dataB, setDataB]   = useState(null)
   const [loading, setLoading] = useState(false)
+  const [coaMap, setCoaMap]   = useState({})
+
+  useEffect(() => {
+    api.accounting.getCOA({ limit: 2000, postable: false })
+      .then(r => setCoaMap(buildCoaLookup(r?.data || [])))
+      .catch(() => {})
+  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -478,13 +504,13 @@ function BalanceComparison() {
 
             <BSSection label="الأصول"        icon="🏦" color="#1e3a8a"
               rows={sA.assets?.rows || []}      total={dataA.total_assets || 0}
-              cmpRows={sB.assets?.rows || []}   cmpTotal={dataB.total_assets || 0} showCmp={true} />
+              cmpRows={sB.assets?.rows || []}   cmpTotal={dataB.total_assets || 0} showCmp={true} coaMap={coaMap} />
             <BSSection label="الالتزامات"     icon="💳" color="#7f1d1d"
               rows={sA.liabilities?.rows || []} total={sA.liabilities?.total || 0}
-              cmpRows={sB.liabilities?.rows || []} cmpTotal={sB.liabilities?.total || 0} showCmp={true} />
+              cmpRows={sB.liabilities?.rows || []} cmpTotal={sB.liabilities?.total || 0} showCmp={true} coaMap={coaMap} />
             <BSSection label="حقوق الملكية"  icon="👑" color="#581c87"
               rows={sA.equity?.rows || []}      total={sA.equity?.total || 0}
-              cmpRows={sB.equity?.rows || []}   cmpTotal={sB.equity?.total || 0} showCmp={true} />
+              cmpRows={sB.equity?.rows || []}   cmpTotal={sB.equity?.total || 0} showCmp={true} coaMap={coaMap} />
 
             <div className="grid px-5 py-4 text-white font-bold items-center"
               style={{ background: '#0f172a', gridTemplateColumns: '1fr 140px 140px 90px' }}>
