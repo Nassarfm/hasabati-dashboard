@@ -143,6 +143,7 @@ export const api = {
     listProjects:         ()            => get('/settings/projects'),
     createProject:        (b)           => post('/settings/projects', b),
     updateProject:        (id, b)       => put(`/settings/projects/${id}`, b),
+    listExpenseClassifications: ()      => get('/settings/expense-classifications'),
   },
 
   fiscal: {
@@ -307,8 +308,9 @@ export const api = {
 
     // مصاريف العهدة (PET)
     listPettyCashExpenses:  (p={}) => get('/treasury/petty-cash/expenses', p),
-    createPettyCashExpense: (b)    => post('/treasury/petty-cash/expenses', b),
-    postPettyCashExpense:   (id)   => post(`/treasury/petty-cash/expenses/${id}/post`, {}),
+    createPettyCashExpense: (b)     => post('/treasury/petty-cash/expenses', b),
+    updatePettyCashExpense: (id, b) => put(`/treasury/petty-cash/expenses/${id}`, b),
+    postPettyCashExpense:   (id)    => post(`/treasury/petty-cash/expenses/${id}/post`, {}),
 
     // إعادة التعبئة (PCR)
     listReplenishments:  (p={})   => get('/treasury/petty-cash/replenishments', p),

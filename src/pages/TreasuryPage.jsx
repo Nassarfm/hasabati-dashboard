@@ -233,6 +233,115 @@ function PartyPicker({value, onChange, label, role, required=false, placeholder}
 }
 
 
+// ── DimensionPicker — بحث وتحديد الأبعاد المحاسبية ─────────
+// يستخدم لـ: الفروع، مراكز التكلفة، المشاريع، التصنيفات
+function DimensionPicker({ type, value, valueName, onChange, label, color='blue' }) {
+  const [open, setOpen]       = useState(false)
+  const [search, setSearch]   = useState('')
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const ref  = useRef(null)
+  const iRef = useRef(null)
+  const [pos, setPos] = useState({top:0,left:0,width:0})
+
+  useEffect(()=>{
+    const h=(e)=>{ if(ref.current&&!ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return ()=>document.removeEventListener('mousedown', h)
+  },[])
+
+  const load = useCallback(async(q='')=>{
+    setLoading(true)
+    try{
+      let items=[]
+      if(type==='branch'){
+        const r=await api.settings.listBranches()
+        items=(r?.data||r||[]).filter(b=>b.is_active!==false)
+      } else if(type==='cost_center'){
+        const r=await api.settings.listCostCenters()
+        items=(r?.data||r||[]).filter(c=>c.is_active!==false)
+      } else if(type==='project'){
+        const r=await api.settings.listProjects()
+        items=(r?.data||r||[]).filter(p=>p.status!=='closed')
+      } else if(type==='expense_class'){
+        const r=await api.settings.listExpenseClassifications?.()
+        items=r?.data||r||[]
+      }
+      if(q){
+        const low=q.toLowerCase()
+        items=items.filter(i=>(i.name_ar||i.name||i.code||'').toLowerCase().includes(low)||
+          (i.code||i.branch_code||i.cost_center_code||i.project_code||'').toLowerCase().includes(low))
+      }
+      setResults(items.slice(0,30))
+    }catch{ setResults([]) }finally{ setLoading(false) }
+  },[type])
+
+  useEffect(()=>{ if(!open) return; const t=setTimeout(()=>load(search),200); return()=>clearTimeout(t) },[search,open])
+
+  const handleOpen=()=>{
+    if(iRef.current){
+      const r=iRef.current.getBoundingClientRect()
+      setPos({top:r.bottom+window.scrollY+4, left:r.left+window.scrollX, width:Math.max(r.width,260)})
+    }
+    setOpen(true); load('')
+  }
+
+  const getCode=(item)=>item.branch_code||item.cost_center_code||item.project_code||item.classification_code||item.code||item.id||''
+  const getName=(item)=>item.name_ar||item.name||item.branch_name||item.cost_center_name||item.project_name||''
+
+  const select=(item)=>{
+    onChange(getCode(item), getName(item))
+    setOpen(false); setSearch('')
+  }
+
+  const clear=(e)=>{ e.stopPropagation(); onChange('','') }
+
+  const colors={
+    blue:  {border:'border-blue-200',   bg:'bg-blue-50',   txt:'text-blue-700',  badge:'bg-blue-100'},
+    purple:{border:'border-purple-200', bg:'bg-purple-50', txt:'text-purple-700',badge:'bg-purple-100'},
+    green: {border:'border-green-200',  bg:'bg-green-50',  txt:'text-green-700', badge:'bg-green-100'},
+    amber: {border:'border-amber-200',  bg:'bg-amber-50',  txt:'text-amber-700', badge:'bg-amber-100'},
+  }
+  const c=colors[color]||colors.blue
+
+  return (
+    <div ref={ref} className="relative">
+      {label&&<label className={'text-[10px] font-bold block mb-1 '+c.txt}>{label}</label>}
+      <div className="flex gap-1">
+        <input ref={iRef} readOnly
+          value={valueName||(value?value:'')}
+          placeholder={'اختر '+label+'...'}
+          onClick={handleOpen}
+          className={'flex-1 border rounded-lg px-2 py-1.5 text-xs cursor-pointer hover:opacity-80 '+c.border+' '+c.bg}/>
+        {value&&<button onClick={clear} className={'text-xs px-1.5 border rounded-lg '+c.border+' '+c.txt}>✕</button>}
+      </div>
+      {open&&typeof document!=='undefined'&&ReactDOM.createPortal(
+        <div style={{position:'absolute',top:pos.top,left:pos.left,width:pos.width,zIndex:9999}}
+          className={'bg-white border-2 rounded-2xl shadow-2xl overflow-hidden '+c.border}>
+          <div className={'p-2 border-b sticky top-0 '+c.bg}>
+            <input autoFocus value={search} onChange={e=>setSearch(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none"
+              placeholder={'ابحث في '+label+'...'}/>
+          </div>
+          <div style={{maxHeight:220,overflowY:'auto'}}>
+            {loading&&<div className="py-3 text-center text-xs text-slate-400">جارٍ البحث...</div>}
+            {!loading&&results.length===0&&<div className="py-4 text-center text-xs text-slate-400">لا توجد نتائج</div>}
+            {!loading&&results.map((item,i)=>(
+              <button key={i} onClick={()=>select(item)}
+                className={'flex items-center gap-2 w-full px-3 py-2 hover:'+c.bg+' text-right border-b border-slate-50 last:border-0'}>
+                <span className={'font-mono text-[10px] px-1.5 py-0.5 rounded font-bold '+c.badge+' '+c.txt}>{getCode(item)}</span>
+                <span className="text-xs text-slate-800 flex-1 text-right">{getName(item)}</span>
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
+
 // ── جدول القيد المحاسبي الموحد — نفس تصميم قيد اليومية ──
 // ══════════════════════════════════════════════════════════
 // AccountingRow — سطر واحد معزول (نصيحة: component منفصل)
@@ -6445,7 +6554,8 @@ function PettyCashTab({showToast}) {
   const [showFundForm,setShowFundForm]=useState(false)
   const [editFund,setEditFund]=useState(null)
   const [showExpForm,setShowExpForm]=useState(false)
-  const [viewExp,setViewExp]=useState(null) // للاستعراض
+  const [editExpense,setEditExpense]=useState(null) // null = جديد, object = تعديل
+  const [viewExp,setViewExp]=useState(null)
 
   const load=useCallback(async()=>{
     setLoading(true)
@@ -6465,18 +6575,20 @@ function PettyCashTab({showToast}) {
   if(showExpForm) return (
     <PettyCashExpensePage
       funds={funds}
-      onBack={()=>setShowExpForm(false)}
-      onSaved={()=>{load();setShowExpForm(false);showToast('تم إنشاء المصروف ✅')}}
+      editExpense={editExpense}
+      onBack={()=>{setShowExpForm(false);setEditExpense(null)}}
+      onSaved={()=>{load();setShowExpForm(false);setEditExpense(null);showToast(editExpense?'تم التعديل ✅':'تم إنشاء المصروف ✅')}}
       showToast={showToast}
     />
   )
 
-  // ✅ Early return — صفحة استعراض مصروف (fullscreen)
   if(viewExp) return (
     <PettyCashExpenseView
       expense={viewExp}
+      funds={funds}
       onBack={()=>setViewExp(null)}
       onPosted={()=>{load();setViewExp(null);showToast('تم الترحيل ✅')}}
+      onEdit={(exp)=>{setViewExp(null);setEditExpense(exp);setShowExpForm(true)}}
       showToast={showToast}
     />
   )
@@ -6599,7 +6711,7 @@ function PettyCashTab({showToast}) {
 }
 
 // ══ PETTY CASH EXPENSE VIEW — استعراض المصروف ═══════════
-function PettyCashExpenseView({expense, onBack, onPosted, showToast}) {
+function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToast}) {
   const [exp, setExp] = useState(expense)
   const [loading, setLoading] = useState(false)
 
@@ -6619,7 +6731,6 @@ function PettyCashExpenseView({expense, onBack, onPosted, showToast}) {
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto" dir="rtl">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium">← رجوع</button>
         <div className="flex-1">
@@ -6629,11 +6740,19 @@ function PettyCashExpenseView({expense, onBack, onPosted, showToast}) {
           </h2>
           <p className="text-xs text-slate-400">{exp.description}</p>
         </div>
-        {exp.status==='draft'&&(
-          <button onClick={doPost} disabled={loading}
-            className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50">
-            {loading?'⏳ جارٍ...':'✅ ترحيل'}
-          </button>
+        <div className="flex gap-2">
+          {exp.status==='draft'&&onEdit&&(
+            <button onClick={()=>onEdit(exp)}
+              className="px-4 py-2.5 rounded-xl border-2 border-amber-300 text-amber-700 font-semibold text-sm hover:bg-amber-50">
+              ✏️ تعديل
+            </button>
+          )}
+          {exp.status==='draft'&&(
+            <button onClick={doPost} disabled={loading}
+              className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50">
+              {loading?'⏳ جارٍ...':'✅ ترحيل'}
+            </button>
+          )}
         )}
       </div>
 
@@ -8254,10 +8373,33 @@ function CashFlowPage({showToast}) {
 }
 
 
-function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
-  const [form,setForm]   = useState({fund_id:'',expense_date:today(),description:'',reference:'',notes:'',party_id:'',party_name:'',party_role:'petty_cash_keeper'})
-  const [lines,setLines] = useState([{id:1,expense_account:'',expense_account_name:'',description:'',amount:'',vat_pct:'0',vat_amount:'',vendor_name:'',branch_code:'',branch_name:'',cost_center:'',cost_center_name:'',project_code:'',project_name:''}])
-  const [showDims,setShowDims]=useState({}) // toggles per line
+function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) {
+  const isEdit = !!editExpense
+  const emptyLine = {id:1,expense_account:'',expense_account_name:'',description:'',amount:'',vat_pct:'0',vat_amount:'',vendor_name:'',branch_code:'',branch_name:'',cost_center:'',cost_center_name:'',project_code:'',project_name:'',expense_classification_code:'',expense_classification_name:''}
+  const [form,setForm] = useState({
+    fund_id:     editExpense?.fund_id     || '',
+    expense_date:editExpense?.expense_date|| today(),
+    description: editExpense?.description || '',
+    reference:   editExpense?.reference   || '',
+    notes:       editExpense?.notes       || '',
+    party_id:    editExpense?.party_id    || '',
+    party_name:  editExpense?.party_name  || '',
+    party_role:  'petty_cash_keeper',
+  })
+  const [lines,setLines] = useState(
+    editExpense?.lines?.length > 0
+      ? editExpense.lines.map((l,i)=>({
+          id:i+1, expense_account:l.expense_account||'', expense_account_name:l.expense_account_name||'',
+          description:l.description||'', amount:String(l.amount||l.debit||''), vat_pct:String(l.vat_pct||'0'),
+          vat_amount:String(l.vat_amount||''), vendor_name:l.vendor_name||'',
+          branch_code:l.branch_code||'', branch_name:l.branch_name||'',
+          cost_center:l.cost_center||'', cost_center_name:l.cost_center_name||'',
+          project_code:l.project_code||'', project_name:l.project_name||'',
+          expense_classification_code:l.expense_classification_code||'', expense_classification_name:l.expense_classification_name||'',
+        }))
+      : [{...emptyLine}]
+  )
+  const [showDims,setShowDims]=useState({})
   const [attachments,setAttachments]=useState([])
   const fileRef=useRef(null)
   const [saving,setSaving]   = useState(false)
@@ -8266,10 +8408,9 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
   const sl = (i,k,v) => setLines(ls=>ls.map((l,idx)=>idx===i?{...l,[k]:v}:l))
   const {isClosed:periodClosed} = useFiscalPeriod(form.expense_date)
 
-  const addLine = () => setLines(ls=>[...ls,{id:Date.now(),expense_account:'',expense_account_name:'',description:'',amount:'',vat_pct:'0',vat_amount:'',vendor_name:'',branch_code:'',branch_name:'',cost_center:'',cost_center_name:'',project_code:'',project_name:''}])
+  const addLine = () => setLines(ls=>[...ls,{...emptyLine,id:Date.now()}])
   const rmLine  = (i) => { if(lines.length>1) setLines(ls=>ls.filter((_,idx)=>idx!==i)) }
   const toggleDims = (id) => setShowDims(p=>({...p,[id]:!p[id]}))
-
   const handleAmountChange = (i, field, val) => {
     setLines(ls => ls.map((l, idx) => {
       if (idx !== i) return l
@@ -8306,25 +8447,32 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
     if(periodClosed)      { showToast('الفترة المالية مغلقة','error'); return }
     setSaveError(''); setSaving(true)
     try {
-      await api.treasury.createPettyCashExpense({
+      const payload = {
         ...form,
         lines: validLines.map(l=>({
-          expense_account:      l.expense_account,
-          expense_account_name: l.expense_account_name,
-          description:          l.description,
-          amount:               parseFloat(l.amount)||0,
-          vat_amount:           parseFloat(l.vat_amount)||0,
-          vat_pct:              parseFloat(l.vat_pct)||0,
-          net_amount:           parseFloat(l.amount)||0,
-          vendor_name:          l.vendor_name,
-          branch_code:          l.branch_code||null,
-          branch_name:          l.branch_name||null,
-          cost_center:          l.cost_center||null,
-          cost_center_name:     l.cost_center_name||null,
-          project_code:         l.project_code||null,
-          project_name:         l.project_name||null,
+          expense_account:              l.expense_account,
+          expense_account_name:         l.expense_account_name,
+          description:                  l.description,
+          amount:                       parseFloat(l.amount)||0,
+          vat_amount:                   parseFloat(l.vat_amount)||0,
+          vat_pct:                      parseFloat(l.vat_pct)||0,
+          net_amount:                   parseFloat(l.amount)||0,
+          vendor_name:                  l.vendor_name,
+          branch_code:                  l.branch_code||null,
+          branch_name:                  l.branch_name||null,
+          cost_center:                  l.cost_center||null,
+          cost_center_name:             l.cost_center_name||null,
+          project_code:                 l.project_code||null,
+          project_name:                 l.project_name||null,
+          expense_classification_code:  l.expense_classification_code||null,
+          expense_classification_name:  l.expense_classification_name||null,
         }))
-      })
+      }
+      if(isEdit) {
+        await api.treasury.updatePettyCashExpense(editExpense.id, payload)
+      } else {
+        await api.treasury.createPettyCashExpense(payload)
+      }
       onSaved()
     } catch(e) { setSaveError(e.message); showToast('فشل: '+e.message,'error') }
     finally { setSaving(false) }
@@ -8337,7 +8485,9 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
           {'<'}- رجوع
         </button>
         <div className="flex-1">
-          <h2 className="text-lg font-bold text-red-700">{'💸'} مصروف نثري جديد / New Petty Cash Expense</h2>
+          <h2 className="text-lg font-bold text-red-700">
+            {isEdit ? '✏️ تعديل مصروف نثري: '+editExpense.serial : '💸 مصروف نثري جديد / New Petty Cash Expense'}
+          </h2>
           <p className="text-xs text-slate-400">يسجل كمسودة — يمكن الترحيل لاحقاً بعد المراجعة</p>
         </div>
         <div className="flex items-center gap-2">
@@ -8345,7 +8495,7 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
           {isBalanced  && total > 0 && <span className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-semibold">{'✅'} القيد متوازن</span>}
           <button onClick={save} disabled={saving||periodClosed}
             className={'px-6 py-2.5 rounded-xl font-bold text-sm '+(periodClosed?'bg-slate-200 text-slate-400 cursor-not-allowed':'bg-red-600 text-white hover:bg-red-700 shadow-sm')}>
-            {saving?'جاري الحفظ...':periodClosed?'الفترة مغلقة':'حفظ كمسودة'}
+            {saving?'جاري الحفظ...':periodClosed?'الفترة مغلقة':isEdit?'💾 حفظ التعديلات':'حفظ كمسودة'}
           </button>
         </div>
       </div>
@@ -8439,22 +8589,23 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
                 <button onClick={()=>rmLine(i)} className="flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 h-full">x</button>
               </div>
               {showDims[l.id]&&(
-                <div className="grid grid-cols-3 gap-3 px-4 py-3 bg-purple-50/40 border-b border-slate-100">
-                  <div>
-                    <label className="text-[10px] font-semibold text-purple-600 block mb-1">الفرع</label>
-                    <input className="w-full border border-purple-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                      value={l.branch_code||''} onChange={e=>sl(i,'branch_code',e.target.value)} placeholder="كود الفرع"/>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-purple-600 block mb-1">مركز التكلفة</label>
-                    <input className="w-full border border-purple-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                      value={l.cost_center||''} onChange={e=>sl(i,'cost_center',e.target.value)} placeholder="كود مركز التكلفة"/>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-purple-600 block mb-1">المشروع</label>
-                    <input className="w-full border border-purple-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
-                      value={l.project_code||''} onChange={e=>sl(i,'project_code',e.target.value)} placeholder="كود المشروع"/>
-                  </div>
+                <div className="grid grid-cols-4 gap-3 px-4 py-3 bg-purple-50/40 border-b border-slate-100">
+                  <DimensionPicker type="branch" color="blue"
+                    value={l.branch_code||''} valueName={l.branch_name||''}
+                    onChange={(code,name)=>{sl(i,'branch_code',code);sl(i,'branch_name',name)}}
+                    label="الفرع"/>
+                  <DimensionPicker type="cost_center" color="purple"
+                    value={l.cost_center||''} valueName={l.cost_center_name||''}
+                    onChange={(code,name)=>{sl(i,'cost_center',code);sl(i,'cost_center_name',name)}}
+                    label="مركز التكلفة"/>
+                  <DimensionPicker type="project" color="green"
+                    value={l.project_code||''} valueName={l.project_name||''}
+                    onChange={(code,name)=>{sl(i,'project_code',code);sl(i,'project_name',name)}}
+                    label="المشروع"/>
+                  <DimensionPicker type="expense_class" color="amber"
+                    value={l.expense_classification_code||''} valueName={l.expense_classification_name||''}
+                    onChange={(code,name)=>{sl(i,'expense_classification_code',code);sl(i,'expense_classification_name',name)}}
+                    label="التصنيف"/>
                 </div>
               )}
             </div>
