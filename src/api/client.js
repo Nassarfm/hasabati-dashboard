@@ -545,8 +545,12 @@ export const api = {
     updateRole:    (id, b)  => put(`/parties/role-definitions/${id}`, b),
     deleteRole:    (id)     => del(`/parties/role-definitions/${id}`),
   },
-  // ── قاعدة المعرفة والمستندات ─────────────────────────────
-  knowledge: {
+  // ── أدوات المدير ──────────────────────────────────────
+  admin: {
+    backupSummary:      ()  => get('/admin/backup/summary'),
+    resetTransactions:  ()  => post('/admin/reset/transactions', { confirm: 'RESET' }),
+  },
+}
     listDocuments:  (p={})   => get('/knowledge/documents', p),
     createDocument: (b)      => post('/knowledge/documents', b),
     deleteDocument: (id)     => del('/knowledge/documents/' + id),

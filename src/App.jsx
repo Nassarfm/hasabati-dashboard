@@ -35,6 +35,7 @@ import NumberSeriesPage from './pages/NumberSeriesPage'
 import PartiesPage from './pages/PartiesPage'
 import WorkflowChartPage from './pages/WorkflowChartPage'
 import KnowledgePage from './pages/KnowledgePage'
+import AdminToolsPage from './pages/AdminToolsPage'
 
 const PAGE_LABELS = {
   dashboard:'الصفحة الرئيسية / Home',
@@ -168,6 +169,7 @@ function AppContent() {
       case 'company_settings':   return <CompanySettingsPage/>
       case 'vat_settings':       return <VATSettingsPage/>
       case 'localization':       return <VATSettingsPage/>
+      case 'admin_tools':        return <AdminToolsPage/>
 
       // ── موديولات أخرى ──
       case 'sales':              return <SalesPage/>

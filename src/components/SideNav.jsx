@@ -240,6 +240,12 @@ const MODULES = [
           { id:'localization',  icon:'🌍', ar:'الإقليمية والتوطين',en:'Localization'    },
         ]
       },
+      {
+        id:'set_admin', ar:'أدوات النظام', en:'System Tools', type:'section',
+        children: [
+          { id:'admin_tools', icon:'🛡️', ar:'نسخ احتياطي وإعادة تهيئة', en:'Backup & Reset', danger:true },
+        ]
+      },
     ]
   },
 ]
@@ -373,7 +379,7 @@ function NavItem({ item, activePage, onNav, isTopLevel = false }) {
         textAlign: 'right',
         background: isActive
           ? T.activeBg
-          : hovered ? T.hoverBg : 'transparent',
+          : hovered ? (item.danger ? 'rgba(239,68,68,0.12)' : T.hoverBg) : 'transparent',
         boxShadow: isActive ? T.activeShadow : 'none',
         transition: 'all 0.15s ease',
         borderRight: isActive ? '3px solid rgba(147,197,253,0.6)' : '3px solid transparent',
@@ -387,7 +393,7 @@ function NavItem({ item, activePage, onNav, isTopLevel = false }) {
         textAlign: 'right',
         fontSize: isTopLevel ? 14 : 13,
         fontWeight: isActive ? 700 : 500,
-        color: isActive ? T.textActive : hovered ? 'rgba(226,232,240,0.95)' : T.textPrimary,
+        color: isActive ? T.textActive : hovered ? 'rgba(226,232,240,0.95)' : item.danger ? 'rgba(252,165,165,0.9)' : T.textPrimary,
         letterSpacing: '-0.01em',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
