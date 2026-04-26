@@ -3,6 +3,7 @@
  * Petty Cash: Tab + ExpenseView + FundModal + ExpensePage
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
+import * as XLSX from 'xlsx'
 import api from '../../api/client'
 import { AccountPicker, PartyPicker, DimensionPicker } from '../../components/pickers'
 
@@ -12,6 +13,52 @@ import { AccountPicker, PartyPicker, DimensionPicker } from '../../components/pi
 const fmt = (n,d=2)=>(parseFloat(n||0)).toLocaleString("ar-SA",{minimumFractionDigits:d,maximumFractionDigits:d})
 const fmtDate = d => d ? new Date(String(d).slice(0,10)).toLocaleDateString('ar-SA') : '—'
 const today = ()=>new Date().toISOString().slice(0,10)
+
+function exportXLS(rows, headers, filename) {
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+  XLSX.writeFile(wb, filename + '.xlsx')
+}
+
+function KPIBar({cards}) {
+  return (
+    <div className="grid gap-4" style={{gridTemplateColumns:`repeat(${cards.length},1fr)`}}>
+      {cards.map((c,i)=>(
+        <div key={i} className={'rounded-2xl border-2 p-4 flex items-center gap-3 ' + (c.bg||'bg-white border-slate-200')}>
+          <div className={'w-10 h-10 rounded-xl flex items-center justify-center text-xl ' + (c.iconBg||'bg-slate-100')}>{c.icon}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-slate-400 truncate">{c.label}</div>
+            <div className={'text-xl font-bold font-mono truncate ' + (c.color||'text-slate-800')}>{c.value}</div>
+            {c.sub&&<div className="text-[10px] text-slate-400">{c.sub}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function useFiscalPeriod(date) {
+  const [status, setStatus] = useState('unknown')
+  useEffect(()=>{
+    if(!date) return
+    api.fiscal.getCurrentPeriod(date)
+      .then(r=>{ const p=r?.data; setStatus(p?.status==='open'?'open':p?.status==='closed'?'closed':'not_found') })
+      .catch(()=>setStatus('error'))
+  },[date])
+  return { isOpen: status==='open', isClosed: status==='closed' }
+}
+
+function FiscalPeriodBadge({date}) {
+  const {isOpen, isClosed} = useFiscalPeriod(date)
+  if(!date) return null
+  return (
+    <div className={'text-xs mt-1 flex items-center gap-1 ' + (isClosed?'text-red-600':isOpen?'text-emerald-600':'text-slate-400')}>
+      {isClosed?'🔒':isOpen?'✅':'⏳'}
+      {isClosed?'الفترة مغلقة':isOpen?new Date(date).toLocaleDateString('ar-SA',{month:'long',year:'numeric'})+' — مفتوحة':'جارٍ التحقق...'}
+    </div>
+  )
+}
 
 function PettyCashTab({showToast}) {
   const [subTab,setSubTab]=useState('expenses')
