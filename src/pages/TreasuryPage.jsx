@@ -7019,63 +7019,6 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToa
     </div>
   )
 }
-        </div>
-      </div>
-
-      {/* بيانات رئيسية */}
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          {l:'الصندوق',v:exp.fund_name||'—'},
-          {l:'التاريخ',v:fmtDate(exp.expense_date)},
-          {l:'المبلغ',v:fmt(exp.total_amount,3)+' ر.س'},
-          {l:'القيد',v:exp.je_serial||'—'},
-        ].map(k=>(
-          <div key={k.l} className="bg-white rounded-2xl border border-slate-200 p-4">
-            <div className="text-xs text-slate-400 mb-1">{k.l}</div>
-            <div className="font-bold text-slate-800 font-mono">{k.v}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* المتعامل */}
-      {(exp.party_id||exp.party_name) && (
-        <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 flex items-center gap-3">
-          <span className="text-2xl">🤝</span>
-          <div>
-            <div className="text-xs text-teal-500 font-semibold">أمين العهدة / Petty Cash Custodian</div>
-            <div className="font-bold text-teal-800">{exp.party_name||exp.custodian_name||exp.party_id}</div>
-          </div>
-        </div>
-      )}
-
-      {/* سطور المصروفات */}
-      {(exp.lines||exp.expense_lines||[]).length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-3 font-bold text-white text-sm" style={{background:'linear-gradient(135deg,#7f1d1d,#dc2626)'}}>📋 سطور المصروفات</div>
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                {['الحساب','اسم الحساب','البيان','المبلغ','الضريبة','المورد'].map(h=><th key={h} className="px-3 py-2.5 text-right font-semibold text-slate-500">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {(exp.lines||exp.expense_lines||[]).map((l,i)=>(
-                <tr key={i} className={i%2===0?'bg-white':'bg-slate-50/30'}>
-                  <td className="px-3 py-2.5 font-mono text-blue-600">{l.expense_account||l.account_code||'—'}</td>
-                  <td className="px-3 py-2.5">{l.expense_account_name||l.account_name||'—'}</td>
-                  <td className="px-3 py-2.5">{l.description||'—'}</td>
-                  <td className="px-3 py-2.5 font-mono font-bold text-slate-800">{fmt(l.amount||l.debit,3)}</td>
-                  <td className="px-3 py-2.5 font-mono text-amber-600">{fmt(l.vat_amount||0,3)}</td>
-                  <td className="px-3 py-2.5">{l.vendor_name||'—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
 function FieldTooltip({text}) {
   const [show,setShow] = useState(false)
   return (
