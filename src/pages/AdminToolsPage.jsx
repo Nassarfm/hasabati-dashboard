@@ -54,27 +54,32 @@ function DangerConfirmModal({ onConfirm, onCancel, title, desc, confirmWord }) {
 
 export default function AdminToolsPage() {
   const { user } = useAuth()
+  const [isAdmin,     setIsAdmin]     = useState(null)   // null = جارٍ التحقق
   const [summary,     setSummary]     = useState(null)
-  const [loadingSummary, setLoadingSummary] = useState(true)
+  const [loadingSummary, setLoadingSummary] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [resetting,   setResetting]   = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [result,      setResult]      = useState(null)
   const [error,       setError]       = useState(null)
 
-  // تحقق من صلاحية المدير
-  const isAdmin = user?.user_metadata?.role === 'admin'
-    || user?.user_metadata?.is_admin === true
-    || user?.user_metadata?.role === 'system_admin'
-    || user?.email?.includes('admin')  // fallback مؤقت
-
+  // التحقق من صلاحية المدير عبر الـ backend
   useEffect(() => {
-    if (!isAdmin) return
-    api.admin.backupSummary()
-      .then(r => setSummary(r?.data || {}))
-      .catch(() => setSummary({}))
-      .finally(() => setLoadingSummary(false))
-  }, [isAdmin])
+    if (!user) return
+    api.admin.isAdmin()
+      .then(r => {
+        const admin = r?.data?.is_admin || false
+        setIsAdmin(admin)
+        if (admin) {
+          setLoadingSummary(true)
+          api.admin.backupSummary()
+            .then(s => setSummary(s?.data || {}))
+            .catch(() => setSummary({}))
+            .finally(() => setLoadingSummary(false))
+        }
+      })
+      .catch(() => setIsAdmin(false))
+  }, [user])
 
   // ── تنزيل النسخة الاحتياطية ──────────────────────────
   const handleBackup = async () => {
@@ -117,6 +122,17 @@ export default function AdminToolsPage() {
     } finally {
       setResetting(false)
     }
+  }
+
+  if (isAdmin === null) {
+    return (
+      <div className="flex items-center justify-center min-h-96" dir="rtl">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-3"/>
+          <p className="text-slate-400 text-sm">جارٍ التحقق من الصلاحيات...</p>
+        </div>
+      </div>
+    )
   }
 
   if (!isAdmin) {

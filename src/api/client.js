@@ -547,6 +547,7 @@ export const api = {
   },
   // ── أدوات المدير ──────────────────────────────────────
   admin: {
+    isAdmin:            ()  => get('/admin/is-admin'),
     backupSummary:      ()  => get('/admin/backup/summary'),
     resetTransactions:  ()  => post('/admin/reset/transactions', { confirm: 'RESET' }),
   },
