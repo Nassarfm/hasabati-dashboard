@@ -6,6 +6,7 @@
  * - زر ترحيل من القائمة
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
+import ReactDOM from 'react-dom'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import * as XLSX from 'xlsx'
 import api from '../api/client'
@@ -46,13 +47,15 @@ function Toast({msg,type,onClose}) {
 }
 
 // ── AccountPicker ────────────────────────────────────────
-function AccountPicker({value,onChange,label,required=false}) {
+function AccountPicker({value,onChange,label,required=false,postableOnly=false}) {
   const [search,setSearch]=useState('')
   const [results,setResults]=useState([])
   const [open,setOpen]=useState(false)
   const [display,setDisplay]=useState('')
   const [loading,setLoading]=useState(false)
+  const [dropPos,setDropPos]=useState({top:0,left:0,width:0})
   const ref=useRef(null)
+  const inputRef=useRef(null)
 
   const getName=(a)=>a.account_name||a.name||a.name_ar||''
   const getCode=(a)=>a.account_code||a.code||''
@@ -66,61 +69,81 @@ function AccountPicker({value,onChange,label,required=false}) {
   const doSearch=useCallback(async(q)=>{
     setLoading(true)
     try{
-      const r=await api.accounting.getCOA({...(q?{search:q}:{}),limit:40})
+      const params={limit:40}
+      if(q) params.search=q
+      if(postableOnly) params.postable=true  // ← فلتر الحسابات القابلة للترحيل فقط
+      const r=await api.accounting.getCOA(params)
       let items=[]
       if(Array.isArray(r))                   items=r
       else if(Array.isArray(r?.data))        items=r.data
       else if(Array.isArray(r?.data?.items)) items=r.data.items
       else if(Array.isArray(r?.items))       items=r.items
-      const filtered=items.filter(a=>getCode(a)&&getName(a)&&!['header','group'].includes((a.account_type||'').toLowerCase()))
-      let final=filtered.length>0?filtered:items
+      // فلترة الحسابات القابلة للترحيل
+      let filtered = postableOnly
+        ? items.filter(a=>a.postable===true||a.postable===1||a.is_postable===true)
+        : items.filter(a=>getCode(a)&&getName(a)&&!['header','group'].includes((a.account_type||'').toLowerCase()))
+      if(!postableOnly&&filtered.length===0) filtered=items
       if(q){
         const low=q.toLowerCase()
-        const byCode=final.filter(a=>getCode(a).startsWith(low))
-        const byName=final.filter(a=>getName(a).toLowerCase().includes(low)&&!getCode(a).startsWith(low))
-        final=[...byCode,...byName]
+        const byCode=filtered.filter(a=>getCode(a).startsWith(low))
+        const byName=filtered.filter(a=>getName(a).toLowerCase().includes(low)&&!getCode(a).startsWith(low))
+        filtered=[...byCode,...byName]
       }
-      setResults(final.slice(0,30))
+      setResults(filtered.slice(0,30))
     }catch{setResults([])}finally{setLoading(false)}
-  },[])
+  },[postableOnly])
 
   useEffect(()=>{if(!open)return;const t=setTimeout(()=>doSearch(search),200);return()=>clearTimeout(t)},[search,open])
 
-  const handleOpen=()=>{setOpen(true);if(results.length===0)doSearch('')}
+  const handleOpen=()=>{
+    // حساب موضع الـ dropdown بالنسبة للشاشة (لتجنب overflow:hidden)
+    if(inputRef.current){
+      const rect=inputRef.current.getBoundingClientRect()
+      setDropPos({top:rect.bottom+window.scrollY+4, left:rect.left+window.scrollX, width:rect.width})
+    }
+    setOpen(true)
+    if(results.length===0) doSearch('')
+  }
 
   const select=(a)=>{
     const code=getCode(a); const name=getName(a)
     onChange(code,name)
-    setDisplay(`${code} — ${name}`)
+    setDisplay(code+' — '+name)
     setOpen(false); setSearch('')
   }
 
   return <div ref={ref} className="relative">
-    {label&&<label className="text-sm font-semibold text-slate-600 block mb-1.5">{label}{required&&<span className="text-red-500 mr-1">*</span>}</label>}
+    {label&&<label className="text-xs font-semibold text-slate-600 block mb-1.5">{label}{required&&<span className="text-red-500 mr-1">*</span>}</label>}
     <div className="flex gap-1">
-      <input readOnly value={display||(value||'')} placeholder="اضغط للبحث في دليل الحسابات..."
-        className="flex-1 border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono bg-slate-50 cursor-pointer hover:border-blue-300 focus:outline-none focus:border-blue-500 transition-colors"
+      <input ref={inputRef} readOnly value={display||(value||'')} placeholder="اضغط للبحث في دليل الحسابات..."
+        className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-mono bg-slate-50 cursor-pointer hover:border-blue-300 focus:outline-none focus:border-blue-500 transition-colors"
         onClick={handleOpen}/>
       {value&&<button onClick={e=>{e.stopPropagation();onChange('','');setDisplay('');}}
-        className="px-3 border-2 border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-300">✕</button>}
+        className="px-2 border-2 border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-300 text-xs">✕</button>}
     </div>
-    {open&&<div className="absolute z-[400] top-full mt-1 right-0 left-0 bg-white border-2 border-blue-200 rounded-2xl shadow-2xl overflow-hidden" style={{minWidth:'100%',maxHeight:'300px',overflowY:'auto'}}>
-      <div className="p-3 border-b bg-blue-50 sticky top-0">
-        <input autoFocus className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-          placeholder="اكتب رقم أو اسم الحساب..." value={search} onChange={e=>setSearch(e.target.value)}/>
-      </div>
-      {loading&&<div className="py-4 text-center text-sm text-slate-400">🔍 جارٍ البحث...</div>}
-      {!loading&&results.length===0&&<div className="py-6 text-center text-sm text-slate-400">{search?'لا توجد نتائج':'ابدأ الكتابة للبحث'}</div>}
-      {!loading&&results.map((a,i)=>{
-        const code=getCode(a); const name=getName(a)
-        return <button key={code||i} onClick={()=>select(a)}
-          className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-blue-50 text-right border-b border-slate-50 last:border-0 transition-colors">
-          <span className="font-mono text-blue-700 font-bold text-xs bg-blue-100 px-2 py-1 rounded-lg shrink-0">{code}</span>
-          <span className="text-slate-800 text-sm font-medium flex-1 text-right">{name}</span>
-          <span className="text-slate-400 text-xs shrink-0">{a.account_type||''}</span>
-        </button>
-      })}
-    </div>}
+    {open&&typeof document!=='undefined'&&ReactDOM.createPortal(
+      <div style={{position:'absolute',top:dropPos.top,left:dropPos.left,width:Math.max(dropPos.width,280),zIndex:9999}}
+        className="bg-white border-2 border-blue-200 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="p-2 border-b bg-blue-50 sticky top-0">
+          <input autoFocus className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+            placeholder="اكتب رقم أو اسم الحساب..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        <div style={{maxHeight:260,overflowY:'auto'}}>
+          {loading&&<div className="py-4 text-center text-sm text-slate-400">جارٍ البحث...</div>}
+          {!loading&&results.length===0&&<div className="py-6 text-center text-sm text-slate-400">{search?'لا توجد نتائج':'ابدأ الكتابة للبحث'}</div>}
+          {!loading&&results.map((a,i)=>{
+            const code=getCode(a); const name=getName(a)
+            return <button key={code||i} onClick={()=>select(a)}
+              className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-blue-50 text-right border-b border-slate-50 last:border-0 transition-colors">
+              <span className="font-mono text-blue-700 font-bold text-xs bg-blue-100 px-2 py-1 rounded-lg shrink-0">{code}</span>
+              <span className="text-slate-800 text-sm font-medium flex-1 text-right">{name}</span>
+              {a.postable&&<span className="text-[10px] text-emerald-600 shrink-0">✓ تحليلي</span>}
+            </button>
+          })}
+        </div>
+      </div>,
+      document.body
+    )}
   </div>
 }
 
@@ -8233,15 +8256,19 @@ function CashFlowPage({showToast}) {
 
 function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
   const [form,setForm]   = useState({fund_id:'',expense_date:today(),description:'',reference:'',notes:'',party_id:'',party_name:'',party_role:'petty_cash_keeper'})
-  const [lines,setLines] = useState([{id:1,expense_account:'',expense_account_name:'',description:'',amount:'',vat_pct:'0',vat_amount:'',vendor_name:''}])
+  const [lines,setLines] = useState([{id:1,expense_account:'',expense_account_name:'',description:'',amount:'',vat_pct:'0',vat_amount:'',vendor_name:'',branch_code:'',branch_name:'',cost_center:'',cost_center_name:'',project_code:'',project_name:''}])
+  const [showDims,setShowDims]=useState({}) // toggles per line
+  const [attachments,setAttachments]=useState([])
+  const fileRef=useRef(null)
   const [saving,setSaving]   = useState(false)
   const [saveError,setSaveError] = useState('')
   const s  = (k,v) => setForm(p=>({...p,[k]:v}))
   const sl = (i,k,v) => setLines(ls=>ls.map((l,idx)=>idx===i?{...l,[k]:v}:l))
   const {isClosed:periodClosed} = useFiscalPeriod(form.expense_date)
 
-  const addLine = () => setLines(ls=>[...ls,{id:Date.now(),expense_account:'',expense_account_name:'',description:'',amount:'',vat_pct:'0',vat_amount:'',vendor_name:''}])
+  const addLine = () => setLines(ls=>[...ls,{id:Date.now(),expense_account:'',expense_account_name:'',description:'',amount:'',vat_pct:'0',vat_amount:'',vendor_name:'',branch_code:'',branch_name:'',cost_center:'',cost_center_name:'',project_code:'',project_name:''}])
   const rmLine  = (i) => { if(lines.length>1) setLines(ls=>ls.filter((_,idx)=>idx!==i)) }
+  const toggleDims = (id) => setShowDims(p=>({...p,[id]:!p[id]}))
 
   const handleAmountChange = (i, field, val) => {
     setLines(ls => ls.map((l, idx) => {
@@ -8258,8 +8285,11 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
   const totalVAT = lines.reduce((s,l)=>s+(parseFloat(l.vat_amount)||0),0)
   const selectedFund = funds.find(f=>f.id===form.fund_id)
 
+  // السطور المكتملة فقط (تتجاهل السطور الفارغة)
+  const validLines = lines.filter(l => l.expense_account && parseFloat(l.amount) > 0)
+
   const je_lines_preview = [
-    ...lines.filter(l=>l.expense_account&&parseFloat(l.amount)>0).map(l=>({
+    ...validLines.map(l=>({
       account_code: l.expense_account,
       account_name: l.expense_account_name||'مصروف',
       debit: parseFloat(l.amount)||0, credit:0,
@@ -8270,15 +8300,30 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
   const isBalanced = Math.abs(je_lines_preview.reduce((s,l)=>s+(l.debit-l.credit),0)) < 0.01
 
   const save = async() => {
-    if(!form.fund_id)      { showToast('اختر الصندوق اولا','error'); return }
-    if(!form.description)  { showToast('البيان مطلوب','error'); return }
-    if(lines.some(l=>!l.expense_account||!l.amount)) { showToast('اكمل سطور المصروف','error'); return }
-    if(periodClosed)       { showToast('الفترة المالية مغلقة','error'); return }
+    if(!form.fund_id)     { showToast('اختر الصندوق اولا','error'); return }
+    if(!form.description) { showToast('البيان مطلوب','error'); return }
+    if(validLines.length===0) { showToast('اضف سطراً واحداً على الاقل مع الحساب والمبلغ','error'); return }
+    if(periodClosed)      { showToast('الفترة المالية مغلقة','error'); return }
     setSaveError(''); setSaving(true)
     try {
       await api.treasury.createPettyCashExpense({
         ...form,
-        lines: lines.map(l=>({...l,amount:parseFloat(l.amount)||0,vat_amount:parseFloat(l.vat_amount)||0,vat_pct:parseFloat(l.vat_pct)||0,net_amount:parseFloat(l.amount)||0}))
+        lines: validLines.map(l=>({
+          expense_account:      l.expense_account,
+          expense_account_name: l.expense_account_name,
+          description:          l.description,
+          amount:               parseFloat(l.amount)||0,
+          vat_amount:           parseFloat(l.vat_amount)||0,
+          vat_pct:              parseFloat(l.vat_pct)||0,
+          net_amount:           parseFloat(l.amount)||0,
+          vendor_name:          l.vendor_name,
+          branch_code:          l.branch_code||null,
+          branch_name:          l.branch_name||null,
+          cost_center:          l.cost_center||null,
+          cost_center_name:     l.cost_center_name||null,
+          project_code:         l.project_code||null,
+          project_name:         l.project_name||null,
+        }))
       })
       onSaved()
     } catch(e) { setSaveError(e.message); showToast('فشل: '+e.message,'error') }
@@ -8351,53 +8396,110 @@ function PettyCashExpensePage({funds, onBack, onSaved, showToast}) {
           />
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-visible">
           <div className="px-5 py-3 flex items-center justify-between" style={{background:'linear-gradient(135deg,#7f1d1d,#dc2626)'}}>
             <span className="text-white font-bold text-sm">سطور المصروفات / Expense Lines</span>
             <button onClick={addLine} className="px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs hover:bg-white/30 font-bold">+ سطر</button>
           </div>
           <div className="grid text-slate-500 text-xs font-semibold bg-slate-50 border-b border-slate-200"
-            style={{gridTemplateColumns:'2fr 2.5fr 2fr 1.2fr 0.8fr 1.2fr 2fr 32px'}}>
-            {['حساب المصروف *','اسم الحساب','البيان','المبلغ *','% ضريبة','الضريبة SAR','المورد / Vendor',''].map(h=>(
+            style={{gridTemplateColumns:'2fr 2.5fr 2fr 1.2fr 0.8fr 1.2fr 2fr 60px 32px'}}>
+            {['حساب المصروف *','اسم الحساب','البيان','المبلغ *','% ضريبة','الضريبة SAR','المورد','ابعاد',''].map(h=>(
               <div key={h} className="px-3 py-2.5">{h}</div>
             ))}
           </div>
           {lines.map((l,i)=>(
-            <div key={l.id} className={'grid border-b border-slate-100 items-center '+(i%2===0?'bg-white':'bg-slate-50/30')}
-              style={{gridTemplateColumns:'2fr 2.5fr 2fr 1.2fr 0.8fr 1.2fr 2fr 32px'}}>
-              <div className="border-r border-slate-100 p-1">
-                <AccountPicker value={l.expense_account} onChange={(code,name)=>{sl(i,'expense_account',code);sl(i,'expense_account_name',name)}} label="" required={false}/>
+            <div key={l.id}>
+              <div className={'grid border-b border-slate-100 items-center '+(i%2===0?'bg-white':'bg-slate-50/30')}
+                style={{gridTemplateColumns:'2fr 2.5fr 2fr 1.2fr 0.8fr 1.2fr 2fr 60px 32px'}}>
+                <div className="border-r border-slate-100 p-1">
+                  <AccountPicker postableOnly={true} value={l.expense_account} onChange={(code,name)=>{sl(i,'expense_account',code);sl(i,'expense_account_name',name)}} label="" required={false}/>
+                </div>
+                <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
+                  value={l.expense_account_name} onChange={e=>sl(i,'expense_account_name',e.target.value)} placeholder="اسم الحساب"/>
+                <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
+                  value={l.description} onChange={e=>sl(i,'description',e.target.value)} placeholder="بيان السطر..."/>
+                <input type="number" step="0.001" min="0"
+                  className="px-3 py-2.5 text-xs border-r border-slate-100 font-mono text-center focus:outline-none focus:bg-blue-50 bg-transparent"
+                  value={l.amount} onChange={e=>handleAmountChange(i,'amount',e.target.value)} placeholder="0.000"/>
+                <select className="px-2 py-2.5 text-xs border-r border-slate-100 focus:outline-none bg-transparent text-amber-700 font-semibold"
+                  value={l.vat_pct} onChange={e=>handleAmountChange(i,'vat_pct',e.target.value)}>
+                  <option value="0">0%</option>
+                  <option value="5">5%</option>
+                  <option value="15">15%</option>
+                </select>
+                <input type="number" step="0.001" min="0"
+                  className="px-3 py-2.5 text-xs border-r border-slate-100 font-mono text-center focus:outline-none focus:bg-amber-50 bg-transparent text-amber-700"
+                  value={l.vat_amount} onChange={e=>sl(i,'vat_amount',e.target.value)} placeholder="0.000"/>
+                <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
+                  value={l.vendor_name} onChange={e=>sl(i,'vendor_name',e.target.value)} placeholder="المورد..."/>
+                <button onClick={()=>toggleDims(l.id)}
+                  className={'px-2 py-1.5 text-[10px] border-r border-slate-100 font-semibold '+(l.branch_code||l.cost_center||l.project_code?'text-purple-700 bg-purple-50':'text-slate-400 hover:text-purple-600')}>
+                  {l.branch_code||l.cost_center||l.project_code?'📐✓':'📐'}
+                </button>
+                <button onClick={()=>rmLine(i)} className="flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 h-full">x</button>
               </div>
-              <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
-                value={l.expense_account_name} onChange={e=>sl(i,'expense_account_name',e.target.value)} placeholder="اسم الحساب"/>
-              <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
-                value={l.description} onChange={e=>sl(i,'description',e.target.value)} placeholder="بيان السطر..."/>
-              <input type="number" step="0.001" min="0"
-                className="px-3 py-2.5 text-xs border-r border-slate-100 font-mono text-center focus:outline-none focus:bg-blue-50 bg-transparent"
-                value={l.amount} onChange={e=>handleAmountChange(i,'amount',e.target.value)} placeholder="0.000"/>
-              <select className="px-2 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-amber-50 bg-transparent text-amber-700 font-semibold"
-                value={l.vat_pct} onChange={e=>handleAmountChange(i,'vat_pct',e.target.value)}>
-                <option value="0">0%</option>
-                <option value="5">5%</option>
-                <option value="15">15%</option>
-              </select>
-              <input type="number" step="0.001" min="0"
-                className="px-3 py-2.5 text-xs border-r border-slate-100 font-mono text-center focus:outline-none focus:bg-amber-50 bg-transparent text-amber-700"
-                value={l.vat_amount} onChange={e=>sl(i,'vat_amount',e.target.value)} placeholder="0.000"/>
-              <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
-                value={l.vendor_name} onChange={e=>sl(i,'vendor_name',e.target.value)} placeholder="اسم المورد..."/>
-              <button onClick={()=>rmLine(i)} className="flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 h-full text-lg">x</button>
+              {showDims[l.id]&&(
+                <div className="grid grid-cols-3 gap-3 px-4 py-3 bg-purple-50/40 border-b border-slate-100">
+                  <div>
+                    <label className="text-[10px] font-semibold text-purple-600 block mb-1">الفرع</label>
+                    <input className="w-full border border-purple-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                      value={l.branch_code||''} onChange={e=>sl(i,'branch_code',e.target.value)} placeholder="كود الفرع"/>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-purple-600 block mb-1">مركز التكلفة</label>
+                    <input className="w-full border border-purple-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                      value={l.cost_center||''} onChange={e=>sl(i,'cost_center',e.target.value)} placeholder="كود مركز التكلفة"/>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-purple-600 block mb-1">المشروع</label>
+                    <input className="w-full border border-purple-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                      value={l.project_code||''} onChange={e=>sl(i,'project_code',e.target.value)} placeholder="كود المشروع"/>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <div className="grid bg-slate-800 text-white text-sm font-bold"
-            style={{gridTemplateColumns:'2fr 2.5fr 2fr 1.2fr 0.8fr 1.2fr 2fr 32px'}}>
-            <div className="col-span-3 px-4 py-3">الاجمالي / Total ({lines.length} سطر)</div>
+            style={{gridTemplateColumns:'2fr 2.5fr 2fr 1.2fr 0.8fr 1.2fr 2fr 60px 32px'}}>
+            <div className="col-span-3 px-4 py-3">الاجمالي ({validLines.length} سطر مكتمل)</div>
             <div className="px-3 py-3 font-mono text-blue-300">{fmt(total,3)}</div>
             <div className="px-3 py-3"/>
             <div className="px-3 py-3 font-mono text-amber-300">{fmt(totalVAT,3)}</div>
             <div className="px-3 py-3 font-mono text-emerald-300">{fmt(total+totalVAT,3)} ر.س</div>
-            <div/>
+            <div/><div/>
           </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-bold text-sm text-slate-700">المرفقات / Attachments</span>
+            <button onClick={()=>fileRef.current&&fileRef.current.click()} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100">
+              + ارفاق فاتورة
+            </button>
+          </div>
+          <input ref={fileRef} type="file" multiple accept="image/*,.pdf" className="hidden"
+            onChange={e=>{
+              const files=Array.from(e.target.files||[])
+              setAttachments(a=>[...a,...files.map(f=>({name:f.name,size:f.size,url:URL.createObjectURL(f)}))])
+              e.target.value=''
+            }}/>
+          {attachments.length===0?
+            <div className="text-center py-4 text-slate-300 text-xs border-2 border-dashed border-slate-200 rounded-xl">
+              لم يتم ارفاق اي فواتير — اضغط ارفاق فاتورة
+            </div>:
+            <div className="space-y-2">
+              {attachments.map((a,i)=>(
+                <div key={i} className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="text-xl">{a.name.endsWith('.pdf')?'📄':'🖼️'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-slate-700 truncate">{a.name}</div>
+                    <div className="text-[10px] text-slate-400">{(a.size/1024).toFixed(1)} KB</div>
+                  </div>
+                  <button onClick={()=>setAttachments(at=>at.filter((_,j)=>j!==i))} className="text-red-400 hover:text-red-600 text-xs font-bold">x</button>
+                </div>
+              ))}
+            </div>
+          }
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
