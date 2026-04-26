@@ -133,7 +133,8 @@ function AccountPicker({value,onChange,label,required=false,postableOnly=false})
           {!loading&&results.length===0&&<div className="py-6 text-center text-sm text-slate-400">{search?'لا توجد نتائج':'ابدأ الكتابة للبحث'}</div>}
           {!loading&&results.map((a,i)=>{
             const code=getCode(a); const name=getName(a)
-            return <button key={code||i} onClick={()=>select(a)}
+            return <button key={code||i}
+              onMouseDown={e=>{ e.preventDefault(); e.stopPropagation(); select(a) }}
               className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-blue-50 text-right border-b border-slate-50 last:border-0 transition-colors">
               <span className="font-mono text-blue-700 font-bold text-xs bg-blue-100 px-2 py-1 rounded-lg shrink-0">{code}</span>
               <span className="text-slate-800 text-sm font-medium flex-1 text-right">{name}</span>
@@ -327,7 +328,8 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
             {loading&&<div className="py-3 text-center text-xs text-slate-400">جارٍ البحث...</div>}
             {!loading&&results.length===0&&<div className="py-4 text-center text-xs text-slate-400">لا توجد نتائج</div>}
             {!loading&&results.map((item,i)=>(
-              <button key={i} onClick={()=>select(item)}
+              <button key={i}
+                onMouseDown={e=>{ e.preventDefault(); e.stopPropagation(); select(item) }}
                 className={'flex items-center gap-2 w-full px-3 py-2 hover:'+c.bg+' text-right border-b border-slate-50 last:border-0'}>
                 <span className={'font-mono text-[10px] px-1.5 py-0.5 rounded font-bold '+c.badge+' '+c.txt}>{getCode(item)}</span>
                 <span className="text-xs text-slate-800 flex-1 text-right">{getName(item)}</span>
