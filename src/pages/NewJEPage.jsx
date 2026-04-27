@@ -918,7 +918,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                               value={line.branch_code}
                               onChange={e => { const b=branches.find(b=>b.code===e.target.value); setLine(line.id,{branch_code:e.target.value,branch_name:b?.name_ar||''}) }}>
                               <option value="">{needsDim?'— اختر':'—'}</option>
-                              {branches.map(b => <option key={b.id} value={b.code}>{b.code}</option>)}
+                              {branches.map(b => <option key={b.id} value={b.code}>{b.code} — {b.name_ar||b.name||b.code}</option>)}
                             </select>
                             {line.branch_code && branchName && (
                               <div className="text-xs text-blue-600 mt-0.5 truncate px-0.5">{branchName}</div>
@@ -938,7 +938,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                               value={line.cost_center}
                               onChange={e => { const cc=costCenters.find(c=>c.code===e.target.value); setLine(line.id,{cost_center:e.target.value,cost_center_name:cc?.name_ar||cc?.name_en||''}) }}>
                               <option value="">{needsDim?'— اختر':'—'}</option>
-                              {costCenters.map(c => <option key={c.id} value={c.code}>{c.code}</option>)}
+                              {costCenters.map(c => <option key={c.id} value={c.code}>{c.code} — {c.name_ar||c.name||c.code}</option>)}
                             </select>
                             {line.cost_center && ccName && (
                               <div className="text-xs text-purple-600 mt-0.5 truncate px-0.5">{ccName}</div>
@@ -956,7 +956,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                               value={line.expense_classification_code}
                               onChange={e => { const ec=expClass.find(ec=>ec.code===e.target.value); setLine(line.id,{expense_classification_code:e.target.value,expense_classification_name:ec?.name_ar||''}) }}>
                               <option value="">— اختر</option>
-                              {expClass.map(ec => <option key={ec.id||ec.code} value={ec.code}>{ec.code}</option>)}
+                              {expClass.map(ec => <option key={ec.id||ec.code} value={ec.code}>{ec.code} — {ec.name_ar||ec.name||ec.code}</option>)}
                             </select>
                             {/* اسم التصنيف */}
                             {line.expense_classification_code && ecName && (
@@ -973,7 +973,7 @@ export default function NewJEPage({ accounts, jeTypes, branches, costCenters, pr
                             <select className="select text-xs w-full" value={line.project_code}
                               onChange={e => { const p=projects.find(p=>String(p.code)===e.target.value); setLine(line.id,{project_code:e.target.value,project_name:p?.name||''}) }}>
                               <option value="">—</option>
-                              {projects.map(p => <option key={p.id} value={String(p.code)}>{p.code}</option>)}
+                              {projects.map(p => <option key={p.id} value={String(p.code)}>{p.code} — {p.name_ar||p.name||p.code}</option>)}
                             </select>
                             {line.project_code && projName && (
                               <div className="text-xs text-emerald-600 mt-0.5 truncate px-0.5">{projName}</div>
