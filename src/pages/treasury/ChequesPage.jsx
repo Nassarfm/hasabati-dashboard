@@ -244,9 +244,12 @@ export default function ChequesPage({ showToast }) {
         api.cheques.list(statusFilter ? { status: statusFilter } : {}),
         api.treasury.listBankAccounts(),
       ])
-      setBooks(bR?.data || [])
-      setCheques(cR?.data?.items || cR?.data || [])
-      setAccounts(aR?.data || [])
+      const toArr = r => Array.isArray(r?.data) ? r.data :
+                          Array.isArray(r?.data?.items) ? r.data.items :
+                          Array.isArray(r) ? r : []
+      setBooks(toArr(bR))
+      setCheques(toArr(cR))
+      setAccounts(toArr(aR))
     } catch(e) { showToast(e.message, 'error') }
     finally { setLoading(false) }
   }, [statusFilter])
