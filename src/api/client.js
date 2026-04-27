@@ -574,6 +574,8 @@ export const api = {
     clear:          (id, b)   => post(`/treasury/checks/${id}/clear`, b),
     returnCheque:   (id, b)   => post(`/treasury/checks/${id}/return`, b),
   },
+  // ── قاعدة المعرفة والمستندات ─────────────────────────────
+  knowledge: {
     listDocuments:  (p={})   => get('/knowledge/documents', p),
     createDocument: (b)      => post('/knowledge/documents', b),
     deleteDocument: (id)     => del('/knowledge/documents/' + id),
