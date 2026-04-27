@@ -390,17 +390,24 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, onStatu
 
       '<table>' +
         '<thead><tr>' +
-          '<th>#</th><th>الحساب</th><th>اسم الحساب</th><th>البيان</th><th>المبلغ</th><th>الضريبة</th><th>المورد</th>' +
+          '<th>#</th><th>الحساب</th><th>اسم الحساب</th><th>البيان</th><th>المبلغ</th><th>الضريبة</th><th>المورد</th><th>الأبعاد</th>' +
         '</tr></thead>' +
         '<tbody>' +
-        lines.map((l,i)=>'<tr><td style="text-align:center">'+(i+1)+'</td>' +
-          '<td style="font-family:monospace;color:#1d4ed8">'+(l.expense_account||l.account_code||'—')+'</td>' +
-          '<td>'+(l.expense_account_name||l.account_name||'—')+'</td>' +
-          '<td>'+(l.description||'—')+'</td>' +
-          '<td style="font-family:monospace;font-weight:700">'+fmN(l.amount||l.debit)+'</td>' +
-          '<td style="font-family:monospace;color:#92400e">'+fmN(l.vat_amount||0)+'</td>' +
-          '<td>'+(l.vendor_name||'—')+'</td></tr>'
-        ).join('') +
+        lines.map((l,i)=>{
+          const dims = []
+          if(l.branch_code||l.branch_name)   dims.push('<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:8px;font-size:9px;margin:1px">'+( l.branch_name||l.branch_code)+'</span>')
+          if(l.cost_center||l.cost_center_name) dims.push('<span style="background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:8px;font-size:9px;margin:1px">'+(l.cost_center_name||l.cost_center)+'</span>')
+          if(l.project_code||l.project_name) dims.push('<span style="background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:8px;font-size:9px;margin:1px">'+(l.project_name||l.project_code)+'</span>')
+          if(l.expense_classification_code||l.expense_classification_name) dims.push('<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:9px;margin:1px">'+(l.expense_classification_name||l.expense_classification_code)+'</span>')
+          return '<tr><td style="text-align:center">'+(i+1)+'</td>' +
+            '<td style="font-family:monospace;color:#1d4ed8">'+(l.expense_account||l.account_code||'—')+'</td>' +
+            '<td>'+(l.expense_account_name||l.account_name||'—')+'</td>' +
+            '<td>'+(l.description||'—')+'</td>' +
+            '<td style="font-family:monospace;font-weight:700">'+fmN(l.amount||l.debit)+'</td>' +
+            '<td style="font-family:monospace;color:#92400e">'+fmN(l.vat_amount||0)+'</td>' +
+            '<td>'+(l.vendor_name||'—')+'</td>' +
+            '<td>'+(dims.join('')||'—')+'</td></tr>'
+        }).join('') +
         '</tbody>' +
         '<tfoot><tr class="tot"><td colspan="4" style="text-align:right">الإجمالي</td>' +
           '<td style="font-family:monospace">'+fmN(total)+'</td>' +
@@ -485,10 +492,29 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, onStatu
           <p className="text-xs text-slate-400">{exp.description}</p>
         </div>
 
-        {/* أزرار الطباعة */}
+        {/* زر طباعة القيد المحاسبي — يظهر فقط بعد الترحيل */}
+        {exp.status==='posted' && exp.je_serial && (
+          <button onClick={()=>{
+            // فتح صفحة طباعة القيد
+            if(typeof printJE === 'function' && exp.je_data) {
+              printJE(exp.je_data, 'مصروف نثري', '')
+            } else {
+              // fallback: افتح في نافذة جديدة مع البحث عن القيد
+              window.open(
+                window.location.origin + window.location.pathname +
+                '#/accounting/journal?search=' + exp.je_serial,
+                '_blank'
+              )
+            }
+          }}
+          className="px-4 py-2.5 rounded-xl border-2 border-slate-300 text-slate-600 text-sm font-semibold hover:bg-slate-50 flex items-center gap-1.5">
+            📒 طباعة القيد
+            <span className="text-xs text-slate-400 font-mono">{exp.je_serial}</span>
+          </button>
+        )}
         <button onClick={handlePrint}
           className="px-4 py-2.5 rounded-xl border-2 border-blue-200 text-blue-700 text-sm font-semibold hover:bg-blue-50 flex items-center gap-1.5">
-          🖨️ طباعة
+          🖨️ طباعة المصروف
         </button>
 
         {/* Workflow buttons */}
