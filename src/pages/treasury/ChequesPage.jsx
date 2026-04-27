@@ -234,7 +234,8 @@ export default function ChequesPage({ showToast }) {
   const [showChequeForm, setShowChequeForm] = useState(false)
   const [editCheque, setEditCheque]   = useState(null)
   const [viewCheque, setViewCheque]   = useState(null)
-  const [clearing, setClearing] = useState({}) // { [ck_id]: true/false }
+  const [clearing, setClearing]         = useState({}) // { [ck_id]: true/false }
+  const [statusFilter, setStatusFilter] = useState('')  // فلتر الحالة في جدول الشيكات
 
   const doClearRow = async(ck, e) => {
     e.stopPropagation()
