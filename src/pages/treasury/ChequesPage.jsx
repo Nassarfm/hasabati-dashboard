@@ -21,6 +21,186 @@ function exportXLS(rows, headers, filename) {
   XLSX.writeFile(wb, filename + '.xlsx')
 }
 
+// ══════════════════════════════════════════════════════════
+// التفقيط — Arabic Number to Words
+// ══════════════════════════════════════════════════════════
+function tafqeet(amount) {
+  const ones = ['','واحد','اثنان','ثلاثة','أربعة','خمسة','ستة','سبعة','ثمانية','تسعة',
+                 'عشرة','أحد عشر','اثنا عشر','ثلاثة عشر','أربعة عشر','خمسة عشر',
+                 'ستة عشر','سبعة عشر','ثمانية عشر','تسعة عشر']
+  const tens  = ['','عشرة','عشرون','ثلاثون','أربعون','خمسون','ستون','سبعون','ثمانون','تسعون']
+  const hundreds = ['','مئة','مئتان','ثلاثمئة','أربعمئة','خمسمئة','ستمئة','سبعمئة','ثمانمئة','تسعمئة']
+
+  if(amount === 0) return 'صفر ريال'
+
+  const n = Math.floor(amount)
+  const fils = Math.round((amount - n) * 100)
+
+  const threeDigits = (num) => {
+    if(num === 0) return ''
+    let h = Math.floor(num / 100)
+    let t = Math.floor((num % 100) / 10)
+    let o = num % 10
+    let parts = []
+    if(h) parts.push(hundreds[h])
+    if(num % 100 < 20 && num % 100 > 0) {
+      parts.push(ones[num % 100])
+    } else {
+      if(t) parts.push(tens[t])
+      if(o) parts.push(ones[o])
+    }
+    return parts.join(' و')
+  }
+
+  let result = ''
+  const billions  = Math.floor(n / 1000000000)
+  const millions  = Math.floor((n % 1000000000) / 1000000)
+  const thousands = Math.floor((n % 1000000) / 1000)
+  const remainder = n % 1000
+
+  if(billions)  result += threeDigits(billions)  + ' مليار '
+  if(millions)  result += threeDigits(millions)  + ' مليون '
+  if(thousands === 1)     result += 'ألف '
+  else if(thousands === 2) result += 'ألفان '
+  else if(thousands >= 3 && thousands <= 10) result += threeDigits(thousands) + ' آلاف '
+  else if(thousands > 10) result += threeDigits(thousands) + ' ألف '
+  if(remainder) result += threeDigits(remainder)
+
+  result = result.trim() + ' ريال'
+  if(fils > 0) result += ' و' + threeDigits(fils) + ' هللة'
+  result += ' لا غير'
+
+  return result.trim()
+}
+
+// ══════════════════════════════════════════════════════════
+// قوالب طباعة الشيكات — Saudi Bank Templates
+// ══════════════════════════════════════════════════════════
+const BANK_TEMPLATES = {
+  rajhi: {
+    name: 'مصرف الراجحي', nameEn: 'Al Rajhi Bank',
+    width: 210, height: 96,   // mm
+    fields: {
+      date:    { top: 14, right: 15, width: 45, fontSize: 11 },
+      payee:   { top: 30, right: 35, width: 140, fontSize: 12 },
+      amount:  { top: 30, right: 8,  width: 28,  fontSize: 11 },
+      words:   { top: 44, right: 8,  width: 175, fontSize: 10 },
+      sign:    { top: 70, right: 8,  width: 70 },
+    },
+    color: '#1a5276'
+  },
+  ahli: {
+    name: 'البنك الأهلي السعودي', nameEn: 'SNB',
+    width: 210, height: 96,
+    fields: {
+      date:    { top: 12, right: 15, width: 45, fontSize: 11 },
+      payee:   { top: 28, right: 35, width: 140, fontSize: 12 },
+      amount:  { top: 28, right: 8,  width: 28,  fontSize: 11 },
+      words:   { top: 42, right: 8,  width: 175, fontSize: 10 },
+      sign:    { top: 68, right: 8,  width: 70 },
+    },
+    color: '#1a3a5c'
+  },
+  riyad: {
+    name: 'بنك الرياض', nameEn: 'Riyad Bank',
+    width: 210, height: 96,
+    fields: {
+      date:    { top: 13, right: 15, width: 45, fontSize: 11 },
+      payee:   { top: 29, right: 35, width: 140, fontSize: 12 },
+      amount:  { top: 29, right: 8,  width: 28,  fontSize: 11 },
+      words:   { top: 43, right: 8,  width: 175, fontSize: 10 },
+      sign:    { top: 69, right: 8,  width: 70 },
+    },
+    color: '#c0392b'
+  },
+  generic: {
+    name: 'نموذج عام', nameEn: 'Generic',
+    width: 210, height: 96,
+    fields: {
+      date:    { top: 14, right: 15, width: 45, fontSize: 11 },
+      payee:   { top: 30, right: 35, width: 140, fontSize: 12 },
+      amount:  { top: 30, right: 8,  width: 28,  fontSize: 11 },
+      words:   { top: 44, right: 8,  width: 175, fontSize: 10 },
+      sign:    { top: 70, right: 8,  width: 70 },
+    },
+    color: '#2c3e50'
+  },
+}
+
+function printCheque(cheque, templateKey='generic') {
+  const tmpl = BANK_TEMPLATES[templateKey] || BANK_TEMPLATES.generic
+  const f = tmpl.fields
+  const amount = parseFloat(cheque.amount || 0)
+  const words  = tafqeet(amount)
+  const dateStr = cheque.check_date ? new Date(cheque.check_date).toLocaleDateString('ar-SA') : ''
+
+  const w = window.open('','_blank','width=900,height=600')
+  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+  <title>طباعة شيك — ${cheque.check_number}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Segoe UI',Arial,sans-serif; background:#f5f5f5; direction:rtl; }
+    .np { display:block; } @media print { .np{display:none!important} @page{margin:0;size:${tmpl.width}mm ${tmpl.height}mm} }
+    .cheque-outer { width:${tmpl.width}mm; height:${tmpl.height}mm; margin:10mm auto; background:white;
+      border:1px solid #ccc; position:relative; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.15); }
+    .cheque-bg { position:absolute; inset:0; opacity:.04;
+      background:repeating-linear-gradient(45deg, ${tmpl.color} 0,${tmpl.color} 1px, transparent 1px, transparent 12px); }
+    .bank-header { position:absolute; top:3mm; right:4mm; left:4mm; display:flex; justify-content:space-between; align-items:center; border-bottom:0.5px solid ${tmpl.color}; padding-bottom:2mm; }
+    .bank-name { font-size:11px; font-weight:900; color:${tmpl.color}; }
+    .cheque-no { font-size:9px; color:#555; font-family:monospace; }
+    .field { position:absolute; }
+    .field-label { font-size:8px; color:#888; margin-bottom:1px; }
+    .field-value { font-size:${f.payee.fontSize}px; font-weight:700; border-bottom:1px solid #333;
+      min-width:40mm; padding-bottom:1mm; letter-spacing:.5px; }
+    .amount-box { border:1.5px solid ${tmpl.color}; border-radius:3px; padding:1mm 3mm;
+      font-size:13px; font-weight:900; font-family:monospace; color:${tmpl.color}; text-align:center; }
+    .words-value { font-size:${f.words.fontSize}px; font-weight:600; border-bottom:1px solid #333;
+      width:100%; padding-bottom:1mm; line-height:1.5; }
+    .footer { position:absolute; bottom:4mm; right:4mm; left:4mm; display:flex; justify-content:space-between; }
+    .sign-box { width:${f.sign.width}mm; border-top:1px solid #555; text-align:center; padding-top:1mm; font-size:8px; color:#555; }
+    .stamp { position:absolute; top:${tmpl.height/2-12}mm; left:15mm; border:3px solid rgba(0,150,0,.3);
+      color:rgba(0,150,0,.35); font-size:18px; font-weight:900; padding:2mm 6mm; border-radius:4px;
+      transform:rotate(-12deg); letter-spacing:3px; }
+    .controls { width:${tmpl.width}mm; margin:5mm auto; text-align:center; }
+    .btn { padding:8px 24px; margin:0 5px; border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:700; }
+    .btn-print { background:${tmpl.color}; color:white; }
+    .btn-close { background:#eee; color:#333; }
+  </style></head><body>
+  <div class="cheque-outer">
+    <div class="cheque-bg"></div>
+    <div class="bank-header">
+      <div class="bank-name">${tmpl.name}</div>
+      <div class="cheque-no">رقم: ${cheque.check_number || ''}</div>
+    </div>
+    <div class="field" style="top:${f.date.top}mm;right:${f.date.right}mm;width:${f.date.width}mm">
+      <div class="field-label">التاريخ</div>
+      <div class="field-value" style="font-size:${f.date.fontSize}px">${dateStr}</div>
+    </div>
+    <div class="field" style="top:${f.payee.top}mm;right:${f.payee.right}mm;width:${f.payee.width}mm">
+      <div class="field-label">ادفعوا بموجبه لأمر</div>
+      <div class="field-value" style="font-size:${f.payee.fontSize}px">${cheque.payee_name || cheque.party_name || ''}</div>
+    </div>
+    <div class="field" style="top:${f.amount.top}mm;left:${f.amount.right}mm;width:${f.amount.width}mm">
+      <div class="field-label">المبلغ</div>
+      <div class="amount-box">${amount.toLocaleString('en-US',{minimumFractionDigits:2})}</div>
+    </div>
+    <div class="field" style="top:${f.words.top}mm;right:4mm;left:4mm">
+      <div class="field-label">المبلغ كتابةً</div>
+      <div class="words-value">${words}</div>
+    </div>
+    <div class="footer">
+      <div class="sign-box">التوقيع المفوض</div>
+      <div style="font-size:8px;color:#888;align-self:flex-end">رقم الشيك: ${cheque.serial || ''}</div>
+    </div>
+  </div>
+  <div class="controls np">
+    <button class="btn btn-print" onclick="window.print()">🖨️ طباعة الشيك</button>
+    <button class="btn btn-close" onclick="window.close()">✕ إغلاق</button>
+  </div>
+  </body></html>`)
+  w.document.close()
+}
+
 // ── Cheque Workflow Steps ─────────────────────────────────
 const CHEQUE_WORKFLOW = [
   { key:'draft',     label:'مسودة',    icon:'📝' },
@@ -149,9 +329,10 @@ export default function ChequesPage({ showToast }) {
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
         {[
-          { id:'cheques', label:'📝 الشيكات'         },
-          { id:'books',   label:'📚 دفاتر الشيكات'  },
-          { id:'overdue', label:'⚠️ متأخرة' + (overdue.length > 0 ? ' ('+overdue.length+')' : '') },
+          { id:'cheques',  label:'📝 الشيكات' },
+          { id:'books',    label:'📚 دفاتر الشيكات' },
+          { id:'reports',  label:'📊 التقارير' },
+          { id:'overdue',  label:'⚠️ متأخرة' + (overdue.length > 0 ? ' ('+overdue.length+')' : '') },
         ].map(t => (
           <button key={t.id} onClick={() => setSubTab(t.id)}
             className={'flex-1 py-2 rounded-lg text-xs font-semibold transition-all '+(subTab===t.id?'bg-white text-blue-700 shadow-sm':'text-slate-500 hover:text-slate-700')}>
@@ -282,6 +463,11 @@ export default function ChequesPage({ showToast }) {
             ))
           }
         </div>
+      )}
+
+      {/* ── تبويب التقارير ── */}
+      {subTab === 'reports' && (
+        <ChequesReports cheques={cheques} onPrint={printCheque}/>
       )}
 
       {/* ── تبويب المتأخرة ── */}
@@ -760,6 +946,8 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
     finally { setLoading(false); setAction('') }
   }
 
+  const [printTemplate, setPrintTemplate] = useState('generic')
+
   const st = STATUS[ck.status] || { label: ck.status, color: 'bg-slate-100 text-slate-500' }
 
   return (
@@ -777,7 +965,19 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
           <p className="text-xs text-slate-400">شيك {ck.check_type === 'outgoing' ? 'صادر' : 'وارد'} · رقم: {ck.check_number}</p>
         </div>
 
-        {/* Action Buttons */}
+        {/* زر طباعة الشيك */}
+        <div className="flex items-center gap-1 border-2 border-slate-200 rounded-xl overflow-hidden">
+          <button onClick={() => printCheque(ck, printTemplate)}
+            className="px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
+            🖨️ طباعة الشيك
+          </button>
+          <select value={printTemplate} onChange={e => setPrintTemplate(e.target.value)}
+            className="border-r border-slate-200 px-2 py-2 text-xs text-slate-500 focus:outline-none bg-transparent">
+            {Object.entries(BANK_TEMPLATES).map(([k,v]) => (
+              <option key={k} value={k}>{v.name}</option>
+            ))}
+          </select>
+        </div>
         {ck.status === 'draft' && onEdit && (
           <button onClick={() => onEdit(ck)} className="px-4 py-2.5 rounded-xl border-2 border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-50">
             ✏️ تعديل
@@ -890,6 +1090,251 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════
+// CHEQUES REPORTS — 5 تقارير رئيسية
+// ══════════════════════════════════════════════════════════
+function ChequesReports({ cheques, onPrint }) {
+  const [activeReport, setActiveReport] = useState('due')
+  const [partyFilter, setPartyFilter]   = useState('')
+  const [printTemplate, setPrintTemplate] = useState('generic')
+  const today = new Date()
+  const in48h = new Date(today.getTime() + 48*60*60*1000)
+  const in7d  = new Date(today.getTime() + 7*24*60*60*1000)
+
+  // ① الشيكات المستحقة
+  const dueCheques = cheques
+    .filter(c => c.due_date && c.status === 'posted')
+    .sort((a,b) => new Date(a.due_date) - new Date(b.due_date))
+
+  const dueToday  = dueCheques.filter(c => new Date(c.due_date) <= today)
+  const due48h    = dueCheques.filter(c => new Date(c.due_date) <= in48h && new Date(c.due_date) > today)
+  const due7d     = dueCheques.filter(c => new Date(c.due_date) <= in7d  && new Date(c.due_date) > in48h)
+
+  // ② الشيكات المرتجعة
+  const bouncedCheques = cheques.filter(c => c.status === 'returned')
+
+  // ③ كشف حساب حسب المتعامل
+  const partyCheques = cheques
+    .filter(c => c.party_name || c.payee_name)
+    .filter(c => !partyFilter || (c.party_name||c.payee_name||'').toLowerCase().includes(partyFilter.toLowerCase()))
+
+  const partyGroups = partyCheques.reduce((acc, c) => {
+    const name = c.party_name || c.payee_name || 'غير محدد'
+    if(!acc[name]) acc[name] = { name, cheques:[], total:0, pending:0 }
+    acc[name].cheques.push(c)
+    acc[name].total += parseFloat(c.amount||0)
+    if(['draft','submitted','approved','posted'].includes(c.status)) acc[name].pending += parseFloat(c.amount||0)
+    return acc
+  }, {})
+
+  // ④ التدفقات النقدية المتوقعة
+  const cashFlow = []
+  for(let i=0; i<30; i++) {
+    const d = new Date(today)
+    d.setDate(d.getDate() + i)
+    const dStr = d.toISOString().slice(0,10)
+    const out = cheques.filter(c => c.check_type==='outgoing' && c.due_date?.slice(0,10)===dStr && c.status==='posted')
+      .reduce((s,c) => s + parseFloat(c.amount||0), 0)
+    const inn = cheques.filter(c => c.check_type==='incoming' && c.due_date?.slice(0,10)===dStr && c.status==='posted')
+      .reduce((s,c) => s + parseFloat(c.amount||0), 0)
+    if(out > 0 || inn > 0) cashFlow.push({ date: dStr, out, inn, net: inn - out })
+  }
+
+  // ⑤ الشيكات الملغاة
+  const cancelledCheques = cheques.filter(c => c.status === 'cancelled' || c.status === 'rejected')
+
+  const reports = [
+    { id:'due',       label:'📅 المستحقة',           count: dueCheques.length },
+    { id:'bounced',   label:'❌ المرتجعة',            count: bouncedCheques.length },
+    { id:'party',     label:'👤 كشف المتعاملين',      count: Object.keys(partyGroups).length },
+    { id:'cashflow',  label:'📈 التدفق النقدي',       count: cashFlow.length },
+    { id:'cancelled', label:'🚫 الملغاة',             count: cancelledCheques.length },
+  ]
+
+  return (
+    <div className="space-y-4">
+      {/* تنبيه 48 ساعة */}
+      {(dueToday.length > 0 || due48h.length > 0) && (
+        <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 flex items-start gap-3">
+          <span className="text-2xl shrink-0">🔔</span>
+          <div className="flex-1">
+            <div className="font-bold text-red-700 text-sm">تنبيه الاستحقاق</div>
+            {dueToday.length > 0 && (
+              <div className="text-xs text-red-600 mt-1">
+                {dueToday.length} شيك مستحق اليوم — إجمالي: {dueToday.reduce((s,c)=>s+parseFloat(c.amount||0),0).toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س
+              </div>
+            )}
+            {due48h.length > 0 && (
+              <div className="text-xs text-amber-600 mt-1">
+                {due48h.length} شيك يستحق خلال 48 ساعة
+              </div>
+            )}
+          </div>
+          <button onClick={() => exportXLS(
+            [...dueToday,...due48h].map(c=>[c.serial,c.check_number,fmtDate(c.due_date),c.payee_name||'',parseFloat(c.amount||0)]),
+            ['الرقم','رقم الشيك','الاستحقاق','المستفيد','المبلغ'],'شيكات_مستحقة'
+          )} className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg font-semibold">
+            📥 تصدير
+          </button>
+        </div>
+      )}
+
+      {/* اختيار التقرير */}
+      <div className="flex gap-2 flex-wrap">
+        {reports.map(r => (
+          <button key={r.id} onClick={() => setActiveReport(r.id)}
+            className={'px-4 py-2 rounded-xl text-xs font-semibold border-2 transition-all '+
+              (activeReport===r.id?'bg-blue-700 border-blue-700 text-white':'border-slate-200 text-slate-600 hover:bg-slate-50')}>
+            {r.label} {r.count > 0 && <span className="mr-1 opacity-70">({r.count})</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* ① الشيكات المستحقة */}
+      {activeReport === 'due' && (
+        <div className="space-y-3">
+          {[
+            { items: dueToday, title:'⚠️ مستحقة اليوم', color:'red' },
+            { items: due48h,   title:'🕐 خلال 48 ساعة',  color:'amber' },
+            { items: due7d,    title:'📅 خلال 7 أيام',   color:'blue' },
+          ].map(group => group.items.length > 0 && (
+            <div key={group.title} className={`bg-${group.color}-50 border border-${group.color}-200 rounded-2xl overflow-hidden`}>
+              <div className={`px-4 py-2.5 font-bold text-sm text-${group.color}-700 flex justify-between`}>
+                <span>{group.title} ({group.items.length})</span>
+                <span className="font-mono">{group.items.reduce((s,c)=>s+parseFloat(c.amount||0),0).toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س</span>
+              </div>
+              {group.items.map(c => (
+                <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 border-t border-slate-100 bg-white hover:bg-slate-50">
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold">{c.payee_name || c.party_name || '—'}</div>
+                    <div className="text-xs text-slate-400">{c.serial} · {c.bank_account_name}</div>
+                  </div>
+                  <div className="text-xs text-slate-500">{fmtDate(c.due_date)}</div>
+                  <div className="font-mono font-bold text-sm">{parseFloat(c.amount||0).toLocaleString('ar-SA',{minimumFractionDigits:2})}</div>
+                  <div className="flex gap-1">
+                    <select value={printTemplate} onChange={e => setPrintTemplate(e.target.value)}
+                      className="text-[10px] border border-slate-200 rounded px-1 py-0.5">
+                      {Object.entries(BANK_TEMPLATES).map(([k,v]) => <option key={k} value={k}>{v.name}</option>)}
+                    </select>
+                    <button onClick={() => onPrint(c, printTemplate)}
+                      className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-100">
+                      🖨️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+          {dueCheques.length === 0 && <div className="py-10 text-center text-slate-400">لا توجد شيكات مستحقة</div>}
+        </div>
+      )}
+
+      {/* ② المرتجعة */}
+      {activeReport === 'bounced' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-4 py-3 flex justify-between items-center bg-red-50 border-b border-red-100">
+            <span className="font-bold text-red-700 text-sm">❌ الشيكات المرتجعة ({bouncedCheques.length})</span>
+            <button onClick={() => exportXLS(
+              bouncedCheques.map(c=>[c.serial,c.check_number,fmtDate(c.check_date),c.payee_name||'',parseFloat(c.amount||0),c.return_reason||'']),
+              ['الرقم','رقم الشيك','التاريخ','المستفيد','المبلغ','سبب الإعادة'],'شيكات_مرتجعة'
+            )} className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg">📥 Excel</button>
+          </div>
+          {bouncedCheques.length === 0 ?
+            <div className="py-10 text-center text-slate-400">لا توجد شيكات مرتجعة</div> :
+            bouncedCheques.map((c,i) => (
+              <div key={c.id} className={'flex items-center gap-3 px-4 py-3 border-b border-slate-50 '+(i%2===0?'':'bg-slate-50/30')}>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{c.payee_name || c.party_name || '—'}</div>
+                  <div className="text-xs text-slate-400">{c.serial} · {fmtDate(c.check_date)}</div>
+                  {c.return_reason && <div className="text-xs text-red-500 mt-0.5">السبب: {c.return_reason}</div>}
+                </div>
+                <div className="font-mono font-bold text-red-700">{parseFloat(c.amount||0).toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س</div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      {/* ③ كشف المتعاملين */}
+      {activeReport === 'party' && (
+        <div className="space-y-3">
+          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-400"
+            value={partyFilter} onChange={e => setPartyFilter(e.target.value)}
+            placeholder="بحث باسم المتعامل..."/>
+          {Object.values(partyGroups).sort((a,b) => b.total - a.total).map(g => (
+            <div key={g.name} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex justify-between">
+                <span className="font-bold text-slate-800">{g.name}</span>
+                <div className="text-right">
+                  <div className="text-xs text-slate-400">إجمالي الشيكات</div>
+                  <div className="font-mono font-bold text-blue-700">{g.total.toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س</div>
+                </div>
+              </div>
+              <div className="flex gap-4 px-4 py-2 text-xs text-slate-500 border-b">
+                <span>{g.cheques.length} شيك</span>
+                <span className="text-amber-600 font-semibold">معلق: {g.pending.toLocaleString('ar-SA',{minimumFractionDigits:2})}</span>
+              </div>
+            </div>
+          ))}
+          {Object.keys(partyGroups).length === 0 && <div className="py-10 text-center text-slate-400">لا توجد نتائج</div>}
+        </div>
+      )}
+
+      {/* ④ التدفق النقدي */}
+      {activeReport === 'cashflow' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-4 py-3 flex justify-between items-center border-b">
+            <span className="font-bold text-slate-800 text-sm">📈 التدفق النقدي المتوقع (30 يوم)</span>
+            <button onClick={() => exportXLS(
+              cashFlow.map(r=>[r.date,r.inn,r.out,r.net]),
+              ['التاريخ','وارد','صادر','الصافي'],'تدفق_نقدي'
+            )} className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg">📥 Excel</button>
+          </div>
+          {cashFlow.length === 0 ?
+            <div className="py-10 text-center text-slate-400">لا توجد شيكات مستحقة خلال 30 يوم</div> :
+            cashFlow.map(r => (
+              <div key={r.date} className="grid items-center px-4 py-2.5 border-b border-slate-50 text-sm"
+                style={{gridTemplateColumns:'1fr 1fr 1fr 1fr'}}>
+                <div className="text-slate-600">{fmtDate(r.date)}</div>
+                <div className="font-mono text-emerald-600">{r.inn > 0 ? '+'+r.inn.toLocaleString('ar-SA',{minimumFractionDigits:2}) : '—'}</div>
+                <div className="font-mono text-red-600">{r.out > 0 ? '-'+r.out.toLocaleString('ar-SA',{minimumFractionDigits:2}) : '—'}</div>
+                <div className={'font-mono font-bold '+(r.net >= 0 ? 'text-emerald-700':'text-red-700')}>
+                  {r.net >= 0 ? '+':''}{r.net.toLocaleString('ar-SA',{minimumFractionDigits:2})}
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      )}
+
+      {/* ⑤ الملغاة */}
+      {activeReport === 'cancelled' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-4 py-3 flex justify-between items-center bg-slate-50 border-b">
+            <span className="font-bold text-slate-700 text-sm">🚫 الشيكات الملغاة ({cancelledCheques.length})</span>
+            <button onClick={() => exportXLS(
+              cancelledCheques.map(c=>[c.serial,c.check_number,fmtDate(c.check_date),c.payee_name||'',parseFloat(c.amount||0)]),
+              ['الرقم','رقم الشيك','التاريخ','المستفيد','المبلغ'],'شيكات_ملغاة'
+            )} className="text-xs bg-slate-600 text-white px-3 py-1.5 rounded-lg">📥 Excel</button>
+          </div>
+          {cancelledCheques.length === 0 ?
+            <div className="py-10 text-center text-slate-400">لا توجد شيكات ملغاة</div> :
+            cancelledCheques.map((c,i) => (
+              <div key={c.id} className={'flex items-center gap-3 px-4 py-3 border-b border-slate-50 '+(i%2===0?'':'bg-slate-50/30')}>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{c.serial}</div>
+                  <div className="text-xs text-slate-400">{c.payee_name} · {fmtDate(c.check_date)}</div>
+                </div>
+                <div className="font-mono text-slate-500">{parseFloat(c.amount||0).toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س</div>
+              </div>
+            ))
+          }
         </div>
       )}
     </div>
