@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import ReactDOM from 'react-dom'
 import * as XLSX from 'xlsx'
 import api from '../../api/client'
-import { PartyPicker, WorkflowStatusBar } from '../../components/pickers'
+import { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar } from '../../components/pickers'
 
 // ── Helpers ──────────────────────────────────────────────
 const fmt     = (n,d=3) => (parseFloat(n||0)).toLocaleString('ar-SA',{minimumFractionDigits:d,maximumFractionDigits:d})
@@ -451,8 +451,15 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
     party_id:        editCheque?.party_id        || '',
     party_name:      editCheque?.party_name      || '',
     gl_account_code: editCheque?.gl_account_code || '',
+    gl_account_name: editCheque?.gl_account_name || '',
     description:     editCheque?.description     || '',
     notes:           editCheque?.notes           || '',
+    branch_code:     editCheque?.branch_code     || '',
+    branch_name:     editCheque?.branch_name     || '',
+    cost_center:     editCheque?.cost_center     || '',
+    cost_center_name:editCheque?.cost_center_name|| '',
+    project_code:    editCheque?.project_code    || '',
+    project_name:    editCheque?.project_name    || '',
   })
   const [saving, setSaving]   = useState(false)
   const [errors, setErrors]   = useState([])
@@ -496,16 +503,19 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
   const selectedAccount = accounts.find(a => a.id === form.bank_account_id)
 
   // التوجيه المحاسبي المتوقع
+  const hasDims = form.branch_code || form.cost_center || form.project_code
   const jePreview = form.amount && parseFloat(form.amount) > 0 ? [
     {
       code: form.gl_account_code || '21010101',
-      name: 'ذمم دائنة — ' + (form.payee_name || form.party_name || 'المستفيد'),
+      name: (form.gl_account_name ? form.gl_account_name : 'ذمم دائنة') + (form.payee_name ? ' — ' + form.payee_name : ''),
       debit: parseFloat(form.amount), credit: 0,
+      dims: hasDims,
     },
     {
-      code: selectedAccount?.account_code || form.bank_account_id || '—',
+      code: selectedAccount?.account_code || '—',
       name: selectedAccount?.account_name || 'الحساب البنكي',
       debit: 0, credit: parseFloat(form.amount),
+      dims: false,
     },
   ] : []
   const isBalanced = jePreview.length > 0 &&
@@ -617,10 +627,13 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
                 placeholder="الاسم المكتوب على الشيك"/>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">حساب المقابل (GL)</label>
-              <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"
-                value={form.gl_account_code} onChange={e => s('gl_account_code', e.target.value)}
-                placeholder="21010101"/>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">حساب المقابل (GL) *</label>
+              <AccountPicker
+                value={form.gl_account_code}
+                onChange={(code,name)=>{s('gl_account_code',code);s('gl_account_name',name||'')}}
+                label="" required={false} postableOnly={true}
+              />
+              {form.gl_account_name&&<div className="text-[10px] text-slate-400 mt-1">{form.gl_account_name}</div>}
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 block mb-1.5">البيان</label>
@@ -652,28 +665,57 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
               </span>
             </div>
             <div className="grid text-slate-500 text-xs font-semibold bg-slate-50 border-b"
-              style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
-              {['الكود','اسم الحساب','مدين','دائن'].map(h => (
+              style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr 2fr'}}>
+              {['الكود','اسم الحساب','مدين','دائن','الأبعاد'].map(h => (
                 <div key={h} className="px-4 py-2.5">{h}</div>
               ))}
             </div>
             {jePreview.map((l,i) => (
               <div key={i} className={'grid border-b border-slate-50 items-center text-xs '+(i%2===0?'bg-white':'bg-slate-50/30')}
-                style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
+                style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr 2fr'}}>
                 <div className="px-4 py-2.5 font-mono text-blue-600">{l.code}</div>
                 <div className="px-4 py-2.5 text-slate-700">{l.name}</div>
                 <div className="px-4 py-2.5 font-mono font-bold text-slate-800">{l.debit > 0 ? fmt(l.debit, 3) : '—'}</div>
                 <div className="px-4 py-2.5 font-mono font-bold text-emerald-700">{l.credit > 0 ? fmt(l.credit, 3) : '—'}</div>
+                <div className="px-4 py-2.5">
+                  {l.dims && (
+                    <div className="flex flex-wrap gap-1">
+                      {form.branch_name&&<span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{form.branch_name}</span>}
+                      {form.cost_center_name&&<span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{form.cost_center_name}</span>}
+                      {form.project_name&&<span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{form.project_name}</span>}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             <div className="grid bg-slate-800 text-white text-sm font-bold"
-              style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
+              style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr 2fr'}}>
               <div className="col-span-2 px-4 py-2.5">الإجمالي</div>
               <div className="px-4 py-2.5 font-mono">{fmt(parseFloat(form.amount)||0, 3)}</div>
               <div className="px-4 py-2.5 font-mono">{fmt(parseFloat(form.amount)||0, 3)}</div>
+              <div/>
             </div>
           </div>
         )}
+
+        {/* الأبعاد المحاسبية */}
+        <div className="bg-purple-50/40 rounded-2xl border border-purple-100 p-4">
+          <div className="text-xs font-bold text-purple-600 uppercase mb-3">📐 الأبعاد المحاسبية (اختياري)</div>
+          <div className="grid grid-cols-4 gap-3">
+            <DimensionPicker type="branch" color="blue"
+              value={form.branch_code} valueName={form.branch_name}
+              onChange={(c,n)=>{s('branch_code',c);s('branch_name',n)}} label="الفرع"/>
+            <DimensionPicker type="cost_center" color="purple"
+              value={form.cost_center} valueName={form.cost_center_name}
+              onChange={(c,n)=>{s('cost_center',c);s('cost_center_name',n)}} label="مركز التكلفة"/>
+            <DimensionPicker type="project" color="green"
+              value={form.project_code} valueName={form.project_name}
+              onChange={(c,n)=>{s('project_code',c);s('project_name',n)}} label="المشروع"/>
+            <DimensionPicker type="expense_class" color="amber"
+              value={form.expense_classification_code||''} valueName={form.expense_classification_name||''}
+              onChange={(c,n)=>{s('expense_classification_code',c);s('expense_classification_name',n)}} label="التصنيف"/>
+          </div>
+        </div>
 
         {/* ملاحظات */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
