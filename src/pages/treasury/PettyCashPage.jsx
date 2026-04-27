@@ -322,7 +322,71 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, onStatu
   const fund = (funds||[]).find(f=>f.id===exp.fund_id)
 
   // ── طباعة احترافية ─────────────────────────────────────
-  const handlePrint = () => {
+  const doPrintJE = async (exp) => {
+    try {
+      // جلب القيد من API
+      const r = await api.accounting.getJEs({ search: exp.je_serial, limit: 1 })
+      const items = Array.isArray(r?.data) ? r.data : Array.isArray(r?.data?.items) ? r.data.items : []
+      const je = items.find(j => j.serial === exp.je_serial) || items[0]
+      if(!je) { showToast('لم يُعثر على القيد — ' + exp.je_serial, 'error'); return }
+      const detail = await api.accounting.getJE(je.id)
+      const jeData = detail?.data || je
+      printJEWindow(jeData)
+    } catch(e) { showToast(e.message, 'error') }
+  }
+
+  const printJEWindow = (je) => {
+    const lines = je.lines || je.je_lines || []
+    const total = lines.reduce((s,l) => s + parseFloat(l.debit||0), 0)
+    const w = window.open('','_blank','width=900,height=750')
+    const fmN = n => parseFloat(n||0).toLocaleString('ar-SA',{minimumFractionDigits:3})
+    w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>'+je.serial+'</title>' +
+      '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,Arial,sans-serif;font-size:12px;padding:24px;direction:rtl}' +
+      '@media print{.np{display:none!important}@page{margin:1cm;size:A4}}' +
+      '.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #1e3a5f;padding-bottom:12px;margin-bottom:16px}' +
+      '.logo{font-size:18px;font-weight:900;color:#1e3a5f}.serial{font-size:16px;font-weight:900;font-family:monospace}' +
+      '.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:14px}' +
+      '.ml{font-size:9px;color:#94a3b8;margin-bottom:2px}.mv{font-size:11px;font-weight:700}' +
+      'table{width:100%;border-collapse:collapse;margin-bottom:12px}' +
+      'thead tr{background:#1e3a5f;color:white}th,td{padding:7px 10px;text-align:right}td{border-bottom:1px solid #f1f5f9;font-size:11px}' +
+      'tr:nth-child(even)td{background:#fafbfc}.tot td{background:#0f172a!important;color:white!important;font-weight:700}' +
+      '.sigs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px;padding-top:16px;border-top:1px dashed #e2e8f0}' +
+      '.sg-line{border-top:1px solid #94a3b8;width:100%;margin-bottom:5px}.sg-lbl{font-size:9px;color:#64748b;text-align:center}' +
+      '.np{text-align:center;margin-top:20px}</style></head><body>' +
+      '<div class="hdr"><div><div class="logo">حساباتي ERP</div><div style="font-size:10px;color:#64748b">نظام المحاسبة والإدارة المالية</div></div>' +
+      '<div style="text-align:left"><div class="serial">'+je.serial+'</div><div style="font-size:10px;color:#64748b;margin-top:2px">'+
+        (je.status==='posted'?'مُرحَّل':'مسودة')+'</div></div></div>' +
+      '<div class="meta">' +
+        '<div><div class="ml">التاريخ</div><div class="mv">'+(je.je_date||je.date||'—')+'</div></div>' +
+        '<div><div class="ml">نوع القيد</div><div class="mv">'+(je.je_type||'—')+'</div></div>' +
+        '<div><div class="ml">الإجمالي</div><div class="mv" style="color:#1d4ed8">'+fmN(total)+' ر.س</div></div>' +
+        '<div><div class="ml">أنشأه</div><div class="mv">'+((je.created_by||'').split('@')[0]||'—')+'</div></div>' +
+      '</div>' +
+      (je.description?'<div style="background:#eff6ff;border-right:4px solid #1e3a5f;padding:8px 12px;margin-bottom:14px;border-radius:0 6px 6px 0;font-size:12px;font-weight:600;color:#1e3a5f">'+je.description+'</div>':'')+
+      '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:11px;font-weight:700;color:#1e40af">المبلغ كتابةً: ' + tafqeet(total) + '</div>' +
+      '<table><thead><tr><th>#</th><th>الكود</th><th>اسم الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th></tr></thead><tbody>' +
+      lines.map((l,i) => '<tr><td style="text-align:center;color:#94a3b8">'+(i+1)+'</td>' +
+        '<td style="font-family:monospace;color:#1d4ed8">'+(l.account_code||'—')+'</td>' +
+        '<td>'+(l.account_name||'—')+'</td>' +
+        '<td style="color:#64748b;font-size:10px">'+(l.description||'—')+'</td>' +
+        '<td style="font-family:monospace;font-weight:700;color:#1d4ed8">'+(parseFloat(l.debit||0)>0?fmN(l.debit):'—')+'</td>' +
+        '<td style="font-family:monospace;font-weight:700;color:#059669">'+(parseFloat(l.credit||0)>0?fmN(l.credit):'—')+'</td></tr>'
+      ).join('') +
+      '</tbody><tfoot><tr class="tot"><td colspan="4" style="text-align:right">الإجمالي</td>' +
+        '<td style="font-family:monospace">'+fmN(total)+'</td>' +
+        '<td style="font-family:monospace">'+fmN(total)+'</td>' +
+      '</tr></tfoot></table>' +
+      '<div class="sigs">' +
+        '<div><div class="sg-line"></div><div class="sg-lbl">أنشأه: '+((je.created_by||'').split('@')[0]||'—')+'</div></div>' +
+        '<div><div class="sg-line"></div><div class="sg-lbl">راجعه</div></div>' +
+        '<div><div class="sg-line"></div><div class="sg-lbl">اعتمده</div></div>' +
+        '<div><div class="sg-line"></div><div class="sg-lbl">رحَّله: '+((je.posted_by||'').split('@')[0]||'—')+'</div></div>' +
+      '</div>' +
+      '<div class="np"><button onclick="window.print()" style="background:#1e3a5f;color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px">🖨️ طباعة / PDF</button>' +
+      '<button onclick="window.close()" style="margin-right:10px;background:#f1f5f9;border:1px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer">✕ إغلاق</button></div>' +
+      '</body></html>')
+    w.document.close()
+  }
     const w = window.open('','_blank','width=900,height=750')
     const fmN = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:3})
     const lines = exp.lines || exp.expense_lines || []
@@ -494,19 +558,7 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, onStatu
 
         {/* زر طباعة القيد المحاسبي — يظهر فقط بعد الترحيل */}
         {exp.status==='posted' && exp.je_serial && (
-          <button onClick={()=>{
-            // فتح صفحة طباعة القيد
-            if(typeof printJE === 'function' && exp.je_data) {
-              printJE(exp.je_data, 'مصروف نثري', '')
-            } else {
-              // fallback: افتح في نافذة جديدة مع البحث عن القيد
-              window.open(
-                window.location.origin + window.location.pathname +
-                '#/accounting/journal?search=' + exp.je_serial,
-                '_blank'
-              )
-            }
-          }}
+          <button onClick={()=>doPrintJE(exp)}
           className="px-4 py-2.5 rounded-xl border-2 border-slate-300 text-slate-600 text-sm font-semibold hover:bg-slate-50 flex items-center gap-1.5">
             📒 طباعة القيد
             <span className="text-xs text-slate-400 font-mono">{exp.je_serial}</span>

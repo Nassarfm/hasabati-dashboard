@@ -57,6 +57,7 @@ const MODULES = [
         id: 'transactions', ar: 'العمليات', en: 'Transactions', type:'section',
         children: [
           { id:'journal',   icon:'📒', ar:'القيود اليومية',   en:'Journal Entries'   },
+          { id:'je-print',  icon:'🖨️', ar:'طباعة المستندات',  en:'Print Documents'   },
           { id:'recurring', icon:'🔄', ar:'القيود المتكررة',  en:'Recurring Entries' },
           { id:'reversing', icon:'↩️', ar:'القيود العكسية',  en:'Reversing Entries' },
           { id:'allocation',icon:'🔀', ar:'قيد التوزيع',      en:'Allocation'        },
