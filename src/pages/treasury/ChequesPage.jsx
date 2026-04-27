@@ -331,13 +331,23 @@ export default function ChequesPage({ showToast }) {
 // ══════════════════════════════════════════════════════════
 // CHEQUE BOOK MODAL
 // ══════════════════════════════════════════════════════════
-function ChequeBookModal({ accounts, onClose, onSaved, showToast }) {
+function ChequeBookModal({ accounts: initialAccounts, onClose, onSaved, showToast }) {
+  const [accounts, setAccounts] = useState(initialAccounts || [])
   const [form, setForm] = useState({
     book_code: '', bank_account_id: '', bank_name: '',
     series_from: '', series_to: '', currency_code: 'SAR', notes: ''
   })
   const [saving, setSaving] = useState(false)
   const s = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  // إذا لم تكن الحسابات مُمرَّرة، اجلبها مباشرة
+  useEffect(() => {
+    if(accounts.length === 0) {
+      api.treasury.listBankAccounts()
+        .then(r => setAccounts(r?.data || r || []))
+        .catch(() => {})
+    }
+  }, [])
 
   const save = async () => {
     if(!form.series_from || !form.series_to) { showToast('حدد نطاق الأرقام', 'error'); return }
@@ -483,6 +493,23 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
   }
 
   const selectedBook = books.find(b => b.id === form.cheque_book_id)
+  const selectedAccount = accounts.find(a => a.id === form.bank_account_id)
+
+  // التوجيه المحاسبي المتوقع
+  const jePreview = form.amount && parseFloat(form.amount) > 0 ? [
+    {
+      code: form.gl_account_code || '21010101',
+      name: 'ذمم دائنة — ' + (form.payee_name || form.party_name || 'المستفيد'),
+      debit: parseFloat(form.amount), credit: 0,
+    },
+    {
+      code: selectedAccount?.account_code || form.bank_account_id || '—',
+      name: selectedAccount?.account_name || 'الحساب البنكي',
+      debit: 0, credit: parseFloat(form.amount),
+    },
+  ] : []
+  const isBalanced = jePreview.length > 0 &&
+    Math.abs(jePreview.reduce((s,l) => s + l.debit - l.credit, 0)) < 0.01
 
   return (
     <div className="min-h-screen bg-slate-50" dir="rtl">
@@ -613,6 +640,40 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
             placeholder="ابحث عن المورد أو العميل..."
           />
         </div>
+
+        {/* التوجيه المحاسبي */}
+        {jePreview.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 flex items-center justify-between"
+              style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)'}}>
+              <span className="text-white font-bold text-sm">📒 التوجيه المحاسبي المتوقع</span>
+              <span className={'text-xs px-3 py-1 rounded-full font-semibold '+(isBalanced?'bg-emerald-400 text-emerald-900':'bg-red-400 text-red-900')}>
+                {isBalanced ? 'متوازن ✅' : 'غير متوازن'}
+              </span>
+            </div>
+            <div className="grid text-slate-500 text-xs font-semibold bg-slate-50 border-b"
+              style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
+              {['الكود','اسم الحساب','مدين','دائن'].map(h => (
+                <div key={h} className="px-4 py-2.5">{h}</div>
+              ))}
+            </div>
+            {jePreview.map((l,i) => (
+              <div key={i} className={'grid border-b border-slate-50 items-center text-xs '+(i%2===0?'bg-white':'bg-slate-50/30')}
+                style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
+                <div className="px-4 py-2.5 font-mono text-blue-600">{l.code}</div>
+                <div className="px-4 py-2.5 text-slate-700">{l.name}</div>
+                <div className="px-4 py-2.5 font-mono font-bold text-slate-800">{l.debit > 0 ? fmt(l.debit, 3) : '—'}</div>
+                <div className="px-4 py-2.5 font-mono font-bold text-emerald-700">{l.credit > 0 ? fmt(l.credit, 3) : '—'}</div>
+              </div>
+            ))}
+            <div className="grid bg-slate-800 text-white text-sm font-bold"
+              style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
+              <div className="col-span-2 px-4 py-2.5">الإجمالي</div>
+              <div className="px-4 py-2.5 font-mono">{fmt(parseFloat(form.amount)||0, 3)}</div>
+              <div className="px-4 py-2.5 font-mono">{fmt(parseFloat(form.amount)||0, 3)}</div>
+            </div>
+          </div>
+        )}
 
         {/* ملاحظات */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
