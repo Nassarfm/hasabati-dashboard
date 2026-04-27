@@ -213,48 +213,36 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
   const load = useCallback(async(q='')=>{
     setLoading(true)
     try{
+      // الـ code في الـ dimensions API: branch, cost_center, project, expense_classification
       const typeMap = {
-        branch:       ['branch','الفرع','Branch'],
-        cost_center:  ['cost_center','مركز_التكلفة','CostCenter','cost center'],
-        project:      ['project','المشروع','Project'],
-        expense_class:['expense_classification','expense_class','تصنيف_المصروف'],
-        department:   ['department','القسم','Department'],
-        profit_center:['profit_center','مركز_الربح'],
+        branch:       'branch',
+        cost_center:  'cost_center',
+        project:      'project',
+        expense_class:'expense_classification',
+        department:   'department',
+        profit_center:'profit_center',
       }
-      const aliases = typeMap[type] || [type]
+      const dimCode = typeMap[type] || type
 
-      // جلب كل الأبعاد
+      // list_dimensions يُرجع values مدمجة — طلب واحد فقط
       const dimsRes = await api.dimensions.list()
-      const dims = dimsRes?.data || dimsRes || []
+      const dims = dimsRes?.data || []
 
-      // البحث بكل الحقول المحتملة
-      const dim = dims.find(d => {
-        const v = [d.dimension_type, d.code, d.slug, d.type, d.name_en, d.key].map(x=>(x||'').toLowerCase())
-        return aliases.some(a => v.includes(a.toLowerCase()))
-      })
-
-      let items = []
-      if(dim){
-        const vRes = await api.dimensions.listValues(dim.id)
-        items = (vRes?.data || vRes || []).filter(v=>v.is_active!==false)
-      } else {
-        // fallback: جرب الـ settings APIs القديمة
-        if(type==='branch')       { const r=await api.settings.listBranches?.(); items=r?.data||r||[] }
-        else if(type==='cost_center') { const r=await api.settings.listCostCenters?.(); items=r?.data||r||[] }
-        else if(type==='project') { const r=await api.settings.listProjects?.(); items=r?.data||r||[] }
-      }
+      const dim = dims.find(d => d.code === dimCode)
+      let items = dim
+        ? (dim.values || []).filter(v => v.is_active !== false)
+        : []
 
       if(q){
-        const low=q.toLowerCase()
-        items=items.filter(i=>{
-          const name=(i.name_ar||i.value_name||i.name||'').toLowerCase()
-          const code=(i.value_code||i.code||i.branch_code||'').toLowerCase()
-          return name.includes(low)||code.includes(low)
-        })
+        const low = q.toLowerCase()
+        items = items.filter(v =>
+          (v.name_ar||'').toLowerCase().includes(low) ||
+          (v.code||'').toLowerCase().includes(low)
+        )
       }
-      setResults(items.slice(0,40))
+      setResults(items.slice(0, 40))
     }catch(e){
-      console.error('DimensionPicker error:', e)
+      console.error('DimensionPicker error:', type, e)
       setResults([])
     }finally{ setLoading(false) }
   },[type])
@@ -269,8 +257,8 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
     setOpen(true); load('')
   }
 
-  const getCode=(item)=>item.value_code||item.code||item.branch_code||item.cost_center_code||item.project_code||item.id||''
-  const getName=(item)=>item.name_ar||item.value_name||item.name||item.branch_name||item.cost_center_name||item.project_name||item.name_en||''
+  const getCode=(item)=>item.code||''
+  const getName=(item)=>item.name_ar||item.name_en||item.code||''
 
   const select=(item)=>{
     onChange(getCode(item), getName(item))
