@@ -214,25 +214,30 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
     setLoading(true)
     try{
       let items=[]
-      if(type==='branch'){
-        const r=await api.settings.listBranches()
-        items=(r?.data||r||[]).filter(b=>b.is_active!==false)
-      } else if(type==='cost_center'){
-        const r=await api.settings.listCostCenters()
-        items=(r?.data||r||[]).filter(c=>c.is_active!==false)
-      } else if(type==='project'){
-        const r=await api.settings.listProjects()
-        items=(r?.data||r||[]).filter(p=>p.status!=='closed')
-      } else if(type==='expense_class'){
-        const r=await api.settings.listExpenseClassifications?.()
-        items=r?.data||r||[]
+      if(type==='branch'||type==='cost_center'||type==='project'||type==='expense_class'||type==='department'||type==='profit_center'){
+        // جلب كل الأبعاد أولاً للحصول على الـ id المناسب
+        const typeMap = {
+          branch:       'branch',
+          cost_center:  'cost_center',
+          project:      'project',
+          expense_class:'expense_classification',
+          department:   'department',
+          profit_center:'profit_center',
+        }
+        const dimType = typeMap[type] || type
+        const dimsRes = await api.dimensions.list()
+        const dims = dimsRes?.data || dimsRes || []
+        const dim = dims.find(d => d.dimension_type===dimType || d.code===dimType || d.slug===dimType)
+        if(dim){
+          const vRes = await api.dimensions.listValues(dim.id)
+          items = (vRes?.data || vRes || []).filter(v=>v.is_active!==false)
+        }
       }
       if(q){
         const low=q.toLowerCase()
-        items=items.filter(i=>(i.name_ar||i.name||i.code||'').toLowerCase().includes(low)||
-          (i.code||i.branch_code||i.cost_center_code||i.project_code||'').toLowerCase().includes(low))
+        items=items.filter(i=>(i.name_ar||i.name||i.value_code||i.code||'').toLowerCase().includes(low))
       }
-      setResults(items.slice(0,30))
+      setResults(items.slice(0,40))
     }catch{ setResults([]) }finally{ setLoading(false) }
   },[type])
 
@@ -246,8 +251,8 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
     setOpen(true); load('')
   }
 
-  const getCode=(item)=>item.branch_code||item.cost_center_code||item.project_code||item.classification_code||item.code||item.id||''
-  const getName=(item)=>item.name_ar||item.name||item.branch_name||item.cost_center_name||item.project_name||''
+  const getCode=(item)=>item.value_code||item.code||item.branch_code||item.cost_center_code||item.project_code||item.id||''
+  const getName=(item)=>item.name_ar||item.value_name||item.name||item.branch_name||item.cost_center_name||item.project_name||item.name_en||''
 
   const select=(item)=>{
     onChange(getCode(item), getName(item))
