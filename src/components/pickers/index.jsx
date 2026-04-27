@@ -340,3 +340,67 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
 // ── جدول القيد المحاسبي الموحد — نفس تصميم قيد اليومية ──
 // ══════════════════════════════════════════════════════════
 export { AccountPicker, PartyPicker, DimensionPicker }
+
+
+// ══════════════════════════════════════════════════════════
+// WorkflowStatusBar — شريط مراحل سير العمل (مثل Odoo)
+// الاستخدام:
+//   <WorkflowStatusBar
+//     steps={[
+//       {key:'draft',    label:'مسودة',      icon:'📋'},
+//       {key:'review',   label:'مراجعة',     icon:'👁'},
+//       {key:'approved', label:'معتمد',      icon:'✅'},
+//       {key:'posted',   label:'مُرحَّل',    icon:'📤'},
+//     ]}
+//     current={status}
+//     rejected={status==='rejected'}
+//   />
+// ══════════════════════════════════════════════════════════
+function WorkflowStatusBar({ steps=[], current='', rejected=false, className='' }) {
+  const keys   = steps.map(s=>s.key)
+  const curIdx = keys.indexOf(current)
+
+  return (
+    <div className={'bg-white border border-slate-200 rounded-2xl shadow-sm px-5 py-3 '+className}>
+      {rejected && (
+        <div className="text-xs text-red-600 text-center mb-2 font-semibold">❌ مرفوض</div>
+      )}
+      <div className="flex items-center" style={{direction:'ltr'}}>
+        {steps.map((step, idx)=>{
+          const stepIdx = keys.indexOf(step.key)
+          const isDone  = !rejected && stepIdx <= curIdx
+          const isCur   = step.key === current && !rejected
+          return (
+            <div key={step.key} className="flex items-center flex-1 min-w-0">
+              {/* Step Circle */}
+              <div className="flex flex-col items-center flex-1">
+                <div className={
+                  'w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 transition-all font-bold '+
+                  (isCur  ? 'bg-blue-600  border-blue-600  text-white shadow-md scale-110 ring-2 ring-blue-200' :
+                   isDone ? 'bg-emerald-500 border-emerald-500 text-white' :
+                            'bg-white border-slate-200 text-slate-300')
+                }>
+                  {isDone && !isCur ? '✓' : step.icon}
+                </div>
+                <span className={
+                  'text-[10px] mt-1 font-semibold whitespace-nowrap '+
+                  (isCur  ? 'text-blue-600' :
+                   isDone ? 'text-emerald-600' : 'text-slate-300')
+                }>{step.label}</span>
+              </div>
+              {/* Connector Line */}
+              {idx < steps.length-1 && (
+                <div className={
+                  'h-0.5 flex-1 mx-1 rounded-full transition-all '+
+                  (!rejected && stepIdx < curIdx ? 'bg-emerald-400' : 'bg-slate-200')
+                }/>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar }

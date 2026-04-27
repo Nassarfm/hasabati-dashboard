@@ -5,7 +5,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import api from '../../api/client'
-import { AccountPicker, PartyPicker, DimensionPicker } from '../../components/pickers'
+import { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar } from '../../components/pickers'
+
+// Petty Cash workflow steps — ثابتة
+const PETTY_WORKFLOW = [
+  {key:'draft',    label:'مسودة',    icon:'📋'},
+  {key:'review',   label:'مراجعة',   icon:'👁'},
+  {key:'approved', label:'معتمد',    icon:'✅'},
+  {key:'posted',   label:'مُرحَّل',  icon:'📤'},
+]
 
 // ── Shared helpers (imported from TreasuryPage context via props or local) ──
 
@@ -401,6 +409,52 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, onStatu
         '</tr></tfoot>' +
       '</table>' +
 
+      // ── التوجيه المحاسبي ──
+      '<div style="margin-top:20px;border-top:2px solid #e2e8f0;padding-top:14px">' +
+        '<div style="font-size:11px;font-weight:800;color:#1e3a5f;margin-bottom:10px">📒 التوجيه المحاسبي / Journal Entry</div>' +
+        '<table>' +
+          '<thead><tr style="background:#1e3a5f;color:white">' +
+            '<th style="width:30px">#</th>' +
+            '<th style="width:80px">الكود</th>' +
+            '<th>اسم الحساب</th>' +
+            '<th style="width:100px">مدين</th>' +
+            '<th style="width:100px">دائن</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+          (()=>{
+            const jeLines = []
+            lines.forEach((l,i)=>{
+              jeLines.push('<tr><td style="text-align:center">'+(i+1)+'</td>' +
+                '<td style="font-family:monospace;color:#1d4ed8">'+(l.expense_account||'—')+'</td>' +
+                '<td>'+(l.expense_account_name||'مصروف')+'</td>' +
+                '<td style="font-family:monospace;font-weight:700">'+fmN(l.amount||0)+'</td>' +
+                '<td>—</td></tr>')
+              if(parseFloat(l.vat_amount||0)>0){
+                jeLines.push('<tr><td style="text-align:center">'+(i+1)+'.v</td>' +
+                  '<td style="font-family:monospace;color:#1d4ed8">210502</td>' +
+                  '<td>ضريبة القيمة المضافة المدخلات</td>' +
+                  '<td style="font-family:monospace;font-weight:700">'+fmN(l.vat_amount)+'</td>' +
+                  '<td>—</td></tr>')
+              }
+            })
+            const fund = exp.fund_name || 'صندوق العهدة'
+            const fundCode = exp.fund_gl_account || '—'
+            jeLines.push('<tr style="background:#f0fdf4"><td style="text-align:center">—</td>' +
+              '<td style="font-family:monospace;color:#059669">'+fundCode+'</td>' +
+              '<td>'+fund+'</td>' +
+              '<td>—</td>' +
+              '<td style="font-family:monospace;font-weight:700;color:#059669">'+fmN(total+vat)+'</td></tr>')
+            return jeLines.join('')
+          })() +
+          '</tbody>' +
+          '<tfoot><tr class="tot">' +
+            '<td colspan="3" style="text-align:right">الإجمالي</td>' +
+            '<td style="font-family:monospace">'+fmN(total+vat)+'</td>' +
+            '<td style="font-family:monospace">'+fmN(total+vat)+'</td>' +
+          '</tr></tfoot>' +
+        '</table>' +
+      '</div>' +
+
       '<div class="workflow">' +
         '<div class="wf-box"><div class="wf-lbl">أنشأه</div><div class="wf-line"></div><div class="wf-name">'+(exp.created_by?.split('@')[0]||'—')+'</div><div class="wf-date">'+(exp.created_at||'')+'</div></div>' +
         '<div class="wf-box"><div class="wf-lbl">أرسل للمراجعة</div><div class="wf-line"></div><div class="wf-name">'+(exp.submitted_by?.split('@')[0]||'')+'</div><div class="wf-date">'+(exp.submitted_at||'')+'</div></div>' +
@@ -464,44 +518,12 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, onStatu
         )}
       </div>
 
-      {/* Workflow Progress Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-        <div className="flex items-center gap-0" style={{direction:'ltr'}}>
-          {[
-            {s:'draft',    l:'مسودة',    i:'📋'},
-            {s:'review',   l:'مراجعة',   i:'👁'},
-            {s:'approved', l:'معتمد',    i:'✅'},
-            {s:'posted',   l:'مُرحَّل',  i:'📒'},
-          ].map((step, idx, arr)=>{
-            const steps   = ['draft','review','approved','posted']
-            const curIdx  = steps.indexOf(exp.status==='rejected'?'draft':exp.status)
-            const stepIdx = steps.indexOf(step.s)
-            const isDone  = stepIdx <= curIdx && exp.status !== 'rejected'
-            const isCur   = step.s === exp.status
-            return (
-              <div key={step.s} className="flex items-center flex-1">
-                <div className="flex flex-col items-center flex-1">
-                  <div className={'w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all '+
-                    (isCur  ? 'bg-blue-600 border-blue-600 text-white shadow-lg scale-110' :
-                     isDone ? 'bg-emerald-500 border-emerald-500 text-white' :
-                              'bg-slate-100 border-slate-200 text-slate-400')}>
-                    {step.i}
-                  </div>
-                  <span className={'text-[10px] mt-1 font-semibold '+(isDone?'text-emerald-600':isCur?'text-blue-600':'text-slate-400')}>{step.l}</span>
-                </div>
-                {idx < arr.length-1 && (
-                  <div className={'h-0.5 w-full mx-1 '+(stepIdx < curIdx?'bg-emerald-400':'bg-slate-200')}/>
-                )}
-              </div>
-            )
-          })}
-        </div>
-        {exp.status==='rejected'&&(
-          <div className="mt-2 text-xs text-red-600 text-center">
-            ❌ مرفوض {exp.rejection_reason?'— '+exp.rejection_reason:''}
-          </div>
-        )}
-      </div>
+      {/* Workflow Status Bar */}
+      <WorkflowStatusBar
+        steps={PETTY_WORKFLOW}
+        current={exp.status}
+        rejected={exp.status==='rejected'}
+      />
 
       {/* بيانات رئيسية */}
       <div className="grid grid-cols-4 gap-4">
@@ -1119,8 +1141,7 @@ function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) 
           </h2>
           <p className="text-xs text-slate-400">يسجل كمسودة — يمكن الترحيل لاحقاً بعد المراجعة</p>
         </div>
-        <div className="flex items-center gap-2">
-          {!isBalanced && total > 0 && <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">{'⚠️'} القيد غير متوازن</span>}
+        <div className="flex items-center gap-2">          {!isBalanced && total > 0 && <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">{'⚠️'} القيد غير متوازن</span>}
           {isBalanced  && total > 0 && <span className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-semibold">{'✅'} القيد متوازن</span>}
           <button onClick={save} disabled={saving||periodClosed}
             className={'px-6 py-2.5 rounded-xl font-bold text-sm '+(periodClosed?'bg-slate-200 text-slate-400 cursor-not-allowed':'bg-red-600 text-white hover:bg-red-700 shadow-sm')}>
@@ -1130,6 +1151,9 @@ function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) 
       </div>
 
       <div className="p-6 space-y-5">
+        {/* Workflow Bar */}
+        <WorkflowStatusBar steps={PETTY_WORKFLOW} current={isEdit?editExpense.status:'draft'}/>
+
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
           <div className="text-xs font-bold text-slate-400 uppercase mb-4">معلومات السند / Voucher Info</div>
           <div className="grid grid-cols-4 gap-4">
