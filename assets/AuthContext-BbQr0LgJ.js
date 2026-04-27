@@ -1,0 +1,1 @@
+import"./vendor-react-Ce168Nlk.js";import"./vendor-supabase-LOBHjVx3.js";import{n as e}from"./index-Fhm8fNCX.js";export{e as supabase};
