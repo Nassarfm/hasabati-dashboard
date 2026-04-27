@@ -39,12 +39,14 @@ function KPIBar({cards}) {
 }
 
 function useFiscalPeriod(date) {
-  const [status, setStatus] = useState('unknown')
+  const [status, setStatus] = useState('open') // default open
   useEffect(()=>{
     if(!date) return
-    api.fiscal.getCurrentPeriod(date)
-      .then(r=>{ const p=r?.data; setStatus(p?.status==='open'?'open':p?.status==='closed'?'closed':'not_found') })
-      .catch(()=>setStatus('error'))
+    const fn = api.fiscal?.getCurrentPeriod || api.accounting?.getFiscalPeriod
+    if(!fn) { setStatus('open'); return }
+    fn(date)
+      .then(r=>{ const p=r?.data; setStatus(p?.status==='closed'?'closed':'open') })
+      .catch(()=>setStatus('open'))
   },[date])
   return { isOpen: status==='open', isClosed: status==='closed' }
 }
@@ -1133,8 +1135,13 @@ function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) 
                 <input className="px-3 py-2.5 text-xs border-r border-slate-100 focus:outline-none focus:bg-blue-50 bg-transparent"
                   value={l.vendor_name} onChange={e=>sl(i,'vendor_name',e.target.value)} placeholder="المورد..."/>
                 <button onClick={()=>toggleDims(l.id)}
-                  className={'px-2 py-1.5 text-[10px] border-r border-slate-100 font-semibold '+(l.branch_code||l.cost_center||l.project_code?'text-purple-700 bg-purple-50':'text-slate-400 hover:text-purple-600')}>
-                  {l.branch_code||l.cost_center||l.project_code?'📐✓':'📐'}
+                  title="الأبعاد المحاسبية"
+                  className={'flex items-center justify-center gap-1 px-2 py-1.5 text-xs border-r border-slate-100 font-semibold rounded transition-colors '+(
+                    (l.branch_code||l.cost_center||l.project_code||l.expense_classification_code)
+                      ?'text-purple-700 bg-purple-100 hover:bg-purple-200'
+                      :'text-slate-500 hover:text-purple-600 hover:bg-purple-50'
+                  )}>
+                  📐{(l.branch_code||l.cost_center||l.project_code||l.expense_classification_code)?<span className="text-[9px]">✓</span>:''}
                 </button>
                 <button onClick={()=>rmLine(i)} className="flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 h-full">x</button>
               </div>
