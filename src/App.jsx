@@ -134,7 +134,7 @@ function AppContent() {
       case 'projects':           return <ProjectsPage/>
       case 'fiscal':             return <FiscalPeriodsPage/>
       case 'journal':            return <JournalPage/>
-      case 'je-print':           return <JEPrintPage showToast={showToast}/>
+      case 'je-print':           return <JEPrintPage/>
       case 'reversing':          return <ReversingPage onNavigateToJournal={()=>navigate('journal')}/>
       case 'recurring':          return <RecurringPage/>
       case 'allocation':         return <AllocationPage onBack={()=>navigate('journal')}/>
