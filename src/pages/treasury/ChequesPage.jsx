@@ -371,8 +371,8 @@ export default function ChequesPage({ showToast }) {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="grid text-white text-xs font-semibold"
               style={{background:'linear-gradient(135deg,#1e3a5f,#1e40af)',
-                      gridTemplateColumns:'1.2fr 1fr 1.4fr 1fr 1fr 1.8fr 1.2fr 1.2fr 120px'}}>
-              {['رقم الشيك','رقم CH','التاريخ','الاستحقاق','المبلغ','المستفيد / المتعامل','الحساب','الحالة','إجراء'].map(h => (
+                      gridTemplateColumns:'1.2fr 1fr 1.4fr 1fr 1fr 1.8fr 1.2fr 1.2fr 100px 60px'}}>
+              {['رقم الشيك','رقم CH','التاريخ','الاستحقاق','المبلغ','المستفيد / المتعامل','الحساب','الحالة','إجراء','تسوية'].map(h => (
                 <div key={h} className="px-2 py-3">{h}</div>
               ))}
             </div>
@@ -381,10 +381,19 @@ export default function ChequesPage({ showToast }) {
              cheques.map((ck, i) => {
                const st  = STATUS[ck.status] || { label: ck.status, color: 'bg-slate-100 text-slate-500' }
                const ovd = ck.due_date && new Date(ck.due_date) < new Date() && ck.status === 'posted'
+               const [clearing, setClearing] = useState(false)
+               const doClear = async(e) => {
+                 e.stopPropagation()
+                 if(!confirm('تسوية الشيك '+ck.serial+'؟')) return
+                 setClearing(true)
+                 try { await api.cheques.clear(ck.id,{reference:''}); load(); showToast('تمت التسوية ✅') }
+                 catch(e) { showToast(e.message,'error') }
+                 finally { setClearing(false) }
+               }
                return (
                  <div key={ck.id}
                    className={'grid items-center border-b border-slate-50 text-xs '+(ovd?'bg-amber-50':i%2===0?'bg-white':'bg-slate-50/30')}
-                   style={{gridTemplateColumns:'1.2fr 1fr 1.4fr 1fr 1fr 1.8fr 1.2fr 1.2fr 120px'}}>
+                   style={{gridTemplateColumns:'1.2fr 1fr 1.4fr 1fr 1fr 1.8fr 1.2fr 1.2fr 100px 60px'}}>
                    <div className="px-2 py-3 font-mono font-bold text-blue-700 cursor-pointer hover:underline" onClick={() => setViewCheque(ck)}>
                      {ck.serial}
                    </div>
@@ -407,6 +416,20 @@ export default function ChequesPage({ showToast }) {
                        className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded-lg">
                        👁 عرض
                      </button>
+                   </div>
+                   {/* checkbox تسوية */}
+                   <div className="px-2 py-3 flex items-center justify-center">
+                     {ck.status==='posted' ? (
+                       <button onClick={doClear} disabled={clearing}
+                         title="تسوية بنكية"
+                         className="w-7 h-7 rounded-lg border-2 border-teal-300 bg-white hover:bg-teal-50 flex items-center justify-center transition-colors disabled:opacity-50">
+                         {clearing ? '⏳' : '🏦'}
+                       </button>
+                     ) : ck.status==='cleared' ? (
+                       <span className="text-teal-500 text-base" title="مُسوَّى">✓</span>
+                     ) : (
+                       <span className="text-slate-200 text-base">—</span>
+                     )}
                    </div>
                  </div>
                )
@@ -942,11 +965,25 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
 // CHEQUE VIEW PAGE — استعراض الشيك كامل
 // ══════════════════════════════════════════════════════════
 function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
-  const [ck, setCk]           = useState(cheque)
+  const [ck, setCk]         = useState(cheque)
   const [loading, setLoading] = useState(false)
   const [action, setAction]   = useState('')
   const [showClearForm, setShowClearForm] = useState(false)
   const [clearRef, setClearRef] = useState('')
+  const [printTemplate, setPrintTemplate] = useState('generic')
+
+  const GRAD = 'linear-gradient(135deg,#1e3a5f,#1e40af)'
+  const st   = STATUS[ck.status] || { label:ck.status, color:'bg-slate-100 text-slate-500' }
+  const amount = parseFloat(ck.amount||0)
+
+  // القيد المحاسبي المتوقع
+  const gl_credit = ck.bank_account_code || ck.bank_account_name || 'حساب البنك'
+  const gl_debit  = ck.gl_account_code   || '21010101'
+  const je_lines = [
+    { account_code: gl_debit,   account_name: ck.gl_account_name || 'ذمم دائنة', debit: amount, credit: 0 },
+    { account_code: ck.bank_account_code||'—', account_name: ck.bank_account_name||'البنك', debit: 0, credit: amount },
+  ]
+  const isBalanced = Math.abs(je_lines.reduce((s,l)=>s+(l.debit-l.credit),0)) < 0.01
 
   const doAction = async (fn, actionName, nextStatus, confirmMsg) => {
     if(confirmMsg && !confirm(confirmMsg)) return
@@ -954,149 +991,301 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
     try {
       const res = await fn()
       setCk(p => ({ ...p, status: nextStatus, je_serial: res?.data?.je_serial || p.je_serial }))
-      showToast({ submit:'تم الإرسال للمراجعة', approve:'تم الاعتماد', post:'تم الترحيل', clear:'تم التسوية', reject:'تم الرفض' }[actionName] || 'تم')
+      const msgs = { submit:'تم الإرسال للمراجعة', approve:'تم الاعتماد', post:'تم الترحيل ✅', clear:'تم التسوية', reject:'تم الرفض' }
+      showToast(msgs[actionName] || 'تم')
       onAction()
-    } catch(e) { showToast(e.message, 'error') }
+    } catch(e) { showToast(e.message,'error') }
     finally { setLoading(false); setAction('') }
   }
 
-  const [printTemplate, setPrintTemplate] = useState('generic')
-
-  const st = STATUS[ck.status] || { label: ck.status, color: 'bg-slate-100 text-slate-500' }
+  const doPrintVoucher = () => {
+    const w = window.open('','_blank','width=900,height=700')
+    const fmN = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:3})
+    w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">' +
+      '<title>شيك — '+ck.serial+'</title>' +
+      '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#1e293b;padding:24px;direction:rtl}' +
+      '@media print{.np{display:none!important}@page{margin:1cm;size:A4}}' +
+      '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1e3a5f;padding-bottom:12px;margin-bottom:16px}' +
+      '.title{font-size:20px;font-weight:900;color:#1e3a5f}.sub{font-size:10px;color:#64748b;margin-top:2px}' +
+      '.stamp{border:3px solid;border-radius:4px;font-size:16px;font-weight:900;padding:3px 12px;transform:rotate(-8deg);display:inline-block;letter-spacing:2px;opacity:.85;margin-top:6px}' +
+      '.stamp-posted{border-color:#dc2626;color:#dc2626}.stamp-draft{border-color:#f59e0b;color:#f59e0b}' +
+      '.meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:14px}' +
+      '.ml{font-size:9px;color:#94a3b8;margin-bottom:2px;font-weight:600}.mv{font-size:11px;font-weight:700}' +
+      '.tafq{background:#eff6ff;border-right:4px solid #1e3a5f;padding:8px 12px;margin-bottom:14px;border-radius:0 6px 6px 0}' +
+      'table{width:100%;border-collapse:collapse;margin-bottom:12px}' +
+      'thead tr{background:#1e3a5f;color:white}th{padding:8px 10px;text-align:right;font-size:10px}' +
+      'td{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:11px}' +
+      'tr:nth-child(even)td{background:#fafbfc}.tot td{background:#1e3a5f!important;color:white;font-weight:700}' +
+      '.sigs{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:24px;padding-top:16px;border-top:1px dashed #e2e8f0}' +
+      '.sg{text-align:center}.sg-line{border-top:1px solid #94a3b8;width:100%;margin-bottom:5px}.sg-lbl{font-size:9px;color:#64748b}' +
+      '.np{text-align:center;margin-top:20px}' +
+      '</style></head><body>' +
+      '<div class="hdr">' +
+        '<div><div class="title">حساباتي — ERP</div><div class="sub">نظام المحاسبة والإدارة المالية</div></div>' +
+        '<div style="text-align:left">' +
+          '<div class="stamp stamp-'+ck.status+'">'+st.label+'</div>' +
+          '<div style="font-size:14px;font-weight:800;font-family:monospace;margin-top:6px">'+ck.serial+'</div>' +
+          '<div style="font-size:10px;color:#64748b">شيك '+( ck.check_type==='outgoing'?'صادر':'وارد')+'</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="meta">' +
+        '<div><div class="ml">رقم الشيك</div><div class="mv" style="font-family:monospace">'+(ck.check_number||'—')+'</div></div>' +
+        '<div><div class="ml">تاريخ الشيك</div><div class="mv">'+(ck.check_date||'—')+'</div></div>' +
+        '<div><div class="ml">تاريخ الاستحقاق</div><div class="mv">'+(ck.due_date||'—')+'</div></div>' +
+        '<div><div class="ml">المبلغ</div><div class="mv" style="color:#1e3a5f">'+fmN(amount)+' ر.س</div></div>' +
+        '<div><div class="ml">المستفيد</div><div class="mv">'+(ck.payee_name||'—')+'</div></div>' +
+        '<div><div class="ml">البنك</div><div class="mv">'+(ck.bank_account_name||'—')+'</div></div>' +
+        '<div><div class="ml">القيد المحاسبي</div><div class="mv" style="color:#16a34a;font-family:monospace">'+(ck.je_serial||'—')+'</div></div>' +
+        '<div><div class="ml">حالة الشيك</div><div class="mv">'+st.label+'</div></div>' +
+      '</div>' +
+      '<div class="tafq"><div style="font-size:9px;color:#94a3b8;margin-bottom:3px">المبلغ كتابةً / Amount in Words</div>' +
+        '<div style="font-size:12px;font-weight:700;color:#1e3a5f">'+tafqeet(amount)+'</div>' +
+      '</div>' +
+      '<div style="font-size:11px;font-weight:700;margin-bottom:8px">📒 التوجيه المحاسبي / Journal Entry</div>' +
+      '<table><thead><tr><th>الكود</th><th>اسم الحساب</th><th>مدين</th><th>دائن</th></tr></thead><tbody>' +
+      je_lines.map(l=>'<tr><td style="font-family:monospace;color:#1d4ed8">'+l.account_code+'</td><td>'+l.account_name+'</td>' +
+        '<td style="font-family:monospace;font-weight:700">'+(l.debit>0?fmN(l.debit):'—')+'</td>' +
+        '<td style="font-family:monospace;font-weight:700;color:#059669">'+(l.credit>0?fmN(l.credit):'—')+'</td></tr>'
+      ).join('') +
+      '</tbody><tfoot><tr class="tot"><td colspan="2" style="text-align:right">الإجمالي</td>' +
+        '<td style="font-family:monospace">'+fmN(amount)+'</td>' +
+        '<td style="font-family:monospace">'+fmN(amount)+'</td>' +
+      '</tr></tfoot></table>' +
+      '<div class="sigs">' +
+        '<div class="sg"><div class="sg-line"></div><div class="sg-lbl">أنشأه: '+(ck.created_by?.split("@")[0]||"—")+'</div></div>' +
+        '<div class="sg"><div class="sg-line"></div><div class="sg-lbl">اعتمده: '+(ck.approved_by?.split("@")[0]||"—")+'</div></div>' +
+        '<div class="sg"><div class="sg-line"></div><div class="sg-lbl">رحَّله: '+(ck.posted_by?.split("@")[0]||"—")+'</div></div>' +
+      '</div>' +
+      '<div class="np"><button onclick="window.print()" style="background:#1e3a5f;color:white;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px">🖨️ طباعة / PDF</button>' +
+        '<button onclick="window.close()" style="margin-right:10px;background:#f1f5f9;border:1px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer">✕ إغلاق</button></div>' +
+      '</body></html>')
+    w.document.close()
+  }
 
   return (
-    <div className="space-y-5 max-w-4xl mx-auto" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={onBack} className="px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium">
-          {'←'} رجوع
-        </button>
-        <div className="flex-1">
-          <h2 className="text-xl font-bold text-blue-700 flex items-center gap-2">
-            <span>{'📝'} {ck.serial}</span>
-            <span className={'text-sm px-3 py-1 rounded-full font-semibold '+st.color}>{st.label}</span>
-          </h2>
-          <p className="text-xs text-slate-400">شيك {ck.check_type === 'outgoing' ? 'صادر' : 'وارد'} · رقم: {ck.check_number}</p>
-        </div>
-
-        {/* زر طباعة الشيك */}
-        <div className="flex items-center gap-1 border-2 border-slate-200 rounded-xl overflow-hidden">
-          <button onClick={() => printCheque(ck, printTemplate)}
-            className="px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
-            🖨️ طباعة الشيك
-          </button>
-          <select value={printTemplate} onChange={e => setPrintTemplate(e.target.value)}
-            className="border-r border-slate-200 px-2 py-2 text-xs text-slate-500 focus:outline-none bg-transparent">
-            {Object.entries(BANK_TEMPLATES).map(([k,v]) => (
-              <option key={k} value={k}>{v.name}</option>
-            ))}
-          </select>
-        </div>
-        {ck.status === 'draft' && onEdit && (
-          <button onClick={() => onEdit(ck)} className="px-4 py-2.5 rounded-xl border-2 border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-50">
-            ✏️ تعديل
-          </button>
-        )}
-        {ck.status === 'draft' && (
-          <button onClick={() => doAction(() => api.cheques.submit(ck.id), 'submit', 'submitted')}
-            disabled={loading} className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
-            {loading && action==='submit' ? '⏳...' : '📤 إرسال للمراجعة'}
-          </button>
-        )}
-        {ck.status === 'submitted' && (
-          <button onClick={() => doAction(() => api.cheques.approve(ck.id), 'approve', 'approved')}
-            disabled={loading} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50">
-            {loading && action==='approve' ? '⏳...' : '✅ اعتماد'}
-          </button>
-        )}
-        {(ck.status === 'approved' || ck.status === 'submitted') && (
-          <button onClick={() => doAction(() => api.cheques.post(ck.id), 'post', 'posted', 'هل تريد ترحيل هذا الشيك وإنشاء القيد المحاسبي؟')}
-            disabled={loading} className="px-4 py-2.5 rounded-xl bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50">
-            {loading && action==='post' ? '⏳...' : '📒 ترحيل'}
-          </button>
-        )}
-        {ck.status === 'posted' && (
-          <button onClick={() => setShowClearForm(true)}
-            className="px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700">
-            🏦 تسوية
-          </button>
-        )}
-      </div>
-
-      {/* Workflow Bar */}
-      <WorkflowStatusBar
-        steps={CHEQUE_WORKFLOW}
-        current={ck.status}
-        rejected={ck.status === 'rejected' || ck.status === 'returned'}
-      />
-
-      {/* بيانات رئيسية */}
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          { l:'رقم الشيك',    v: ck.check_number || '—' },
-          { l:'التاريخ',       v: fmtDate(ck.check_date) },
-          { l:'الاستحقاق',    v: fmtDate(ck.due_date)   },
-          { l:'المبلغ',        v: fmt(ck.amount, 3) + ' ر.س' },          { l:'البنك',         v: ck.bank_account_name || '—' },
-          { l:'المستفيد',      v: ck.payee_name || '—'  },
-          { l:'القيد المحاسبي',v: ck.je_serial || '—'   },
-          { l:'حساب المقابل',  v: ck.gl_account_code || '—' },
-        ].map(k => (
-          <div key={k.l} className="bg-white rounded-2xl border border-slate-200 p-4">
-            <div className="text-xs text-slate-400 mb-1">{k.l}</div>
-            <div className="font-bold text-slate-800 font-mono text-sm">{k.v}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* المتعامل */}
-      {(ck.party_id || ck.party_name) && (
-        <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 flex items-center gap-3">
-          <span className="text-2xl">🤝</span>
-          <div>
-            <div className="text-xs text-teal-500 font-semibold">المتعامل المالي</div>
-            <div className="font-bold text-teal-800">{ck.party_name || ck.party_id}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Audit Trail */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-        <div className="text-xs font-bold text-slate-400 mb-3 uppercase">Audit Information</div>
-        <div className="grid grid-cols-4 gap-3 text-xs">
-          {[
-            { l:'أنشأه',             v: ck.created_by,   d: ck.created_at   },
-            { l:'أرسل للمراجعة',     v: ck.submitted_by, d: ck.submitted_at },
-            { l:'اعتمده',            v: ck.approved_by,  d: ck.approved_at  },
-            { l:'رحَّله',            v: ck.posted_by,    d: ck.posted_at    },
-          ].map(a => (
-            <div key={a.l} className="border-r border-slate-100 pr-3 last:border-0">
-              <div className="text-slate-400 mb-1">{a.l}</div>
-              <div className="font-semibold text-slate-700">{a.v?.split('@')[0] || '—'}</div>
-              {a.d && <div className="text-slate-400 mt-0.5">{new Date(a.d).toLocaleDateString('ar-SA')}</div>}
+    <div className="flex flex-col h-full" dir="rtl">
+      {/* ── Header شبيه بالدفعة البنكية ── */}
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between px-5 py-3">
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="px-3 py-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 text-sm">
+              {'←'} رجوع
+            </button>
+            <div>
+              <div className="font-bold text-slate-800 flex items-center gap-2">
+                {'📝'} {ck.serial}
+                <span className={'text-xs px-2 py-0.5 rounded-full font-semibold '+st.color}>{st.label}</span>
+              </div>
+              <div className="text-xs text-slate-400">{ck.check_type==='outgoing'?'شيك صادر':'شيك وارد'} · {ck.check_number}</div>
             </div>
-          ))}
+          </div>
+          {/* أزرار الإجراءات */}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button onClick={doPrintVoucher} className="px-3 py-2 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50">
+              🖨️ طباعة القيد
+            </button>
+            <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
+              <button onClick={() => printCheque(ck, printTemplate)} className="px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                🖨️ طباعة الشيك
+              </button>
+              <select value={printTemplate} onChange={e=>setPrintTemplate(e.target.value)}
+                className="border-r border-slate-200 px-2 py-2 text-xs text-slate-500 bg-transparent focus:outline-none">
+                {Object.entries(BANK_TEMPLATES).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}
+              </select>
+            </div>
+            {ck.status==='draft' && onEdit && (
+              <button onClick={()=>onEdit(ck)} className="px-3 py-2 rounded-xl text-sm text-amber-700 border border-amber-200 hover:bg-amber-50">
+                ✏️ تعديل
+              </button>
+            )}
+            {ck.status==='draft' && (
+              <button onClick={()=>doAction(()=>api.cheques.submit(ck.id),'submit','submitted')}
+                disabled={loading} className="px-3 py-2 rounded-xl text-sm text-blue-700 border border-blue-200 hover:bg-blue-50 disabled:opacity-50">
+                {loading&&action==='submit'?'⏳...':'📤 إرسال للمراجعة'}
+              </button>
+            )}
+            {ck.status==='submitted' && (
+              <button onClick={()=>doAction(()=>api.cheques.approve(ck.id),'approve','approved')}
+                disabled={loading} className="px-4 py-2.5 rounded-xl text-sm bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                {loading&&action==='approve'?'⏳...':'✅ اعتماد وترحيل'}
+              </button>
+            )}
+            {(ck.status==='approved'||ck.status==='submitted'||ck.status==='draft') && (
+              <button onClick={()=>doAction(()=>api.cheques.post(ck.id),'post','posted','هل تريد ترحيل الشيك وإنشاء القيد المحاسبي؟')}
+                disabled={loading} className="px-4 py-2.5 rounded-xl text-sm bg-blue-700 text-white font-semibold hover:bg-blue-800 disabled:opacity-50">
+                {loading&&action==='post'?'⏳ ترحيل...':'📒 ترحيل مباشر'}
+              </button>
+            )}
+            {ck.status==='posted' && (
+              <button onClick={()=>setShowClearForm(true)}
+                className="px-4 py-2.5 rounded-xl text-sm bg-teal-600 text-white font-semibold hover:bg-teal-700">
+                🏦 تسوية بنكية
+              </button>
+            )}
+          </div>
+        </div>
+        {/* WorkflowStatusBar */}
+        <div className="px-5 pb-3">
+          <WorkflowStatusBar steps={CHEQUE_WORKFLOW} current={ck.status} rejected={ck.status==='rejected'||ck.status==='returned'}/>
         </div>
       </div>
 
-      {/* Clear Form Modal */}
+      {/* ── Body: نفس تصميم الدفعة البنكية ── */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* ── الجزء الرئيسي ── */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+          {/* حالة الترحيل */}
+          {ck.status==='posted' && ck.je_serial && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+              <span className="text-2xl">✅</span>
+              <div>
+                <div className="text-sm font-bold text-emerald-800">تم الترحيل بنجاح</div>
+                <div className="text-xs text-emerald-600">رقم القيد: <span className="font-mono font-bold">{ck.je_serial}</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* البيانات الأساسية */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 text-xs font-bold text-white" style={{background:GRAD}}>📋 بيانات الشيك</div>
+            <div className="grid grid-cols-4 gap-0">
+              {[
+                {l:'رقم الشيك',     v:ck.check_number||'—'},
+                {l:'تاريخ الشيك',   v:fmtDate(ck.check_date)},
+                {l:'تاريخ الاستحقاق',v:fmtDate(ck.due_date)},
+                {l:'المبلغ',         v:fmt(ck.amount,3)+' ر.س', bold:true, color:'text-blue-700'},
+                {l:'المستفيد',       v:ck.payee_name||'—'},
+                {l:'البنك',          v:ck.bank_account_name||'—'},
+                {l:'حساب المقابل',   v:ck.gl_account_code||'—'},
+                {l:'القيد',          v:ck.je_serial||'—', color:'text-emerald-600'},
+              ].map(k => (
+                <div key={k.l} className="px-4 py-3 border-b border-r border-slate-50">
+                  <div className="text-[10px] text-slate-400 uppercase mb-0.5">{k.l}</div>
+                  <div className={'text-sm font-bold '+(k.color||'text-slate-800')+(k.bold?' font-mono':'')}>{k.v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* التفقيط */}
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
+            <div className="text-[10px] text-blue-400 font-semibold mb-1">المبلغ كتابةً / Amount in Words</div>
+            <div className="text-sm font-bold text-blue-800">{tafqeet(amount)}</div>
+          </div>
+
+          {/* القيد المحاسبي */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-2.5 text-xs font-bold text-white flex justify-between items-center" style={{background:GRAD}}>
+              <span>📒 القيد المحاسبي</span>
+              <span className={'text-[10px] px-2 py-0.5 rounded-full font-semibold '+(isBalanced?'bg-emerald-400 text-emerald-900':'bg-red-400 text-red-900')}>
+                {isBalanced?'متوازن ✅':'غير متوازن'}
+              </span>
+            </div>
+            <div className="grid text-slate-500 text-xs font-semibold bg-slate-50 border-b"
+              style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
+              {['الكود','اسم الحساب','مدين','دائن'].map(h=><div key={h} className="px-4 py-2">{h}</div>)}
+            </div>
+            {je_lines.map((l,i)=>(
+              <div key={i} className={'grid items-center border-b border-slate-50 text-xs '+(i%2===0?'bg-white':'bg-slate-50/30')}
+                style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
+                <div className="px-4 py-2.5 font-mono font-bold text-blue-600">{l.account_code}</div>
+                <div className="px-4 py-2.5 text-slate-700">{l.account_name}</div>
+                <div className="px-4 py-2.5 font-mono font-bold text-slate-800">{l.debit>0?fmt(l.debit,3):'—'}</div>
+                <div className="px-4 py-2.5 font-mono font-bold text-emerald-600">{l.credit>0?fmt(l.credit,3):'—'}</div>
+              </div>
+            ))}
+            <div className="grid bg-slate-700 text-white text-xs font-bold"
+              style={{gridTemplateColumns:'1fr 3fr 1.2fr 1.2fr'}}>
+              <div className="col-span-2 px-4 py-2.5">الإجمالي</div>
+              <div className="px-4 py-2.5 font-mono">{fmt(amount,3)}</div>
+              <div className="px-4 py-2.5 font-mono">{fmt(amount,3)}</div>
+            </div>
+          </div>
+
+          {/* الأبعاد */}
+          {(ck.branch_name||ck.cost_center_name||ck.project_name) && (
+            <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4">
+              <div className="text-xs font-bold text-purple-600 mb-2">📐 الأبعاد المحاسبية</div>
+              <div className="flex gap-2 flex-wrap">
+                {ck.branch_name&&<span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold">🏢 {ck.branch_name}</span>}
+                {ck.cost_center_name&&<span className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">💰 {ck.cost_center_name}</span>}
+                {ck.project_name&&<span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold">📁 {ck.project_name}</span>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── الشريط الجانبي — مثل الدفعة البنكية ── */}
+        <div className="w-64 border-r border-slate-100 overflow-y-auto bg-slate-50/50">
+          <div className="p-4 space-y-4">
+            {/* ملخص */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-3 py-2 text-xs font-bold text-white" style={{background:GRAD}}>ملخص</div>
+              <div className="p-3 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">المبلغ</span>
+                  <span className="font-mono font-bold text-blue-700">{fmt(amount,3)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">النوع</span>
+                  <span className="font-semibold">{ck.check_type==='outgoing'?'📤 صادر':'📥 وارد'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">الحالة</span>
+                  <span className={'text-xs px-2 py-0.5 rounded-full font-semibold '+st.color}>{st.label}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* المتعامل */}
+            {(ck.party_id||ck.party_name) && (
+              <div className="bg-teal-50 border border-teal-100 rounded-2xl p-3">
+                <div className="text-[10px] text-teal-500 font-semibold mb-1">المتعامل</div>
+                <div className="text-sm font-bold text-teal-800">{ck.party_name||ck.party_id}</div>
+              </div>
+            )}
+
+            {/* Audit */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-3 py-2 text-xs font-bold text-white" style={{background:GRAD}}>🔍 Audit</div>
+              <div className="p-3 space-y-2.5 text-xs">
+                {[
+                  {l:'أنشأه',         v:ck.created_by,   d:ck.created_at   },
+                  {l:'أرسل للمراجعة', v:ck.submitted_by, d:ck.submitted_at },
+                  {l:'اعتمده',        v:ck.approved_by,  d:ck.approved_at  },
+                  {l:'رحَّله',        v:ck.posted_by,    d:ck.posted_at    },
+                  {l:'سوَّاه',        v:ck.cleared_by,   d:ck.cleared_at   },
+                ].filter(a=>a.v).map(a=>(
+                  <div key={a.l}>
+                    <div className="text-slate-400">{a.l}</div>
+                    <div className="font-semibold text-slate-700">{a.v?.split('@')[0]}</div>
+                    {a.d&&<div className="text-slate-400">{new Date(a.d).toLocaleDateString('ar-SA')}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Clear Modal */}
       {showClearForm && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center" dir="rtl">
-          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setShowClearForm(false)}/>
-          <div className="relative bg-white rounded-2xl shadow-2xl w-[400px] p-6">
-            <h3 className="font-bold text-lg text-teal-700 mb-4">🏦 تسوية الشيك</h3>
+          <div className="absolute inset-0 bg-slate-900/50" onClick={()=>setShowClearForm(false)}/>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-[380px] p-6">
+            <h3 className="font-bold text-lg text-teal-700 mb-4">🏦 تسوية بنكية</h3>
+            <p className="text-xs text-slate-400 mb-3">يُظهر الشيك في صفحة التسوية البنكية ويُغير حالته إلى مُسوَّى</p>
             <div className="mb-4">
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">رقم المرجع / Reference</label>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">رقم المرجع</label>
               <input className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-teal-400"
-                value={clearRef} onChange={e => setClearRef(e.target.value)}
-                placeholder="رقم كشف الحساب أو المرجع..."/>
+                value={clearRef} onChange={e=>setClearRef(e.target.value)} placeholder="رقم كشف الحساب..."/>
             </div>
-            <p className="text-xs text-slate-400 mb-4">
-              التسوية تُغير حالة الشيك إلى مُسوَّى وتجعله يظهر في التسوية البنكية
-            </p>
             <div className="flex gap-3">
-              <button onClick={() => setShowClearForm(false)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600">إلغاء</button>
-              <button onClick={() => {
-                doAction(() => api.cheques.clear(ck.id, { reference: clearRef }), 'clear', 'cleared')
+              <button onClick={()=>setShowClearForm(false)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-slate-600">إلغاء</button>
+              <button onClick={()=>{
+                doAction(()=>api.cheques.clear(ck.id,{reference:clearRef}),'clear','cleared')
                 setShowClearForm(false)
               }} className="flex-1 py-3 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700">
                 ✅ تأكيد التسوية
@@ -1108,6 +1297,8 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
     </div>
   )
 }
+
+
 
 // ══════════════════════════════════════════════════════════
 // CHEQUES REPORTS — 5 تقارير رئيسية
