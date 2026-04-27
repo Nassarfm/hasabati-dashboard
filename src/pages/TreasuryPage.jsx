@@ -11,6 +11,7 @@ import api from '../api/client'
 import SlideOver from '../components/SlideOver'
 import { AccountPicker, PartyPicker, DimensionPicker } from '../components/pickers'
 import PettyCashTab, { PettyCashExpenseView, PettyCashFundModal, PettyCashExpensePage } from './treasury/PettyCashPage'
+import ChequesPage from './treasury/ChequesPage'
 
 const fmt    = (n,d=3) => (parseFloat(n)||0).toLocaleString('ar-SA',{minimumFractionDigits:d,maximumFractionDigits:d})
 const today  = () => new Date().toISOString().split('T')[0]
@@ -1151,7 +1152,7 @@ export default function TreasuryPage({ section: initSection='dashboard', sub: in
       {activePage==='cash'           && <CashFocusedPage showToast={showToast} openView={openView}/>}
       {activePage==='bank'           && <BankFocusedPage showToast={showToast} openView={openView}/>}
       {activePage==='transfers'      && <TransfersFocusedPage showToast={showToast} openView={openView}/>}
-      {activePage==='checks'         && <ChecksTab showToast={showToast}/>}
+      {activePage==='checks' && <ChequesPage showToast={showToast}/>}
       {activePage==='accounts'       && <BankAccountsTab showToast={showToast} openView={openView}/>}
       {activePage==='settings'       && <BankAccountsTab showToast={showToast} openView={openView}/>}
       {activePage==='petty'          && <PettyCashTab showToast={showToast}/>}
