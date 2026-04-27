@@ -21,7 +21,53 @@ function exportXLS(rows, headers, filename) {
   XLSX.writeFile(wb, filename + '.xlsx')
 }
 
-function KPIBar({cards}) {
+// ── Smart Error Banner — يُظهر الأخطاء بشكل واضح ──────────
+function SmartErrorBanner({ errors, onClose }) {
+  if(!errors || errors.length === 0) return null
+  return (
+    <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 shadow-sm" dir="rtl">
+      <div className="flex items-start gap-3">
+        <div className="text-2xl shrink-0">⚠️</div>
+        <div className="flex-1">
+          <div className="font-bold text-red-700 text-sm mb-2">
+            لا يمكن الحفظ — يرجى مراجعة الحقول التالية:
+          </div>
+          <ul className="space-y-1">
+            {errors.map((e,i)=>(
+              <li key={i} className="flex items-center gap-2 text-sm text-red-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"/>
+                {e}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <button onClick={onClose} className="text-red-400 hover:text-red-600 text-xl shrink-0">✕</button>
+      </div>
+    </div>
+  )
+}
+
+// ── parseApiError — يحوّل خطأ الـ API لرسالة مفهومة ───────
+function parseApiError(e) {
+  const status = e?.response?.status || e?.status
+  const detail = e?.response?.data?.detail || e?.data?.detail || ''
+  const msg    = e?.response?.data?.message || e?.message || ''
+
+  if(status === 404) return ['الخادم لم يجد الـ endpoint — تأكد من رفع آخر تحديث للـ Backend']
+  if(status === 422) {
+    if(detail && Array.isArray(detail))
+      return detail.map(d => d.msg || JSON.stringify(d))
+    if(typeof detail === 'string' && detail)
+      return [detail]
+    return ['بيانات غير صحيحة — تحقق من الحقول المطلوبة']
+  }
+  if(status === 403) return ['ليس لديك صلاحية لهذه العملية']
+  if(status === 400) return [detail || msg || 'طلب غير صحيح']
+  if(status === 500) return ['خطأ في الخادم — حاول مرة أخرى أو تواصل مع الدعم الفني']
+  if(msg.includes('dim') || msg.includes('بعد') || msg.includes('required'))
+    return ['حقول الأبعاد المحاسبية مطلوبة — تأكد من تعبئة الفرع / مركز التكلفة / المشروع']
+  return [msg || 'حدث خطأ غير متوقع']
+}
   return (
     <div className="grid gap-4" style={{gridTemplateColumns:`repeat(${cards.length},1fr)`}}>
       {cards.map((c,i)=>(
@@ -955,7 +1001,7 @@ function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) 
   const [attachments,setAttachments]=useState([])
   const fileRef=useRef(null)
   const [saving,setSaving]   = useState(false)
-  const [saveError,setSaveError] = useState('')
+  const [saveErrors, setSaveErrors] = useState([])  // array of error messages
   const s  = (k,v) => setForm(p=>({...p,[k]:v}))
   const sl = (i,k,v) => setLines(ls=>ls.map((l,idx)=>idx===i?{...l,[k]:v}:l))
   const {isClosed:periodClosed} = useFiscalPeriod(form.expense_date)
@@ -993,11 +1039,27 @@ function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) 
   const isBalanced = Math.abs(je_lines_preview.reduce((s,l)=>s+(l.debit-l.credit),0)) < 0.01
 
   const save = async() => {
-    if(!form.fund_id)     { showToast('اختر الصندوق اولا','error'); return }
-    if(!form.description) { showToast('البيان مطلوب','error'); return }
-    if(validLines.length===0) { showToast('اضف سطراً واحداً على الاقل مع الحساب والمبلغ','error'); return }
-    if(periodClosed)      { showToast('الفترة المالية مغلقة','error'); return }
-    setSaveError(''); setSaving(true)
+    // ── تحقق أولي ──────────────────────────────────
+    const errors = []
+    if(!form.fund_id)     errors.push('الصندوق مطلوب — اختر صندوق العهدة')
+    if(!form.description) errors.push('البيان العام مطلوب')
+    if(validLines.length===0) errors.push('أضف سطراً واحداً على الأقل مع الحساب والمبلغ')
+    if(periodClosed)      errors.push('الفترة المالية مغلقة — لا يمكن الحفظ في فترة مغلقة')
+
+    // تحقق من سطور المصروف
+    validLines.forEach((l, i) => {
+      if(!l.expense_account) errors.push('السطر '+(i+1)+': حساب المصروف مطلوب')
+      if(!parseFloat(l.amount)) errors.push('السطر '+(i+1)+': المبلغ مطلوب')
+    })
+
+    if(errors.length > 0) {
+      setSaveErrors(errors)
+      // scroll to error banner
+      setTimeout(()=>document.getElementById('save-errors-banner')?.scrollIntoView({behavior:'smooth'}), 100)
+      return
+    }
+
+    setSaveErrors([]); setSaving(true)
     try {
       const payload = {
         ...form,
@@ -1027,13 +1089,10 @@ function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) 
       }
       onSaved()
     } catch(e) {
-      const msg = e?.response?.status === 404
-        ? 'الخادم لم يجد الـ endpoint — تأكد من رفع آخر تحديث للـ backend'
-        : e?.response?.status === 422
-        ? 'بيانات غير صحيحة: ' + (e?.response?.data?.detail || e.message)
-        : e.message || 'حدث خطأ غير متوقع'
-      setSaveError(msg)
-      showToast(msg, 'error')
+      const errs = parseApiError(e)
+      setSaveErrors(errs)
+      showToast(errs[0], 'error')
+      setTimeout(()=>document.getElementById('save-errors-banner')?.scrollIntoView({behavior:'smooth'}), 100)
     }
     finally { setSaving(false) }
   }
@@ -1239,13 +1298,10 @@ function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) 
           ))}
         </div>
 
-        {saveError && (
-          <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 text-red-700 text-sm flex items-center gap-3">
-            <span className="text-xl">x</span>
-            <span className="flex-1">{saveError}</span>
-            <button onClick={()=>setSaveError('')} className="text-red-400 hover:text-red-600">x</button>
-          </div>
-        )}
+        {/* Error Banner */}
+        <div id="save-errors-banner">
+          <SmartErrorBanner errors={saveErrors} onClose={()=>setSaveErrors([])}/>
+        </div>
 
         <div className="flex gap-3 pb-8">
           <button onClick={onBack} className="px-6 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50">الغاء</button>
