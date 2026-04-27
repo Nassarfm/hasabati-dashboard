@@ -68,6 +68,8 @@ function parseApiError(e) {
     return ['حقول الأبعاد المحاسبية مطلوبة — تأكد من تعبئة الفرع / مركز التكلفة / المشروع']
   return [msg || 'حدث خطأ غير متوقع']
 }
+
+function KPIBar({cards}) {
   return (
     <div className="grid gap-4" style={{gridTemplateColumns:`repeat(${cards.length},1fr)`}}>
       {cards.map((c,i)=>(
