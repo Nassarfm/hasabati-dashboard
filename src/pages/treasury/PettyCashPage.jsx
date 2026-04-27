@@ -387,6 +387,8 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, onStatu
       '</body></html>')
     w.document.close()
   }
+
+  const handlePrint = () => {
     const w = window.open('','_blank','width=900,height=750')
     const fmN = n => parseFloat(n||0).toLocaleString('en',{minimumFractionDigits:3})
     const lines = exp.lines || exp.expense_lines || []
