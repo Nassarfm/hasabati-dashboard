@@ -2207,7 +2207,13 @@ function RecurringTab({showToast,openView}) {
   const load = useCallback(()=>{
     setLoading(true)
     Promise.all([api.treasury.listRecurring(), api.treasury.listBankAccounts()])
-      .then(([r,a])=>{ setItems(r?.data||[]); setAccounts(a?.data||[]) })
+      .then(([r,a])=>{
+        const items = Array.isArray(r?.data) ? r.data :
+                      Array.isArray(r?.data?.items) ? r.data.items :
+                      Array.isArray(r) ? r : []
+        setItems(items)
+        setAccounts(a?.data||[])
+      })
       .catch(e=>showToast(e.message,'error'))
       .finally(()=>setLoading(false))
   },[])
