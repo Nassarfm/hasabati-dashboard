@@ -234,7 +234,19 @@ export default function ChequesPage({ showToast }) {
   const [showChequeForm, setShowChequeForm] = useState(false)
   const [editCheque, setEditCheque]   = useState(null)
   const [viewCheque, setViewCheque]   = useState(null)
-  const [statusFilter, setStatusFilter] = useState('')
+  const [clearing, setClearing] = useState({}) // { [ck_id]: true/false }
+
+  const doClearRow = async(ck, e) => {
+    e.stopPropagation()
+    if(!confirm('تسوية الشيك ' + ck.serial + '؟')) return
+    setClearing(p => ({...p, [ck.id]: true}))
+    try {
+      await api.cheques.clear(ck.id, {reference:''})
+      load()
+      showToast('تمت التسوية ✅')
+    } catch(e) { showToast(e.message,'error') }
+    finally { setClearing(p => ({...p, [ck.id]: false})) }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -384,15 +396,6 @@ export default function ChequesPage({ showToast }) {
              cheques.map((ck, i) => {
                const st  = STATUS[ck.status] || { label: ck.status, color: 'bg-slate-100 text-slate-500' }
                const ovd = ck.due_date && new Date(ck.due_date) < new Date() && ck.status === 'posted'
-               const [clearing, setClearing] = useState(false)
-               const doClear = async(e) => {
-                 e.stopPropagation()
-                 if(!confirm('تسوية الشيك '+ck.serial+'؟')) return
-                 setClearing(true)
-                 try { await api.cheques.clear(ck.id,{reference:''}); load(); showToast('تمت التسوية ✅') }
-                 catch(e) { showToast(e.message,'error') }
-                 finally { setClearing(false) }
-               }
                return (
                  <div key={ck.id}
                    className={'grid items-center border-b border-slate-50 text-xs '+(ovd?'bg-amber-50':i%2===0?'bg-white':'bg-slate-50/30')}
@@ -423,10 +426,11 @@ export default function ChequesPage({ showToast }) {
                    {/* checkbox تسوية */}
                    <div className="px-2 py-3 flex items-center justify-center">
                      {ck.status==='posted' ? (
-                       <button onClick={doClear} disabled={clearing}
+                       <button onClick={(e) => doClearRow(ck, e)}
+                         disabled={clearing[ck.id]}
                          title="تسوية بنكية"
                          className="w-7 h-7 rounded-lg border-2 border-teal-300 bg-white hover:bg-teal-50 flex items-center justify-center transition-colors disabled:opacity-50">
-                         {clearing ? '⏳' : '🏦'}
+                         {clearing[ck.id] ? '⏳' : '🏦'}
                        </button>
                      ) : ck.status==='cleared' ? (
                        <span className="text-teal-500 text-base" title="مُسوَّى">✓</span>
