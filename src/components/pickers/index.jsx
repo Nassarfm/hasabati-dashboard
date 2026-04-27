@@ -339,8 +339,7 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
 
 // ── جدول القيد المحاسبي الموحد — نفس تصميم قيد اليومية ──
 // ══════════════════════════════════════════════════════════
-export { AccountPicker, PartyPicker, DimensionPicker }
-
+export { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar }
 
 // ══════════════════════════════════════════════════════════
 // WorkflowStatusBar — شريط مراحل سير العمل (مثل Odoo)
@@ -403,4 +402,3 @@ function WorkflowStatusBar({ steps=[], current='', rejected=false, className='' 
   )
 }
 
-export { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar }
