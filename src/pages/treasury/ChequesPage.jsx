@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import ReactDOM from 'react-dom'
 import * as XLSX from 'xlsx'
 import api from '../../api/client'
-import { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar } from '../../components/pickers'
+import { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar, Tooltip, AuthorityBadge } from '../../components/pickers'
 
 // ── Helpers ──────────────────────────────────────────────
 const fmt     = (n,d=3) => (parseFloat(n||0)).toLocaleString('ar-SA',{minimumFractionDigits:d,maximumFractionDigits:d})
@@ -801,10 +801,20 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
                 value={form.due_date} onChange={e => s('due_date', e.target.value)}/>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">المبلغ *</label>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                <Tooltip text="المبلغ المكتوب على الشيك بالأرقام — سيتم تحويله تلقائياً إلى كلمات عربية عند الطباعة">
+                  المبلغ *
+                </Tooltip>
+              </label>
               <input type="number" step="0.001" min="0"
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"
                 value={form.amount} onChange={e => s('amount', e.target.value)} placeholder="0.000"/>
+              {form.amount && parseFloat(form.amount) > 0 && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <AuthorityBadge amount={form.amount}/>
+                  <span className="text-[10px] text-slate-400">{tafqeet(parseFloat(form.amount))}</span>
+                </div>
+              )}
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 block mb-1.5">اسم المستفيد</label>
@@ -813,7 +823,11 @@ function ChequeFormPage({ books, accounts, editCheque, onBack, onSaved, showToas
                 placeholder="الاسم المكتوب على الشيك"/>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">حساب المقابل (GL) *</label>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                <Tooltip text="الحساب المقابل في دفتر الأستاذ — عادةً حساب الذمم الدائنة (21010101) للموردين أو حساب التزامات أخرى">
+                  حساب المقابل (GL) *
+                </Tooltip>
+              </label>
               <AccountPicker
                 value={form.gl_account_code}
                 onChange={(code,name)=>{s('gl_account_code',code);s('gl_account_name',name||'')}}
@@ -1022,8 +1036,7 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
           { l:'رقم الشيك',    v: ck.check_number || '—' },
           { l:'التاريخ',       v: fmtDate(ck.check_date) },
           { l:'الاستحقاق',    v: fmtDate(ck.due_date)   },
-          { l:'المبلغ',        v: fmt(ck.amount, 3) + ' ر.س' },
-          { l:'البنك',         v: ck.bank_account_name || '—' },
+          { l:'المبلغ',        v: fmt(ck.amount, 3) + ' ر.س' },          { l:'البنك',         v: ck.bank_account_name || '—' },
           { l:'المستفيد',      v: ck.payee_name || '—'  },
           { l:'القيد المحاسبي',v: ck.je_serial || '—'   },
           { l:'حساب المقابل',  v: ck.gl_account_code || '—' },
@@ -1149,12 +1162,43 @@ function ChequesReports({ cheques, onPrint }) {
   // ⑤ الشيكات الملغاة
   const cancelledCheques = cheques.filter(c => c.status === 'cancelled' || c.status === 'rejected')
 
+  // ⑥ الشيكات الصادرة والواردة
+  const outgoing = cheques.filter(c => c.check_type === 'outgoing')
+  const incoming = cheques.filter(c => c.check_type === 'incoming')
+
+  // ⑦ Aging تحليل
+  const aging = [
+    { label:'0-30 يوم',  min:0,   max:30,  items:[] },
+    { label:'31-60 يوم', min:31,  max:60,  items:[] },
+    { label:'61-90 يوم', min:61,  max:90,  items:[] },
+    { label:'+90 يوم',   min:91,  max:9999,items:[] },
+  ]
+  cheques.filter(c=>c.due_date && c.status==='posted').forEach(c => {
+    const days = Math.floor((new Date()-new Date(c.due_date))/(1000*60*60*24))
+    const bucket = aging.find(a => days >= a.min && days <= a.max)
+    if(bucket) bucket.items.push({...c, days})
+  })
+
+  // ⑧ حسب البنك
+  const byBank = cheques.reduce((acc,c) => {
+    const bank = c.bank_account_name || 'غير محدد'
+    if(!acc[bank]) acc[bank] = {name:bank, count:0, total:0, posted:0}
+    acc[bank].count++
+    acc[bank].total += parseFloat(c.amount||0)
+    if(c.status==='posted') acc[bank].posted += parseFloat(c.amount||0)
+    return acc
+  },{})
+
   const reports = [
-    { id:'due',       label:'📅 المستحقة',           count: dueCheques.length },
-    { id:'bounced',   label:'❌ المرتجعة',            count: bouncedCheques.length },
-    { id:'party',     label:'👤 كشف المتعاملين',      count: Object.keys(partyGroups).length },
-    { id:'cashflow',  label:'📈 التدفق النقدي',       count: cashFlow.length },
-    { id:'cancelled', label:'🚫 الملغاة',             count: cancelledCheques.length },
+    { id:'due',       label:'📅 المستحقة',        count: dueCheques.length },
+    { id:'outgoing',  label:'📤 الصادرة',          count: outgoing.length  },
+    { id:'incoming',  label:'📥 الواردة',          count: incoming.length  },
+    { id:'bounced',   label:'❌ المرتجعة',         count: bouncedCheques.length },
+    { id:'party',     label:'👤 حسب المتعامل',     count: Object.keys(partyGroups).length },
+    { id:'bank',      label:'🏦 حسب البنك',        count: Object.keys(byBank).length },
+    { id:'aging',     label:'📊 Aging تحليل',      count: aging.reduce((s,a)=>s+a.items.length,0) },
+    { id:'cashflow',  label:'📈 Cash Flow',         count: cashFlow.length  },
+    { id:'cancelled', label:'🚫 الملغاة',           count: cancelledCheques.length },
   ]
 
   return (
@@ -1337,6 +1381,82 @@ function ChequesReports({ cheques, onPrint }) {
           }
         </div>
       )}
+
+      {/* ⑥ الصادرة */}
+      {activeReport === 'outgoing' && (
+        <ChequeListReport items={outgoing} title="الشيكات الصادرة" color="blue" onPrint={onPrint}/>
+      )}
+      {/* ⑦ الواردة */}
+      {activeReport === 'incoming' && (
+        <ChequeListReport items={incoming} title="الشيكات الواردة" color="emerald" onPrint={onPrint}/>
+      )}
+      {/* ⑧ حسب البنك */}
+      {activeReport === 'bank' && (
+        <div className="space-y-3">
+          {Object.values(byBank).sort((a,b)=>b.total-a.total).map(b => (
+            <div key={b.name} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-4">
+              <div className="text-2xl">🏦</div>
+              <div className="flex-1"><div className="font-bold">{b.name}</div><div className="text-xs text-slate-400">{b.count} شيك</div></div>
+              <div className="font-mono font-bold text-blue-700">{b.total.toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* ⑨ Aging */}
+      {activeReport === 'aging' && (
+        <div className="space-y-3">
+          {aging.map(bucket => (
+            <div key={bucket.label} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 flex justify-between bg-slate-50 border-b">
+                <span className="font-bold text-sm">{bucket.label} ({bucket.items.length})</span>
+                <span className="font-mono text-sm font-bold text-blue-700">
+                  {bucket.items.reduce((s,c)=>s+parseFloat(c.amount||0),0).toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س
+                </span>
+              </div>
+              {bucket.items.slice(0,5).map(c=>(
+                <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-50">
+                  <div className="flex-1 text-sm">{c.payee_name||'—'}</div>
+                  <div className="text-xs text-slate-400">{c.days} يوم</div>
+                  <div className="font-mono text-sm font-bold">{parseFloat(c.amount||0).toLocaleString('ar-SA',{minimumFractionDigits:2})}</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ── Reusable Cheque List Report ───────────────────────────
+function ChequeListReport({ items, title, color, onPrint }) {
+  const [tmpl, setTmpl] = useState('generic')
+  const total = items.reduce((s,c)=>s+parseFloat(c.amount||0),0)
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="px-4 py-3 flex justify-between items-center border-b bg-slate-50">
+        <span className="font-bold text-slate-800 text-sm">{title} ({items.length})</span>
+        <span className="font-mono text-sm font-bold text-blue-700">{total.toLocaleString('ar-SA',{minimumFractionDigits:2})} ر.س</span>
+      </div>
+      {items.length===0 ? <div className="py-10 text-center text-slate-400">لا توجد شيكات</div> :
+        items.map((c,i) => (
+          <div key={c.id} className={'flex items-center gap-3 px-4 py-3 border-b border-slate-50 '+(i%2===0?'':'bg-slate-50/30')}>
+            <div className="flex-1">
+              <div className="text-sm font-semibold">{c.payee_name||c.party_name||'—'}</div>
+              <div className="text-xs text-slate-400">{c.serial} · {fmtDate(c.check_date)}</div>
+            </div>
+            <span className={'text-xs px-2 py-0.5 rounded-full font-semibold '+(STATUS[c.status]?.color||'bg-slate-100 text-slate-500')}>{STATUS[c.status]?.label||c.status}</span>
+            <div className="font-mono font-bold text-sm">{parseFloat(c.amount||0).toLocaleString('ar-SA',{minimumFractionDigits:2})}</div>
+            <div className="flex items-center gap-1">
+              <select value={tmpl} onChange={e=>setTmpl(e.target.value)} className="text-[10px] border border-slate-200 rounded px-1 py-0.5">
+                {Object.entries(BANK_TEMPLATES).map(([k,v])=><option key={k} value={k}>{v.name}</option>)}
+              </select>
+              <button onClick={()=>onPrint(c,tmpl)} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">🖨️</button>
+            </div>
+          </div>
+        ))
+      }
     </div>
   )
 }

@@ -339,7 +339,6 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
 
 // ── جدول القيد المحاسبي الموحد — نفس تصميم قيد اليومية ──
 // ══════════════════════════════════════════════════════════
-export { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar }
 
 // ══════════════════════════════════════════════════════════
 // WorkflowStatusBar — شريط مراحل سير العمل (مثل Odoo)
@@ -402,3 +401,58 @@ function WorkflowStatusBar({ steps=[], current='', rejected=false, className='' 
   )
 }
 
+
+// ══════════════════════════════════════════════════════════
+// Tooltip — تلميح أداة للحقول التقنية
+// الاستخدام: <Tooltip text="شرح الحقل"><label>اسم الحقل</label></Tooltip>
+// ══════════════════════════════════════════════════════════
+function Tooltip({ text, children }) {
+  const [show, setShow] = useState(false)
+  return (
+    <span className="inline-flex items-center gap-1 relative">
+      {children}
+      <span
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold inline-flex items-center justify-center cursor-help hover:bg-blue-200 hover:text-blue-700 transition-colors shrink-0">
+        ?
+      </span>
+      {show && (
+        <span className="absolute bottom-full right-0 mb-2 w-64 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 z-[9999] leading-relaxed shadow-xl text-right pointer-events-none">
+          {text}
+          <span className="absolute top-full right-3 border-4 border-transparent border-t-slate-800"/>
+        </span>
+      )}
+    </span>
+  )
+}
+
+// ══════════════════════════════════════════════════════════
+// AuthorityMatrix — مصفوفة الصلاحيات للشيكات
+// ══════════════════════════════════════════════════════════
+const AUTHORITY_LIMITS = {
+  level1: { label:'توقيع منفرد',  max: 10000,   signers: 1, icon:'👤' },
+  level2: { label:'توقيع مشترك', max: 100000,   signers: 2, icon:'👥' },
+  level3: { label:'مجلس الإدارة',max: Infinity,  signers: 3, icon:'🏛️' },
+}
+
+function AuthorityBadge({ amount }) {
+  const n = parseFloat(amount || 0)
+  const level = n <= AUTHORITY_LIMITS.level1.max ? 'level1' :
+                n <= AUTHORITY_LIMITS.level2.max ? 'level2' : 'level3'
+  const auth = AUTHORITY_LIMITS[level]
+  const colors = {
+    level1: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    level2: 'bg-amber-100 text-amber-700 border-amber-200',
+    level3: 'bg-red-100 text-red-700 border-red-200',
+  }
+  return (
+    <div className={'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold '+colors[level]}>
+      <span>{auth.icon}</span>
+      <span>{auth.label}</span>
+      <span className="opacity-60">({auth.signers} توقيع)</span>
+    </div>
+  )
+}
+
+export { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar, Tooltip, AuthorityBadge }
