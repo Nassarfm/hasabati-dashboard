@@ -152,8 +152,9 @@ function PettyCashTab({showToast}) {
     <PettyCashExpenseView
       expense={viewExp}
       funds={funds}
-      onBack={()=>setViewExp(null)}
+      onBack={()=>{load();setViewExp(null)}}
       onPosted={()=>{load();setViewExp(null);showToast('تم الترحيل ✅')}}
+      onStatusChange={()=>load()}
       onEdit={(exp)=>{setViewExp(null);setEditExpense(exp);setShowExpForm(true)}}
       showToast={showToast}
     />
@@ -278,10 +279,10 @@ function PettyCashTab({showToast}) {
 
 // ══ PETTY CASH EXPENSE VIEW — استعراض المصروف ═══════════
 
-function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToast}) {
+function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, onStatusChange, showToast}) {
   const [exp, setExp]     = useState(expense)
   const [loading, setLoading] = useState(false)
-  const [action, setAction]   = useState('')  // which button is loading
+  const [action, setAction]   = useState('')
 
   const doAction = async(actionFn, actionName, nextStatus, confirmMsg) => {
     if(confirmMsg && !confirm(confirmMsg)) return
@@ -289,12 +290,14 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToa
     try {
       await actionFn()
       setExp(p=>({...p, status: nextStatus}))
-      showToast({
-        submit: 'تم الإرسال للمراجعة ✅',
+      const msgs = {
+        submit:  'تم الإرسال للمراجعة ✅',
         approve: 'تم الاعتماد ✅',
-        post: 'تم الترحيل ✅',
-        reject: 'تم الرفض',
-      }[actionName] || 'تم ✅')
+        post:    'تم الترحيل ✅',
+        reject:  'تم الرفض',
+      }
+      showToast(msgs[actionName] || 'تم ✅')
+      onStatusChange?.()  // ← أبلغ الـ parent لتحديث القائمة
       if(actionName==='post') onPosted()
     } catch(e) { showToast(e.message,'error') }
     finally { setLoading(false); setAction('') }
@@ -453,7 +456,7 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToa
             {loading&&action==='approve'?'⏳...':'✅ اعتماد'}
           </button>
         )}
-        {(exp.status==='approved'||exp.status==='review') && (
+        {(exp.status==='approved'||exp.status==='review'||exp.status==='draft') && (
           <button onClick={()=>doAction(()=>api.treasury.postPettyCashExpense(exp.id),'post','posted','هل تريد ترحيل هذا المصروف؟')}
             disabled={loading} className="px-4 py-2.5 rounded-xl bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50">
             {loading&&action==='post'?'⏳...':'📒 ترحيل'}
@@ -463,18 +466,18 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToa
 
       {/* Workflow Progress Bar */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-        <div className="flex items-center gap-0">
+        <div className="flex items-center gap-0" style={{direction:'ltr'}}>
           {[
-            {s:'draft',    l:'مسودة',       i:'📋'},
-            {s:'review',   l:'مراجعة',      i:'👁'},
-            {s:'approved', l:'معتمد',        i:'✅'},
-            {s:'posted',   l:'مُرحَّل',     i:'📒'},
+            {s:'draft',    l:'مسودة',    i:'📋'},
+            {s:'review',   l:'مراجعة',   i:'👁'},
+            {s:'approved', l:'معتمد',    i:'✅'},
+            {s:'posted',   l:'مُرحَّل',  i:'📒'},
           ].map((step, idx, arr)=>{
-            const steps = ['draft','review','approved','posted']
-            const curIdx = steps.indexOf(exp.status)
+            const steps   = ['draft','review','approved','posted']
+            const curIdx  = steps.indexOf(exp.status==='rejected'?'draft':exp.status)
             const stepIdx = steps.indexOf(step.s)
-            const isDone = stepIdx <= curIdx && exp.status !== 'rejected'
-            const isCur  = step.s === exp.status
+            const isDone  = stepIdx <= curIdx && exp.status !== 'rejected'
+            const isCur   = step.s === exp.status
             return (
               <div key={step.s} className="flex items-center flex-1">
                 <div className="flex flex-col items-center flex-1">
@@ -493,6 +496,11 @@ function PettyCashExpenseView({expense, funds, onBack, onPosted, onEdit, showToa
             )
           })}
         </div>
+        {exp.status==='rejected'&&(
+          <div className="mt-2 text-xs text-red-600 text-center">
+            ❌ مرفوض {exp.rejection_reason?'— '+exp.rejection_reason:''}
+          </div>
+        )}
       </div>
 
       {/* بيانات رئيسية */}
