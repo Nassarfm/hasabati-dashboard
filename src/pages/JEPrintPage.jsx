@@ -22,7 +22,8 @@ const DOC_TYPES = {
   ALO: { label:'قيد توزيع',      color:'bg-teal-100 text-teal-700',      icon:'📊' },
 }
 
-export default function JEPrintPage({ showToast }) {
+export default function JEPrintPage({ showToast: _showToast }) {
+  const showToast = _showToast || ((msg, type) => type==='error' ? console.error(msg) : console.log(msg))
   const [serial, setSerial] = useState('')
   const [je, setJe]         = useState(null)
   const [loading, setLoading] = useState(false)
@@ -33,12 +34,24 @@ export default function JEPrintPage({ showToast }) {
     if(!serial.trim()) { setError('أدخل رقم المستند'); return }
     setError(''); setLoading(true); setJe(null)
     try {
-      const r = await api.accounting.getJEs({ search: serial.trim(), limit: 5 })
-      const items = toArr(r)
+      const r = await api.accounting.getJEs({ search: serial.trim(), limit: 10 })
+      const items = Array.isArray(r?.data) ? r.data :
+                    Array.isArray(r?.data?.items) ? r.data.items :
+                    Array.isArray(r) ? r : []
+
       const found = items.find(j =>
         (j.serial||'').toLowerCase() === serial.trim().toLowerCase()
-      ) || items[0]
-      if(!found) { setError('لم يُعثر على مستند بهذا الرقم: ' + serial.trim()); return }
+      )
+
+      if(!found) {
+        if(items.length === 0) {
+          setError('لم يُعثر على مستند بهذا الرقم: ' + serial.trim())
+        } else {
+          // أقرب نتيجة
+          setJe(items[0])
+        }
+        return
+      }
 
       // جلب التفاصيل الكاملة
       const detail = await api.accounting.getJE(found.id)
