@@ -233,6 +233,29 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
         ? (dim.values || []).filter(v => v.is_active !== false)
         : []
 
+      // Fallback: إذا الأبعاد فارغة → جرب الجداول القديمة
+      if(items.length === 0) {
+        try {
+          if(type==='branch') {
+            const r = await api.settings.listBranches?.()
+            const raw = r?.data || r || []
+            items = raw.map(b=>({code:b.branch_code||b.code||b.id, name_ar:b.name_ar||b.branch_name||b.name||b.code}))
+          } else if(type==='cost_center') {
+            const r = await api.settings.listCostCenters?.()
+            const raw = r?.data || r || []
+            items = raw.map(c=>({code:c.cost_center_code||c.code||c.id, name_ar:c.name_ar||c.cost_center_name||c.name||c.code}))
+          } else if(type==='project') {
+            const r = await api.settings.listProjects?.()
+            const raw = r?.data || r || []
+            items = raw.map(p=>({code:p.project_code||String(p.code)||p.id, name_ar:p.name_ar||p.project_name||p.name||p.code}))
+          } else if(type==='expense_class') {
+            const r = await api.settings.listExpenseClassifications?.()
+            const raw = r?.data || r || []
+            items = raw.map(e=>({code:e.code||e.id, name_ar:e.name_ar||e.name||e.code}))
+          }
+        } catch { /* ignore fallback errors */ }
+      }
+
       if(q){
         const low = q.toLowerCase()
         items = items.filter(v =>
