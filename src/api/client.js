@@ -557,7 +557,23 @@ export const api = {
     resetTransactions:  ()  => post('/admin/reset/transactions', { confirm: 'RESET' }),
   },
   // ── قاعدة المعرفة والمستندات ─────────────────────────────
-  knowledge: {
+  cheques: {
+    // دفاتر الشيكات
+    listBooks:      ()        => get('/treasury/checks/books'),
+    createBook:     (b)       => post('/treasury/checks/books', b),
+    updateBook:     (id, b)   => put(`/treasury/checks/books/${id}`, b),
+    // الشيكات
+    list:           (p={})    => get('/treasury/checks', p),
+    get:            (id)      => get(`/treasury/checks/${id}`),
+    create:         (b)       => post('/treasury/checks', b),
+    update:         (id, b)   => put(`/treasury/checks/${id}`, b),
+    submit:         (id)      => post(`/treasury/checks/${id}/submit`, {}),
+    approve:        (id)      => post(`/treasury/checks/${id}/approve`, {}),
+    reject:         (id, b)   => post(`/treasury/checks/${id}/reject`, b),
+    post:           (id)      => post(`/treasury/checks/${id}/post`, {}),
+    clear:          (id, b)   => post(`/treasury/checks/${id}/clear`, b),
+    returnCheque:   (id, b)   => post(`/treasury/checks/${id}/return`, b),
+  },
     listDocuments:  (p={})   => get('/knowledge/documents', p),
     createDocument: (b)      => post('/knowledge/documents', b),
     deleteDocument: (id)     => del('/knowledge/documents/' + id),
