@@ -2,8 +2,12 @@
  * src/pages/JEPrintPage.jsx
  * صفحة الطباعة العالمية — Universal Journal Entry Print
  * ابحث بأي رقم مستند: JV, CHK, BP, BR, PCR, PET, BT
+ * ✅ إصلاح التاريخ — fallbacks متعددة لأسماء الحقل
+ * ✅ إظهار الأبعاد المحاسبية — fallbacks متعددة
+ * ✅ إضافة تاريخ الطباعة + اسم المستخدم الطابع
  */
 import { useState, useRef } from 'react'
+import { useAuth } from '../AuthContext'
 import api from '../api/client'
 import { toArr, fmt, fmtDate, tafqeet } from '../utils'
 
@@ -15,60 +19,78 @@ const DOC_TYPES = {
   CHK: { label:'شيك',            color:'bg-blue-100 text-blue-700',      icon:'📝' },
   BP:  { label:'دفعة بنكية',     color:'bg-indigo-100 text-indigo-700',  icon:'🏦' },
   BR:  { label:'قبض بنكي',       color:'bg-emerald-100 text-emerald-700',icon:'💰' },
-  BT:  { label:'تحويل داخلي',   color:'bg-purple-100 text-purple-700',  icon:'🔄' },
+  BT:  { label:'تحويل داخلي',    color:'bg-purple-100 text-purple-700',  icon:'🔄' },
   PCR: { label:'مصروف نثري',     color:'bg-amber-100 text-amber-700',    icon:'💸' },
   PET: { label:'قيد عهدة نثرية', color:'bg-orange-100 text-orange-700',  icon:'📒' },
   ADJ: { label:'قيد تسوية',      color:'bg-rose-100 text-rose-700',      icon:'⚖️' },
   ALO: { label:'قيد توزيع',      color:'bg-teal-100 text-teal-700',      icon:'📊' },
 }
 
+// ── استخراج التاريخ من أي حقل ممكن ─────────────────────────
+function getJeDate(je) {
+  return je.je_date || je.entry_date || je.transaction_date ||
+         je.date    || je.posting_date || je.created_at || ''
+}
+
+// ── استخراج الأبعاد من سطر القيد ───────────────────────────
+function getDims(l) {
+  return {
+    branch:      l.branch_name      || l.branch?.name      || l.dim_branch      || '',
+    cost_center: l.cost_center_name || l.cost_center?.name || l.dim_cost_center || '',
+    project:     l.project_name     || l.project?.name     || l.dim_project     || '',
+  }
+}
+
 export default function JEPrintPage({ showToast: _showToast }) {
-  const showToast = _showToast || ((msg, type) => type==='error' ? console.error(msg) : console.log(msg))
-  const [serial, setSerial] = useState('')
-  const [je, setJe]         = useState(null)
+  const { user } = useAuth()
+  const showToast = _showToast || ((msg, type) => type === 'error' ? console.error(msg) : console.log(msg))
+  const [serial, setSerial]   = useState('')
+  const [je, setJe]           = useState(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError]   = useState('')
+  const [error, setError]     = useState('')
   const printRef = useRef()
 
   const search = async () => {
-    if(!serial.trim()) { setError('أدخل رقم المستند'); return }
+    if (!serial.trim()) { setError('أدخل رقم المستند'); return }
     setError(''); setLoading(true); setJe(null)
     try {
       const r = await api.accounting.getJEs({ search: serial.trim(), limit: 10 })
-      const items = Array.isArray(r?.data) ? r.data :
-                    Array.isArray(r?.data?.items) ? r.data.items :
-                    Array.isArray(r) ? r : []
+      const items = toArr(r)
 
       const found = items.find(j =>
-        (j.serial||'').toLowerCase() === serial.trim().toLowerCase()
+        (j.serial || '').toLowerCase() === serial.trim().toLowerCase()
       )
 
-      if(!found) {
-        if(items.length === 0) {
+      if (!found) {
+        if (items.length === 0) {
           setError('لم يُعثر على مستند بهذا الرقم: ' + serial.trim())
         } else {
-          // أقرب نتيجة
           setJe(items[0])
         }
         return
       }
 
-      // جلب التفاصيل الكاملة
       const detail = await api.accounting.getJE(found.id)
       setJe(detail?.data || found)
-    } catch(e) {
+    } catch (e) {
       setError(e.message || 'خطأ في البحث')
     } finally { setLoading(false) }
   }
 
   const handlePrint = () => {
-    if(!je) return
-    const lines   = je.lines || je.je_lines || []
-    const total   = lines.reduce((s,l) => s + parseFloat(l.debit||0), 0)
-    const docType = DOC_TYPES[je.je_type||je.type||'JV'] || DOC_TYPES.JV
-    const statusLabel = je.status==='posted'?'مُرحَّل':je.status==='draft'?'مسودة':'معتمد'
+    if (!je) return
+    const lines     = je.lines || je.je_lines || []
+    const total     = lines.reduce((s, l) => s + parseFloat(l.debit || 0), 0)
+    const docType   = DOC_TYPES[(je.je_type || je.type || 'JV').toUpperCase()] || DOC_TYPES.JV
+    const statusLabel = je.status === 'posted' ? 'مُرحَّل' : je.status === 'draft' ? 'مسودة' : 'معتمد'
+    const jeDate    = getJeDate(je)
+    const printedBy = (user?.email || user?.name || '—').split('@')[0]
+    const printedAt = new Date().toLocaleString('ar-SA', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: true
+    })
 
-    const w = window.open('','_blank','width=900,height=750')
+    const w = window.open('', '_blank', 'width=950,height=800')
     w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
     <title>طباعة قيد — ${je.serial}</title>
     <style>
@@ -85,16 +107,17 @@ export default function JEPrintPage({ showToast: _showToast }) {
       table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px}
       thead tr{background:#1e3a5f;color:white}
       th{padding:8px 10px;text-align:right;font-weight:600}
-      td{padding:7px 10px;border-bottom:1px solid #f1f5f9}
+      td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
       tr:nth-child(even) td{background:#fafbfc}
       .tot td{background:#0f172a!important;color:white!important;font-weight:700;font-size:12px}
       .debit{color:#1d4ed8;font-weight:700;font-family:monospace}
       .credit{color:#059669;font-weight:700;font-family:monospace}
       .accode{font-family:monospace;color:#1d4ed8;font-size:10px}
       .dims{display:flex;gap:4px;flex-wrap:wrap}
-      .dim{font-size:9px;padding:1px 6px;border-radius:8px;font-weight:600}
+      .dim{font-size:9px;padding:2px 7px;border-radius:8px;font-weight:600;white-space:nowrap}
       .sigs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px;padding-top:16px;border-top:1px dashed #e2e8f0}
       .sg{text-align:center}.sg-line{border-top:1px solid #94a3b8;width:100%;margin-bottom:5px}.sg-lbl{font-size:9px;color:#64748b}
+      .print-audit{margin-top:16px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;display:flex;justify-content:space-between;font-size:9px;color:#64748b}
       .np{text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0}
       .btn{padding:10px 28px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;margin:0 5px}
     </style></head><body>
@@ -109,57 +132,73 @@ export default function JEPrintPage({ showToast: _showToast }) {
         <div style="font-size:10px;color:#64748b;margin-top:2px">${statusLabel}</div>
       </div>
     </div>
+
     <div class="meta">
-      <div><div class="ml">التاريخ</div><div class="mv">${fmtDate(je.je_date||je.date)}</div></div>
-      <div><div class="ml">نوع القيد</div><div class="mv">${je.je_type||je.type||'—'}</div></div>
-      <div><div class="ml">إجمالي المدين</div><div class="mv" style="color:#1d4ed8">${fmt(total,3)} ر.س</div></div>
-      <div><div class="ml">إجمالي الدائن</div><div class="mv" style="color:#059669">${fmt(total,3)} ر.س</div></div>
-      <div><div class="ml">أنشأه</div><div class="mv">${(je.created_by||'—').split('@')[0]}</div></div>
-      <div><div class="ml">رحّله</div><div class="mv">${(je.posted_by||'—').split('@')[0]}</div></div>
-      <div><div class="ml">تاريخ الترحيل</div><div class="mv">${je.posted_at?fmtDate(je.posted_at):'—'}</div></div>
-      <div><div class="ml">المرجع</div><div class="mv">${je.reference||'—'}</div></div>
+      <div><div class="ml">التاريخ</div><div class="mv">${jeDate ? fmtDate(jeDate) : '—'}</div></div>
+      <div><div class="ml">نوع القيد</div><div class="mv">${je.je_type || je.type || '—'}</div></div>
+      <div><div class="ml">إجمالي المدين</div><div class="mv" style="color:#1d4ed8">${fmt(total, 3)} ر.س</div></div>
+      <div><div class="ml">إجمالي الدائن</div><div class="mv" style="color:#059669">${fmt(total, 3)} ر.س</div></div>
+      <div><div class="ml">أنشأه</div><div class="mv">${(je.created_by || '—').split('@')[0]}</div></div>
+      <div><div class="ml">رحّله</div><div class="mv">${(je.posted_by || '—').split('@')[0]}</div></div>
+      <div><div class="ml">تاريخ الترحيل</div><div class="mv">${je.posted_at ? fmtDate(je.posted_at) : '—'}</div></div>
+      <div><div class="ml">المرجع</div><div class="mv">${je.reference || '—'}</div></div>
     </div>
-    ${je.description?`<div class="desc">📋 ${je.description}</div>`:''}
+
+    ${je.description ? `<div class="desc">📋 ${je.description}</div>` : ''}
+
     ${total > 0 ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:11px;font-weight:700;color:#1e40af">
       💬 المبلغ كتابةً: ${tafqeet(total)}
-    </div>`:''}
+    </div>` : ''}
+
     <table>
       <thead><tr>
         <th style="width:30px">#</th>
         <th style="width:90px">الكود</th>
         <th>اسم الحساب</th>
         <th>البيان</th>
-        <th>الأبعاد</th>
+        <th style="width:160px">الأبعاد</th>
         <th style="width:110px">مدين</th>
         <th style="width:110px">دائن</th>
       </tr></thead>
       <tbody>
-        ${lines.map((l,i) => `<tr>
-          <td style="text-align:center;color:#94a3b8">${i+1}</td>
-          <td class="accode">${l.account_code||l.gl_account||'—'}</td>
-          <td>${l.account_name||l.account_title||'—'}</td>
-          <td style="color:#64748b;font-size:10px">${l.description||l.narration||'—'}</td>
+        ${lines.map((l, i) => {
+          const d = getDims(l)
+          return `<tr>
+          <td style="text-align:center;color:#94a3b8">${i + 1}</td>
+          <td class="accode">${l.account_code || l.gl_account || '—'}</td>
+          <td>${l.account_name || l.account_title || '—'}</td>
+          <td style="color:#64748b;font-size:10px">${l.description || l.narration || '—'}</td>
           <td><div class="dims">
-            ${l.branch_name?`<span class="dim" style="background:#dbeafe;color:#1d4ed8">${l.branch_name}</span>`:''}
-            ${l.cost_center_name?`<span class="dim" style="background:#ede9fe;color:#7c3aed">${l.cost_center_name}</span>`:''}
-            ${l.project_name?`<span class="dim" style="background:#d1fae5;color:#065f46">${l.project_name}</span>`:''}
+            ${d.branch      ? `<span class="dim" style="background:#dbeafe;color:#1d4ed8">${d.branch}</span>`           : ''}
+            ${d.cost_center ? `<span class="dim" style="background:#ede9fe;color:#7c3aed">${d.cost_center}</span>`      : ''}
+            ${d.project     ? `<span class="dim" style="background:#d1fae5;color:#065f46">${d.project}</span>`          : ''}
+            ${!d.branch && !d.cost_center && !d.project ? '<span style="color:#cbd5e1;font-size:9px">—</span>' : ''}
           </div></td>
-          <td class="debit">${parseFloat(l.debit||0)>0?fmt(l.debit,3):'—'}</td>
-          <td class="credit">${parseFloat(l.credit||0)>0?fmt(l.credit,3):'—'}</td>
-        </tr>`).join('')}
+          <td class="debit">${parseFloat(l.debit || 0) > 0 ? fmt(l.debit, 3) : '—'}</td>
+          <td class="credit">${parseFloat(l.credit || 0) > 0 ? fmt(l.credit, 3) : '—'}</td>
+        </tr>`
+        }).join('')}
       </tbody>
       <tfoot><tr class="tot">
         <td colspan="5" style="text-align:right">الإجمالي</td>
-        <td>${fmt(total,3)}</td>
-        <td>${fmt(total,3)}</td>
+        <td>${fmt(total, 3)}</td>
+        <td>${fmt(total, 3)}</td>
       </tr></tfoot>
     </table>
+
     <div class="sigs">
-      <div class="sg"><div class="sg-line"></div><div class="sg-lbl">أنشأه: ${(je.created_by||'').split('@')[0]||'—'}</div></div>
+      <div class="sg"><div class="sg-line"></div><div class="sg-lbl">أنشأه: ${(je.created_by || '').split('@')[0] || '—'}</div></div>
       <div class="sg"><div class="sg-line"></div><div class="sg-lbl">راجعه</div></div>
-      <div class="sg"><div class="sg-line"></div><div class="sg-lbl">اعتمده: ${(je.approved_by||'').split('@')[0]||'—'}</div></div>
-      <div class="sg"><div class="sg-line"></div><div class="sg-lbl">رحَّله: ${(je.posted_by||'').split('@')[0]||'—'}</div></div>
+      <div class="sg"><div class="sg-line"></div><div class="sg-lbl">اعتمده: ${(je.approved_by || '').split('@')[0] || '—'}</div></div>
+      <div class="sg"><div class="sg-line"></div><div class="sg-lbl">رحَّله: ${(je.posted_by || '').split('@')[0] || '—'}</div></div>
     </div>
+
+    <div class="print-audit">
+      <span>🖨️ طُبع بواسطة: <strong>${printedBy}</strong></span>
+      <span>🕐 تاريخ الطباعة: <strong>${printedAt}</strong></span>
+      <span>📄 المستند: <strong>${je.serial}</strong></span>
+    </div>
+
     <div class="np">
       <button class="btn" style="background:#1e3a5f;color:white" onclick="window.print()">🖨️ طباعة / PDF</button>
       <button class="btn" style="background:#f1f5f9;border:1px solid #e2e8f0" onclick="window.close()">✕ إغلاق</button>
@@ -169,8 +208,8 @@ export default function JEPrintPage({ showToast: _showToast }) {
   }
 
   // اختصارات سريعة
-  const QUICK = ['JV','CHK','BP','BR','BT','PCR','PET']
-  const docType = je ? (DOC_TYPES[(je.je_type||je.type||'').toUpperCase()] || DOC_TYPES.JV) : null
+  const QUICK = ['JV', 'CHK', 'BP', 'BR', 'BT', 'PCR', 'PET']
+  const docType = je ? (DOC_TYPES[(je.je_type || je.type || '').toUpperCase()] || DOC_TYPES.JV) : null
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-5" dir="rtl">
@@ -202,7 +241,7 @@ export default function JEPrintPage({ showToast: _showToast }) {
             {QUICK.map(type => {
               const dt = DOC_TYPES[type]
               return (
-                <button key={type} onClick={() => setSerial(type+'-2026-')}
+                <button key={type} onClick={() => setSerial(type + '-2026-')}
                   className="text-xs px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center gap-1">
                   {dt.icon} {type}
                 </button>
@@ -228,9 +267,9 @@ export default function JEPrintPage({ showToast: _showToast }) {
               <div>
                 <div className="font-bold text-xl font-mono text-slate-800">{je.serial}</div>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className={'text-xs px-2 py-0.5 rounded-full font-semibold '+(docType?.color||'bg-slate-100 text-slate-600')}>{docType?.label}</span>
-                  <span className={'text-xs px-2 py-0.5 rounded-full font-semibold '+(je.status==='posted'?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-700')}>
-                    {je.status==='posted'?'مُرحَّل':je.status==='draft'?'مسودة':'معتمد'}
+                  <span className={'text-xs px-2 py-0.5 rounded-full font-semibold ' + (docType?.color || 'bg-slate-100 text-slate-600')}>{docType?.label}</span>
+                  <span className={'text-xs px-2 py-0.5 rounded-full font-semibold ' + (je.status === 'posted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                    {je.status === 'posted' ? 'مُرحَّل' : je.status === 'draft' ? 'مسودة' : 'معتمد'}
                   </span>
                 </div>
               </div>
@@ -244,10 +283,10 @@ export default function JEPrintPage({ showToast: _showToast }) {
           {/* البيانات الأساسية */}
           <div className="grid grid-cols-4 border-b border-slate-100">
             {[
-              {l:'التاريخ',      v: fmtDate(je.je_date||je.date)},
-              {l:'نوع القيد',    v: je.je_type||je.type||'—'},
-              {l:'المرجع',       v: je.reference||'—'},
-              {l:'أنشأه',        v: (je.created_by||'—').split('@')[0]},
+              { l: 'التاريخ',  v: fmtDate(getJeDate(je)) || '—' },
+              { l: 'نوع القيد', v: je.je_type || je.type || '—' },
+              { l: 'المرجع',   v: je.reference || '—' },
+              { l: 'أنشأه',    v: (je.created_by || '—').split('@')[0] },
             ].map(k => (
               <div key={k.l} className="px-5 py-3 border-r border-slate-50 last:border-0">
                 <div className="text-[10px] text-slate-400 uppercase mb-0.5">{k.l}</div>
@@ -267,53 +306,60 @@ export default function JEPrintPage({ showToast: _showToast }) {
           {/* سطور القيد */}
           <div>
             <div className="grid text-slate-500 text-xs font-semibold bg-slate-50 border-b"
-              style={{gridTemplateColumns:'40px 100px 2fr 1.5fr 1fr 1fr'}}>
-              {['#','الكود','اسم الحساب','البيان','مدين','دائن'].map(h=>(
+              style={{gridTemplateColumns:'40px 100px 2fr 1.5fr 1fr 1fr 1fr'}}>
+              {['#', 'الكود', 'اسم الحساب', 'البيان', 'الأبعاد', 'مدين', 'دائن'].map(h => (
                 <div key={h} className="px-4 py-2.5">{h}</div>
               ))}
             </div>
-            {(je.lines||je.je_lines||[]).map((l,i)=>(
-              <div key={i} className={'grid items-center border-b border-slate-50 text-xs '+(i%2===0?'bg-white':'bg-slate-50/30')}
-                style={{gridTemplateColumns:'40px 100px 2fr 1.5fr 1fr 1fr'}}>
-                <div className="px-4 py-2.5 text-slate-400">{i+1}</div>
-                <div className="px-4 py-2.5 font-mono text-blue-600 font-bold text-[11px]">{l.account_code||l.gl_account||'—'}</div>
-                <div className="px-4 py-2.5">
-                  <div className="font-semibold text-slate-800">{l.account_name||l.account_title||'—'}</div>
-                  <div className="flex gap-1 mt-0.5">
-                    {l.branch_name&&<span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 rounded">{l.branch_name}</span>}
-                    {l.cost_center_name&&<span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 rounded">{l.cost_center_name}</span>}
-                    {l.project_name&&<span className="text-[9px] bg-green-100 text-green-700 px-1.5 rounded">{l.project_name}</span>}
+            {(je.lines || je.je_lines || []).map((l, i) => {
+              const d = getDims(l)
+              return (
+                <div key={i} className={'grid items-center border-b border-slate-50 text-xs ' + (i % 2 === 0 ? 'bg-white' : 'bg-slate-50/30')}
+                  style={{gridTemplateColumns:'40px 100px 2fr 1.5fr 1fr 1fr 1fr'}}>
+                  <div className="px-4 py-2.5 text-slate-400">{i + 1}</div>
+                  <div className="px-4 py-2.5 font-mono text-blue-600 font-bold text-[11px]">{l.account_code || l.gl_account || '—'}</div>
+                  <div className="px-4 py-2.5">
+                    <div className="font-semibold text-slate-800">{l.account_name || l.account_title || '—'}</div>
                   </div>
+                  <div className="px-4 py-2.5 text-slate-500 text-[10px]">{l.description || l.narration || '—'}</div>
+                  <div className="px-4 py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      {d.branch      && <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{d.branch}</span>}
+                      {d.cost_center && <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{d.cost_center}</span>}
+                      {d.project     && <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{d.project}</span>}
+                      {!d.branch && !d.cost_center && !d.project && <span className="text-slate-300">—</span>}
+                    </div>
+                  </div>
+                  <div className="px-4 py-2.5 font-mono font-bold text-blue-700">{parseFloat(l.debit || 0) > 0 ? fmt(l.debit, 3) : '—'}</div>
+                  <div className="px-4 py-2.5 font-mono font-bold text-emerald-600">{parseFloat(l.credit || 0) > 0 ? fmt(l.credit, 3) : '—'}</div>
                 </div>
-                <div className="px-4 py-2.5 text-slate-500 text-[10px]">{l.description||l.narration||'—'}</div>
-                <div className="px-4 py-2.5 font-mono font-bold text-blue-700">{parseFloat(l.debit||0)>0?fmt(l.debit,3):'—'}</div>
-                <div className="px-4 py-2.5 font-mono font-bold text-emerald-600">{parseFloat(l.credit||0)>0?fmt(l.credit,3):'—'}</div>
-              </div>
-            ))}
+              )
+            })}
+
             {/* Footer */}
-            {(()=>{
-              const lines = je.lines||je.je_lines||[]
-              const total = lines.reduce((s,l)=>s+parseFloat(l.debit||0),0)
-              const balanced = Math.abs(lines.reduce((s,l)=>s+parseFloat(l.debit||0)-parseFloat(l.credit||0),0)) < 0.01
+            {(() => {
+              const lines = je.lines || je.je_lines || []
+              const total = lines.reduce((s, l) => s + parseFloat(l.debit || 0), 0)
+              const balanced = Math.abs(lines.reduce((s, l) => s + parseFloat(l.debit || 0) - parseFloat(l.credit || 0), 0)) < 0.01
               return (
                 <div className="grid bg-slate-700 text-white text-sm font-bold"
-                  style={{gridTemplateColumns:'40px 100px 2fr 1.5fr 1fr 1fr'}}>
-                  <div className="col-span-4 px-4 py-3 flex items-center gap-2">
+                  style={{gridTemplateColumns:'40px 100px 2fr 1.5fr 1fr 1fr 1fr'}}>
+                  <div className="col-span-5 px-4 py-3 flex items-center gap-2">
                     <span>الإجمالي</span>
-                    <span className={'text-xs px-2 py-0.5 rounded-full '+(balanced?'bg-emerald-500':'bg-red-500')}>
-                      {balanced?'متوازن ✅':'غير متوازن ⚠️'}
+                    <span className={'text-xs px-2 py-0.5 rounded-full ' + (balanced ? 'bg-emerald-500' : 'bg-red-500')}>
+                      {balanced ? 'متوازن ✅' : 'غير متوازن ⚠️'}
                     </span>
                   </div>
-                  <div className="px-4 py-3 font-mono">{fmt(total,3)}</div>
-                  <div className="px-4 py-3 font-mono">{fmt(total,3)}</div>
+                  <div className="px-4 py-3 font-mono">{fmt(total, 3)}</div>
+                  <div className="px-4 py-3 font-mono">{fmt(total, 3)}</div>
                 </div>
               )
             })()}
           </div>
 
           {/* التفقيط */}
-          {(()=>{
-            const total = (je.lines||je.je_lines||[]).reduce((s,l)=>s+parseFloat(l.debit||0),0)
+          {(() => {
+            const total = (je.lines || je.je_lines || []).reduce((s, l) => s + parseFloat(l.debit || 0), 0)
             return total > 0 ? (
               <div className="px-5 py-3 bg-blue-50 border-t border-blue-100">
                 <span className="text-xs text-blue-400">المبلغ كتابةً: </span>
@@ -321,6 +367,12 @@ export default function JEPrintPage({ showToast: _showToast }) {
               </div>
             ) : null
           })()}
+
+          {/* معلومات الطباعة */}
+          <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+            <span>🖨️ سيُسجَّل اسم المستخدم وتاريخ الطباعة تلقائياً عند الضغط على زر الطباعة</span>
+            <span className="font-mono">{user?.email?.split('@')[0] || '—'}</span>
+          </div>
         </div>
       )}
     </div>
