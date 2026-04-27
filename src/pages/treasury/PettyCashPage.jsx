@@ -1026,7 +1026,15 @@ function PettyCashExpensePage({funds, editExpense, onBack, onSaved, showToast}) 
         await api.treasury.createPettyCashExpense(payload)
       }
       onSaved()
-    } catch(e) { setSaveError(e.message); showToast('فشل: '+e.message,'error') }
+    } catch(e) {
+      const msg = e?.response?.status === 404
+        ? 'الخادم لم يجد الـ endpoint — تأكد من رفع آخر تحديث للـ backend'
+        : e?.response?.status === 422
+        ? 'بيانات غير صحيحة: ' + (e?.response?.data?.detail || e.message)
+        : e.message || 'حدث خطأ غير متوقع'
+      setSaveError(msg)
+      showToast(msg, 'error')
+    }
     finally { setSaving(false) }
   }
 

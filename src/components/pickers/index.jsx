@@ -213,32 +213,50 @@ function DimensionPicker({ type, value, valueName, onChange, label, color='blue'
   const load = useCallback(async(q='')=>{
     setLoading(true)
     try{
-      let items=[]
-      if(type==='branch'||type==='cost_center'||type==='project'||type==='expense_class'||type==='department'||type==='profit_center'){
-        // جلب كل الأبعاد أولاً للحصول على الـ id المناسب
-        const typeMap = {
-          branch:       'branch',
-          cost_center:  'cost_center',
-          project:      'project',
-          expense_class:'expense_classification',
-          department:   'department',
-          profit_center:'profit_center',
-        }
-        const dimType = typeMap[type] || type
-        const dimsRes = await api.dimensions.list()
-        const dims = dimsRes?.data || dimsRes || []
-        const dim = dims.find(d => d.dimension_type===dimType || d.code===dimType || d.slug===dimType)
-        if(dim){
-          const vRes = await api.dimensions.listValues(dim.id)
-          items = (vRes?.data || vRes || []).filter(v=>v.is_active!==false)
-        }
+      const typeMap = {
+        branch:       ['branch','الفرع','Branch'],
+        cost_center:  ['cost_center','مركز_التكلفة','CostCenter','cost center'],
+        project:      ['project','المشروع','Project'],
+        expense_class:['expense_classification','expense_class','تصنيف_المصروف'],
+        department:   ['department','القسم','Department'],
+        profit_center:['profit_center','مركز_الربح'],
       }
+      const aliases = typeMap[type] || [type]
+
+      // جلب كل الأبعاد
+      const dimsRes = await api.dimensions.list()
+      const dims = dimsRes?.data || dimsRes || []
+
+      // البحث بكل الحقول المحتملة
+      const dim = dims.find(d => {
+        const v = [d.dimension_type, d.code, d.slug, d.type, d.name_en, d.key].map(x=>(x||'').toLowerCase())
+        return aliases.some(a => v.includes(a.toLowerCase()))
+      })
+
+      let items = []
+      if(dim){
+        const vRes = await api.dimensions.listValues(dim.id)
+        items = (vRes?.data || vRes || []).filter(v=>v.is_active!==false)
+      } else {
+        // fallback: جرب الـ settings APIs القديمة
+        if(type==='branch')       { const r=await api.settings.listBranches?.(); items=r?.data||r||[] }
+        else if(type==='cost_center') { const r=await api.settings.listCostCenters?.(); items=r?.data||r||[] }
+        else if(type==='project') { const r=await api.settings.listProjects?.(); items=r?.data||r||[] }
+      }
+
       if(q){
         const low=q.toLowerCase()
-        items=items.filter(i=>(i.name_ar||i.name||i.value_code||i.code||'').toLowerCase().includes(low))
+        items=items.filter(i=>{
+          const name=(i.name_ar||i.value_name||i.name||'').toLowerCase()
+          const code=(i.value_code||i.code||i.branch_code||'').toLowerCase()
+          return name.includes(low)||code.includes(low)
+        })
       }
       setResults(items.slice(0,40))
-    }catch{ setResults([]) }finally{ setLoading(false) }
+    }catch(e){
+      console.error('DimensionPicker error:', e)
+      setResults([])
+    }finally{ setLoading(false) }
   },[type])
 
   useEffect(()=>{ if(!open) return; const t=setTimeout(()=>load(search),200); return()=>clearTimeout(t) },[search,open])
