@@ -1252,8 +1252,6 @@ function CashFocusedPage({showToast, openView}) {
       setItems(txItems)
       setTotal(r?.data?.total||0)
       setAccounts(a?.data||[])
-      // تحميل حالة التسوية من الـ backend
-      setReconciledIds(new Set(txItems.filter(i=>i.is_reconciled).map(i=>i.id)))
     }catch(e){showToast(e.message,'error')}
     finally{setLoading(false)}
   },[filters])
@@ -1423,6 +1421,9 @@ function BankFocusedPage({showToast, openView}) {
       setSelectedIds(new Set()); load()
     }catch(e){showToast(e.message,'error')}finally{setBulkPosting(false)}
   }
+
+  const reconciledCount   = items.filter(i=>i.is_reconciled).length
+  const unreconciledCount = items.filter(i=>i.status==='posted'&&!i.is_reconciled).length
 
   return (
     <div className="space-y-4">
