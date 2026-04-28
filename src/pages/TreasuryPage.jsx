@@ -4804,18 +4804,18 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
         <div className="px-3 py-3"><StatusBadge status={item.status}/></div>
         {/* عمود التسوية — فقط للمعاملات البنكية */}
         {showRecon && <div className="px-2 py-3 flex items-center justify-center" onClick={e=>e.stopPropagation()}>
-          {isPosted ? (
-            isReconciled ? (
-              <div title="تمت التسوية — مقفول 🔒"
-                className="w-6 h-6 rounded-lg bg-emerald-500 border-2 border-emerald-500 text-white flex items-center justify-center cursor-default">
-                <span className="text-[11px] font-bold">✓</span>
-              </div>
-            ) : (
-              <button title="ظهر في كشف البنك — انقر للتسوية"
-                onClick={()=>onReconcile(item.id)}
-                className="w-6 h-6 rounded-lg border-2 border-slate-300 hover:border-emerald-400 hover:bg-emerald-50 flex items-center justify-center transition-all">
-              </button>
-            )
+          {!isPosted && <span className="text-slate-200 text-[10px]">—</span>}
+          {isPosted && isReconciled && (
+            <div title="تمت التسوية — مقفول 🔒"
+              className="w-6 h-6 rounded-lg bg-emerald-500 border-2 border-emerald-500 text-white flex items-center justify-center cursor-default">
+              <span className="text-[11px] font-bold">✓</span>
+            </div>
+          )}
+          {isPosted && !isReconciled && (
+            <button title="ظهر في كشف البنك — انقر للتسوية"
+              onClick={()=>onReconcile(item.id)}
+              className="w-6 h-6 rounded-lg border-2 border-slate-300 hover:border-emerald-400 hover:bg-emerald-50 flex items-center justify-center transition-all">
+            </button>
           )}
         </div>}
       </div>
