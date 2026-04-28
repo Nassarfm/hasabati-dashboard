@@ -2239,6 +2239,16 @@ function BankFeesTab({showToast}) {
 
 // ══ ACTIVITY LOG TAB ══════════════════════════════════════
 
+const FREQ_LABELS = {
+  daily:      'يومي',
+  weekly:     'أسبوعي',
+  biweekly:   'كل أسبوعين',
+  monthly:    'شهري',
+  quarterly:  'ربع سنوي',
+  semiannual: 'نصف سنوي',
+  annual:     'سنوي',
+}
+
 function RecurringTab({showToast,openView}) {
   const [items,setItems]   = useState([])
   const [accounts,setAccounts] = useState([])
