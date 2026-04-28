@@ -24,9 +24,22 @@ const DOC_TYPES = {
   CHK: { label:'شيك',               color:'bg-blue-100 text-blue-700',       icon:'📝', module:'treasury'   },
   PCR: { label:'مصروف نثري',        color:'bg-amber-100 text-amber-700',     icon:'💸', module:'treasury'   },
   FBT: { label:'معاملة بنكية متكررة', color:'bg-cyan-100 text-cyan-700',      icon:'🔁', module:'treasury'   },
-  REC: { label:'قيد متكرر',           color:'bg-violet-100 text-violet-700',   icon:'🔄', module:'accounting'  },
-  ADJ: { label:'قيد تسوية',           color:'bg-slate-100 text-slate-700',     icon:'📋', module:'accounting'  },
-  ALO: { label:'قيد توزيع',           color:'bg-slate-100 text-slate-700',     icon:'📋', module:'accounting'  },
+  REC: { label:'قيد متكرر',             color:'bg-violet-100 text-violet-700',   icon:'🔄', module:'accounting'  },
+  ADJ: { label:'قيد تسوية',             color:'bg-slate-100 text-slate-700',     icon:'📋', module:'accounting'  },
+  ALO: { label:'قيد توزيع',             color:'bg-slate-100 text-slate-700',     icon:'📋', module:'accounting'  },
+  // موديول المشتريات
+  APINV: { label:'فاتورة مورد',          color:'bg-orange-100 text-orange-700',   icon:'📄', module:'purchasing'  },
+  APPAY: { label:'دفعة مورد',            color:'bg-orange-100 text-orange-700',   icon:'💳', module:'purchasing'  },
+  CRN:   { label:'إشعار دائن',           color:'bg-teal-100 text-teal-700',       icon:'📑', module:'purchasing'  },
+  DBN:   { label:'إشعار مدين',           color:'bg-rose-100 text-rose-700',       icon:'📑', module:'purchasing'  },
+  // موديول المبيعات
+  INV:   { label:'فاتورة مبيعات',        color:'bg-green-100 text-green-700',     icon:'🧾', module:'sales'       },
+  // موديول المخزون
+  GRN:   { label:'سند استلام بضاعة',     color:'bg-lime-100 text-lime-700',       icon:'📦', module:'inventory'   },
+  GDN:   { label:'سند تسليم بضاعة',      color:'bg-lime-100 text-lime-700',       icon:'📦', module:'inventory'   },
+  GIN:   { label:'سند صرف بضاعة',        color:'bg-lime-100 text-lime-700',       icon:'📦', module:'inventory'   },
+  GIT:   { label:'تحويل بضاعة داخلي',    color:'bg-lime-100 text-lime-700',       icon:'🔄', module:'inventory'   },
+  IJ:    { label:'تسوية مخزون',          color:'bg-lime-100 text-lime-700',       icon:'⚖️', module:'inventory'   },
   ADJ: { label:'قيد تسوية',         color:'bg-rose-100 text-rose-700',       icon:'⚖️', module:'accounting' },
   ALO: { label:'قيد توزيع',         color:'bg-teal-100 text-teal-700',       icon:'📊', module:'accounting' },
 }
@@ -206,7 +219,18 @@ async function smartSearch(serial) {
     const detail = await api.accounting.getJE(found.id)
     return normalizeDoc(detail?.data || found, 'JV', null)
   }
-  throw new Error('نوع المستند غير معروف: ' + prefix + ' — الأنواع: JV PV RV BP BR BT CHK PCR PET FBT REC')
+  // موديولات قيد التطوير — تُظهر رسالة واضحة بدل خطأ تقني
+  const PENDING_MODULES = {
+    APINV: 'موديول المشتريات', APPAY: 'موديول المشتريات',
+    CRN: 'موديول المشتريات',   DBN: 'موديول المشتريات',
+    INV: 'موديول المبيعات',
+    GRN: 'موديول المخزون', GDN: 'موديول المخزون',
+    GIN: 'موديول المخزون', GIT: 'موديول المخزون', IJ: 'موديول المخزون',
+  }
+  if (PENDING_MODULES[prefix]) {
+    throw new Error(`${PENDING_MODULES[prefix]} قيد التطوير — سيُتاح قريباً 🚧`)
+  }
+  throw new Error('نوع المستند غير معروف: ' + prefix)
 }
 
 export default function JEPrintPage({ showToast: _showToast }) {
@@ -214,6 +238,14 @@ export default function JEPrintPage({ showToast: _showToast }) {
   const showToast = _showToast || ((msg, type) => type === 'error' ? console.error(msg) : console.log(msg))
   const [serial, setSerial]   = useState('')
   const [doc, setDoc]         = useState(null)
+  const [seriesTypes, setSeriesTypes] = useState([])  // من series_settings
+
+  // تحميل الأنواع من series_settings ديناميكياً
+  useEffect(() => {
+    api.get('/settings/series').then(r => {
+      if (Array.isArray(r?.data)) setSeriesTypes(r.data)
+    }).catch(() => {})
+  }, [])
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
 
@@ -335,10 +367,19 @@ export default function JEPrintPage({ showToast: _showToast }) {
   }
 
   const QUICK = [
-    {p:'JV',h:'قيد'},{p:'PV',h:'صرف'},{p:'RV',h:'قبض'},
-    {p:'BP',h:'دفعة'},{p:'BR',h:'قبض بنكي'},{p:'BT',h:'تحويل'},
-    {p:'CHK',h:'شيك'},{p:'PCR',h:'نثرية'},{p:'PET',h:'قيد نثري'},
-    {p:'FBT',h:'متكرر بنكي'},{p:'REC',h:'قيد متكرر'},
+    // محاسبة
+    {p:'JV',h:'قيد يومي'},{p:'PET',h:'عهدة نثرية'},{p:'ADJ',h:'تسوية'},{p:'ALO',h:'توزيع'},{p:'REC',h:'متكرر'},
+    // خزينة
+    {p:'PV',h:'صرف نقدي'},{p:'RV',h:'قبض نقدي'},{p:'BP',h:'دفعة بنكية'},{p:'BR',h:'قبض بنكي'},
+    {p:'BT',h:'تحويل'},{p:'CHK',h:'شيك'},{p:'PCR',h:'نثري'},{p:'FBT',h:'متكرر بنكي'},
+    // مشتريات / مبيعات / مخزون
+    {p:'APINV',h:'فاتورة مورد'},{p:'APPAY',h:'دفعة مورد'},{p:'INV',h:'فاتورة مبيعات'},
+    {p:'GRN',h:'استلام بضاعة'},{p:'GDN',h:'تسليم بضاعة'},
+    // أي نوع جديد من series_settings غير موجود في القائمة الثابتة
+    ...seriesTypes
+      .filter(s => !['JV','PET','ADJ','ALO','REC','PV','RV','BP','BR','BT','CHK','PCR','FBT',
+                     'APINV','APPAY','INV','GRN','GDN','GIN','GIT','IJ','CRN','DBN'].includes(s.je_type_code))
+      .map(s => ({p: s.je_type_code, h: s.name_ar || s.je_type_code})),
   ]
   const docType  = doc ? (DOC_TYPES[doc.type] || DOC_TYPES.JV) : null
   const lines    = doc?.lines || []
