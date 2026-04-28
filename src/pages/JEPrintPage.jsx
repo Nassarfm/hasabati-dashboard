@@ -23,6 +23,10 @@ const DOC_TYPES = {
   BT:  { label:'تحويل داخلي',       color:'bg-purple-100 text-purple-700',   icon:'🔄', module:'treasury'   },
   CHK: { label:'شيك',               color:'bg-blue-100 text-blue-700',       icon:'📝', module:'treasury'   },
   PCR: { label:'مصروف نثري',        color:'bg-amber-100 text-amber-700',     icon:'💸', module:'treasury'   },
+  FBT: { label:'معاملة بنكية متكررة', color:'bg-cyan-100 text-cyan-700',      icon:'🔁', module:'treasury'   },
+  REC: { label:'قيد متكرر',           color:'bg-violet-100 text-violet-700',   icon:'🔄', module:'accounting'  },
+  ADJ: { label:'قيد تسوية',           color:'bg-slate-100 text-slate-700',     icon:'📋', module:'accounting'  },
+  ALO: { label:'قيد توزيع',           color:'bg-slate-100 text-slate-700',     icon:'📋', module:'accounting'  },
   ADJ: { label:'قيد تسوية',         color:'bg-rose-100 text-rose-700',       icon:'⚖️', module:'accounting' },
   ALO: { label:'قيد توزيع',         color:'bg-teal-100 text-teal-700',       icon:'📊', module:'accounting' },
 }
@@ -121,6 +125,14 @@ function normalizeDoc(raw, prefix, linkedJE) {
       'الصندوق': raw.fund_name || '—',
       'المبلغ':  fmt(raw.amount || raw.replenishment_amount,3) + ' ر.س',
     }
+  } else if (prefix === 'FBT') {
+    extraFields = {
+      'القالب':          raw.name || raw.rec_name || '—',
+      'الحساب البنكي':   raw.bank_account_name || '—',
+      'الحساب المقابل':  raw.counterpart_account || '—',
+      'التكرار':         raw.frequency || '—',
+      'المبلغ':          fmt(raw.amount,3) + ' ر.س',
+    }
   }
   return {
     serial: raw.serial || '', type: prefix, status: raw.status || '',
@@ -175,7 +187,26 @@ async function smartSearch(serial) {
     const linkedJE = found.je_id ? (await api.accounting.getJE(found.je_id))?.data : null
     return normalizeDoc(found, prefix, linkedJE)
   }
-  throw new Error('نوع المستند غير معروف: ' + prefix + ' — الأنواع: JV PV RV BP BR BT CHK PCR PET')
+  if (prefix === 'FBT') {
+    // FBT — معاملة بنكية متكررة: يبحث في البنك والنقد حسب المصدر
+    const [bankItems, cashItems] = await Promise.all([
+      api.treasury.listBankTransactions({ search: s, limit: 20 }).then(toArr).catch(()=>[]),
+      api.treasury.listCashTransactions({ search: s, limit: 20 }).then(toArr).catch(()=>[]),
+    ])
+    const found = findIn([...bankItems, ...cashItems])
+    if (!found) throw new Error('لم يُعثر على معاملة متكررة بالرقم: ' + s)
+    const linkedJE = found.je_id ? (await api.accounting.getJE(found.je_id))?.data : null
+    return normalizeDoc(found, prefix, linkedJE)
+  }
+  if (prefix === 'REC') {
+    // REC — القيود المتكررة في المحاسبة
+    const items = toArr(await api.accounting.getJEs({ search: s, limit: 20 }))
+    const found = findIn(items)
+    if (!found) throw new Error('لم يُعثر على قيد متكرر بالرقم: ' + s)
+    const detail = await api.accounting.getJE(found.id)
+    return normalizeDoc(detail?.data || found, 'JV', null)
+  }
+  throw new Error('نوع المستند غير معروف: ' + prefix + ' — الأنواع: JV PV RV BP BR BT CHK PCR PET FBT REC')
 }
 
 export default function JEPrintPage({ showToast: _showToast }) {
@@ -307,6 +338,7 @@ export default function JEPrintPage({ showToast: _showToast }) {
     {p:'JV',h:'قيد'},{p:'PV',h:'صرف'},{p:'RV',h:'قبض'},
     {p:'BP',h:'دفعة'},{p:'BR',h:'قبض بنكي'},{p:'BT',h:'تحويل'},
     {p:'CHK',h:'شيك'},{p:'PCR',h:'نثرية'},{p:'PET',h:'قيد نثري'},
+    {p:'FBT',h:'متكرر بنكي'},{p:'REC',h:'قيد متكرر'},
   ]
   const docType  = doc ? (DOC_TYPES[doc.type] || DOC_TYPES.JV) : null
   const lines    = doc?.lines || []
