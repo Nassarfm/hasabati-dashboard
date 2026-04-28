@@ -7,12 +7,56 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import ReactDOM from 'react-dom'
 import * as XLSX from 'xlsx'
 import api from '../../api/client'
-import { AccountPicker, PartyPicker, DimensionPicker, WorkflowStatusBar, Tooltip, AuthorityBadge } from '../../components/pickers'
+import { AccountPicker, PartyPicker, DimensionPicker } from '../../components/pickers'
+
+// Fallback components if not exported from pickers
+function WorkflowStatusBar({ stages=[], current='' }) {
+  const idx = stages.findIndex(s => s.key === current)
+  return (
+    <div className="flex items-center gap-0 overflow-x-auto py-1">
+      {stages.map((s, i) => {
+        const done = i < idx, active = i === idx
+        return (
+          <div key={s.key} className="flex items-center">
+            <div className="flex flex-col items-center gap-0.5">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs border-2 ${done?'bg-emerald-500 border-emerald-500 text-white':active?'bg-blue-700 border-blue-700 text-white ring-2 ring-blue-100':'bg-slate-100 border-slate-200 text-slate-400'}`}>
+                {done ? '✓' : s.icon || (i+1)}
+              </div>
+              <span className={`text-[10px] whitespace-nowrap ${done?'text-emerald-600':active?'text-blue-700':'text-slate-400'}`}>{s.label}</span>
+            </div>
+            {i < stages.length-1 && <div className={`w-10 h-0.5 mx-1 mb-4 ${i < idx?'bg-emerald-400':'bg-slate-200'}`}/>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+function Tooltip({ text, children }) {
+  return <span title={text} className="cursor-help">{children}</span>
+}
+function AuthorityBadge({ type }) {
+  const map = { single:'👤 منفرد', joint:'👥 مشترك', board:'🏛️ مجلس الإدارة' }
+  const cls = { single:'bg-emerald-100 text-emerald-700', joint:'bg-blue-100 text-blue-700', board:'bg-purple-100 text-purple-700' }
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls[type]||'bg-slate-100 text-slate-600'}`}>{map[type]||type}</span>
+}
 
 // ── Helpers ──────────────────────────────────────────────
 const fmt     = (n,d=3) => (parseFloat(n||0)).toLocaleString('ar-SA',{minimumFractionDigits:d,maximumFractionDigits:d})
 const fmtDate = d => d ? new Date(String(d).slice(0,10)).toLocaleDateString('ar-SA') : '—'
 const today   = () => new Date().toISOString().slice(0,10)
+
+// module-level helpers — متاحة لجميع المكونات
+const toArr = r =>
+  Array.isArray(r?.data)        ? r.data       :
+  Array.isArray(r?.data?.items) ? r.data.items :
+  Array.isArray(r)              ? r             : []
+
+const parseApiError = (e) => {
+  try {
+    const d = typeof e?.response?.data === 'object' ? e.response.data : JSON.parse(e?.message || '{}')
+    return [d?.detail || d?.message || e?.message || 'خطأ غير معروف']
+  } catch { return [e?.message || 'خطأ غير معروف'] }
+}
 
 function exportXLS(rows, headers, filename) {
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
