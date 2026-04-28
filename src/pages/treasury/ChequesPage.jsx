@@ -573,6 +573,11 @@ export default function ChequesPage({ showToast }) {
         </div>
       )}
 
+      {/* ── Authority Matrix ── */}
+      {subTab === 'authority' && (
+        <AuthorityMatrixTab showToast={showToast} accounts={accounts} />
+      )}
+
       {/* Cheque Book Form Modal */}
       {showBookForm && (
         <ChequeBookModal
@@ -1026,11 +1031,11 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
   const amount = parseFloat(ck.amount||0)
 
   // القيد المحاسبي المتوقع
-  const gl_debit   = ck.gl_account_code || '21010101'
-  const gl_credit  = ck.bank_gl_code    || ck.bank_account_code || 'حساب البنك'
+  const gl_credit = ck.bank_account_code || ck.bank_account_name || 'حساب البنك'
+  const gl_debit  = ck.gl_account_code   || '21010101'
   const je_lines = [
-    { account_code: gl_debit,  account_name: ck.gl_account_name  || 'الحساب المقابل', debit: amount, credit: 0 },
-    { account_code: gl_credit, account_name: ck.bank_account_name || 'البنك',          debit: 0, credit: amount },
+    { account_code: gl_debit,   account_name: ck.gl_account_name || 'ذمم دائنة', debit: amount, credit: 0 },
+    { account_code: ck.bank_account_code||'—', account_name: ck.bank_account_name||'البنك', debit: 0, credit: amount },
   ]
   const isBalanced = Math.abs(je_lines.reduce((s,l)=>s+(l.debit-l.credit),0)) < 0.01
 
@@ -1087,15 +1092,6 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
         '<div><div class="ml">القيد المحاسبي</div><div class="mv" style="color:#16a34a;font-family:monospace">'+(ck.je_serial||'—')+'</div></div>' +
         '<div><div class="ml">حالة الشيك</div><div class="mv">'+st.label+'</div></div>' +
       '</div>' +
-      (ck.party_id || ck.party_name ? (
-        '<div style="background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:2px solid #5eead4;border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:14px">' +
-          '<span style="font-size:24px">🤝</span>' +
-          '<div>' +
-            '<div style="font-size:9px;color:#0f766e;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">المتعامل المالي / Financial Party</div>' +
-            '<div style="font-size:15px;font-weight:800;color:#134e4a">' + (ck.party_name || '—') + '</div>' +
-          '</div>' +
-        '</div>'
-      ) : '') +
       '<div class="tafq"><div style="font-size:9px;color:#94a3b8;margin-bottom:3px">المبلغ كتابةً / Amount in Words</div>' +
         '<div style="font-size:12px;font-weight:700;color:#1e3a5f">'+tafqeet(amount)+'</div>' +
       '</div>' +
@@ -1672,10 +1668,6 @@ function ChequesReports({ cheques, onPrint }) {
             </div>
           ))}
         </div>
-      )}
-      {/* ── Authority Matrix Tab ── */}
-      {subTab === 'authority' && (
-        <AuthorityMatrixTab showToast={showToast} accounts={accounts} />
       )}
     </div>
   )
