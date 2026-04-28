@@ -9,7 +9,6 @@ import * as XLSX from 'xlsx'
 import api from '../../api/client'
 import { AccountPicker, PartyPicker, DimensionPicker } from '../../components/pickers'
 
-// Fallback components if not exported from pickers
 function WorkflowStatusBar({ stages=[], current='' }) {
   const idx = stages.findIndex(s => s.key === current)
   return (
@@ -19,21 +18,19 @@ function WorkflowStatusBar({ stages=[], current='' }) {
         return (
           <div key={s.key} className="flex items-center">
             <div className="flex flex-col items-center gap-0.5">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs border-2 ${done?'bg-emerald-500 border-emerald-500 text-white':active?'bg-blue-700 border-blue-700 text-white ring-2 ring-blue-100':'bg-slate-100 border-slate-200 text-slate-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs border-2 ${done?'bg-emerald-500 border-emerald-500 text-white':active?'bg-blue-700 border-blue-700 text-white ring-2 ring-blue-100':'bg-slate-100 border-slate-200 text-slate-400'}`}>
                 {done ? '✓' : s.icon || (i+1)}
               </div>
-              <span className={`text-[10px] whitespace-nowrap ${done?'text-emerald-600':active?'text-blue-700':'text-slate-400'}`}>{s.label}</span>
+              <span className={`text-[10px] whitespace-nowrap mt-0.5 ${done?'text-emerald-600':active?'text-blue-700 font-bold':'text-slate-400'}`}>{s.label}</span>
             </div>
-            {i < stages.length-1 && <div className={`w-10 h-0.5 mx-1 mb-4 ${i < idx?'bg-emerald-400':'bg-slate-200'}`}/>}
+            {i < stages.length-1 && <div className={`w-12 h-0.5 mx-1 mb-5 ${i < idx?'bg-emerald-400':'bg-slate-200'}`}/>}
           </div>
         )
       })}
     </div>
   )
 }
-function Tooltip({ text, children }) {
-  return <span title={text} className="cursor-help">{children}</span>
-}
+function Tooltip({ text, children }) { return <span title={text}>{children}</span> }
 function AuthorityBadge({ type }) {
   const map = { single:'👤 منفرد', joint:'👥 مشترك', board:'🏛️ مجلس الإدارة' }
   const cls = { single:'bg-emerald-100 text-emerald-700', joint:'bg-blue-100 text-blue-700', board:'bg-purple-100 text-purple-700' }
@@ -45,7 +42,6 @@ const fmt     = (n,d=3) => (parseFloat(n||0)).toLocaleString('ar-SA',{minimumFra
 const fmtDate = d => d ? new Date(String(d).slice(0,10)).toLocaleDateString('ar-SA') : '—'
 const today   = () => new Date().toISOString().slice(0,10)
 
-// module-level helpers — متاحة لجميع المكونات
 const toArr = r =>
   Array.isArray(r?.data)        ? r.data       :
   Array.isArray(r?.data?.items) ? r.data.items :
@@ -53,7 +49,7 @@ const toArr = r =>
 
 const parseApiError = (e) => {
   try {
-    const d = typeof e?.response?.data === 'object' ? e.response.data : JSON.parse(e?.message || '{}')
+    const d = typeof e?.response?.data === 'object' ? e.response.data : JSON.parse(e?.message||'{}')
     return [d?.detail || d?.message || e?.message || 'خطأ غير معروف']
   } catch { return [e?.message || 'خطأ غير معروف'] }
 }
@@ -1030,11 +1026,11 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
   const amount = parseFloat(ck.amount||0)
 
   // القيد المحاسبي المتوقع
-  const gl_credit = ck.bank_account_code || ck.bank_account_name || 'حساب البنك'
-  const gl_debit  = ck.gl_account_code   || '21010101'
+  const gl_debit   = ck.gl_account_code || '21010101'
+  const gl_credit  = ck.bank_gl_code    || ck.bank_account_code || 'حساب البنك'
   const je_lines = [
-    { account_code: gl_debit,   account_name: ck.gl_account_name || 'ذمم دائنة', debit: amount, credit: 0 },
-    { account_code: ck.bank_account_code||'—', account_name: ck.bank_account_name||'البنك', debit: 0, credit: amount },
+    { account_code: gl_debit,  account_name: ck.gl_account_name  || 'الحساب المقابل', debit: amount, credit: 0 },
+    { account_code: gl_credit, account_name: ck.bank_account_name || 'البنك',          debit: 0, credit: amount },
   ]
   const isBalanced = Math.abs(je_lines.reduce((s,l)=>s+(l.debit-l.credit),0)) < 0.01
 
@@ -1091,6 +1087,15 @@ function ChequeViewPage({ cheque, onBack, onEdit, onAction, showToast }) {
         '<div><div class="ml">القيد المحاسبي</div><div class="mv" style="color:#16a34a;font-family:monospace">'+(ck.je_serial||'—')+'</div></div>' +
         '<div><div class="ml">حالة الشيك</div><div class="mv">'+st.label+'</div></div>' +
       '</div>' +
+      (ck.party_id || ck.party_name ? (
+        '<div style="background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:2px solid #5eead4;border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:14px">' +
+          '<span style="font-size:24px">🤝</span>' +
+          '<div>' +
+            '<div style="font-size:9px;color:#0f766e;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">المتعامل المالي / Financial Party</div>' +
+            '<div style="font-size:15px;font-weight:800;color:#134e4a">' + (ck.party_name || '—') + '</div>' +
+          '</div>' +
+        '</div>'
+      ) : '') +
       '<div class="tafq"><div style="font-size:9px;color:#94a3b8;margin-bottom:3px">المبلغ كتابةً / Amount in Words</div>' +
         '<div style="font-size:12px;font-weight:700;color:#1e3a5f">'+tafqeet(amount)+'</div>' +
       '</div>' +
