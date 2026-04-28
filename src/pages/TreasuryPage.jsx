@@ -1330,9 +1330,13 @@ function BankFocusedPage({showToast, openView}) {
         api.treasury.listBankTransactions(p),
         api.treasury.listBankAccounts(),
       ])
-      setItems(r?.data?.items||[])
+      const txItems = r?.data?.items||[]
+      setItems(txItems)
       setTotal(r?.data?.total||0)
       setAccounts(a?.data||[])
+      // تحميل الحركات المسوّاة مسبقاً من الـ backend
+      const prevRec = new Set(txItems.filter(i=>i.is_reconciled).map(i=>i.id))
+      setReconciledIds(prevRec)
     }catch(e){showToast(e.message,'error')}
     finally{setLoading(false)}
   },[filters])
@@ -1343,12 +1347,26 @@ function BankFocusedPage({showToast, openView}) {
   const posted  = items.filter(i=>i.status==='posted').length
   const drafts  = items.filter(i=>i.status==='draft').length
 
-  const handleReconcile = (id) => {
+  const handleReconcile = async (id) => {
+    const isRec = reconciledIds.has(id)
+    // تحديث الـ UI فوراً (optimistic update)
     setReconciledIds(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+    try {
+      await api.treasury.toggleReconcile(id, !isRec)
+      showToast(isRec ? 'تم إلغاء التسوية' : 'تمت التسوية ✅')
+    } catch(e) {
+      // rollback on error
+      setReconciledIds(prev => {
+        const rollback = new Set(prev)
+        isRec ? rollback.add(id) : rollback.delete(id)
+        return rollback
+      })
+      showToast(e.message, 'error')
+    }
   }
 
   const handleBulkPost = async()=>{
@@ -2190,16 +2208,6 @@ function BankFeesTab({showToast}) {
 }
 
 // ══ ACTIVITY LOG TAB ══════════════════════════════════════
-
-const FREQ_LABELS = {
-  daily:      'يومي',
-  weekly:     'اسبوعي',
-  biweekly:   'كل اسبوعين',
-  monthly:    'شهري',
-  quarterly:  'ربع سنوي',
-  semiannual: 'نصف سنوي',
-  annual:     'سنوي',
-}
 
 function RecurringTab({showToast,openView}) {
   const [items,setItems]   = useState([])
