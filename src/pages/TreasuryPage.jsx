@@ -1388,9 +1388,12 @@ function BankFocusedPage({showToast, openView}) {
         api.treasury.listBankTransactions(p),
         api.treasury.listBankAccounts(),
       ])
-      setItems(r?.data?.items||[])
+      const txItems = r?.data?.items||[]
+      setItems(txItems)
       setTotal(r?.data?.total||0)
       setAccounts(a?.data||[])
+      // تحميل حالة التسوية من الـ backend
+      setReconciledIds(new Set(txItems.filter(i=>i.is_reconciled).map(i=>i.id)))
     }catch(e){showToast(e.message,'error')}
     finally{setLoading(false)}
   },[filters])
