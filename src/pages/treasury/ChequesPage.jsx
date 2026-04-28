@@ -345,10 +345,11 @@ export default function ChequesPage({ showToast }) {
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
         {[
-          { id:'cheques',  label:'📝 الشيكات' },
-          { id:'books',    label:'📚 دفاتر الشيكات' },
-          { id:'reports',  label:'📊 التقارير' },
-          { id:'overdue',  label:'⚠️ متأخرة' + (overdue.length > 0 ? ' ('+overdue.length+')' : '') },
+          { id:'cheques',   label:'📝 الشيكات' },
+          { id:'books',     label:'📚 دفاتر الشيكات' },
+          { id:'reports',   label:'📊 التقارير' },
+          { id:'overdue',   label:'⚠️ متأخرة' + (overdue.length > 0 ? ' ('+overdue.length+')' : '') },
+          { id:'authority', label:'🔐 Authority Matrix' },
         ].map(t => (
           <button key={t.id} onClick={() => setSubTab(t.id)}
             className={'flex-1 py-2 rounded-lg text-xs font-semibold transition-all '+(subTab===t.id?'bg-white text-blue-700 shadow-sm':'text-slate-500 hover:text-slate-700')}>
@@ -1623,6 +1624,10 @@ function ChequesReports({ cheques, onPrint }) {
           ))}
         </div>
       )}
+      {/* ── Authority Matrix Tab ── */}
+      {subTab === 'authority' && (
+        <AuthorityMatrixTab showToast={showToast} accounts={accounts} />
+      )}
     </div>
   )
 }
@@ -1656,6 +1661,355 @@ function ChequeListReport({ items, title, color, onPrint }) {
           </div>
         ))
       }
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// AUTHORITY MATRIX TAB
+// ══════════════════════════════════════════════════════════════
+function AuthorityMatrixTab({ showToast, accounts }) {
+  const [items, setItems]       = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editItem, setEditItem] = useState(null)
+  const [filterBank, setFilterBank] = useState('')
+  const [saving, setSaving]     = useState(false)
+
+  const AUTH_TYPES = {
+    single: { label:'👤 منفرد',        color:'bg-emerald-100 text-emerald-700' },
+    joint:  { label:'👥 مشترك',        color:'bg-blue-100 text-blue-700'      },
+    board:  { label:'🏛️ مجلس الإدارة', color:'bg-purple-100 text-purple-700'  },
+  }
+
+  const emptyForm = {
+    bank_account_id: '', signatory_name: '', signatory_title: '',
+    signatory_email: '', authorization_type: 'single',
+    min_amount: '0', max_amount: '', valid_from: today(), valid_to: '',
+    is_active: true, notes: '',
+  }
+  const [form, setForm] = useState(emptyForm)
+  const sf = (k, v) => setForm(p => ({...p, [k]: v}))
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await api.treasury.listSignatories(filterBank ? { bank_account_id: filterBank } : {})
+      setItems(toArr(r))
+    } catch(e) { showToast(parseApiError(e)[0], 'error') }
+    finally { setLoading(false) }
+  }, [filterBank])
+
+  useEffect(() => { load() }, [load])
+
+  const openEdit = (item) => {
+    setEditItem(item)
+    setForm({
+      bank_account_id:    item.bank_account_id || '',
+      signatory_name:     item.signatory_name  || '',
+      signatory_title:    item.signatory_title || '',
+      signatory_email:    item.signatory_email || '',
+      authorization_type: item.authorization_type || 'single',
+      min_amount:         String(item.min_amount ?? '0'),
+      max_amount:         item.max_amount != null ? String(item.max_amount) : '',
+      valid_from:         item.valid_from ? String(item.valid_from).slice(0,10) : today(),
+      valid_to:           item.valid_to   ? String(item.valid_to).slice(0,10)   : '',
+      is_active:          item.is_active ?? true,
+      notes:              item.notes || '',
+    })
+    setShowForm(true)
+  }
+
+  const save = async () => {
+    if (!form.bank_account_id) return showToast('اختر الحساب البنكي', 'error')
+    if (!form.signatory_name)  return showToast('أدخل اسم الموقع', 'error')
+    setSaving(true)
+    try {
+      const payload = {
+        ...form,
+        min_amount: parseFloat(form.min_amount || 0),
+        max_amount: form.max_amount !== '' ? parseFloat(form.max_amount) : null,
+        valid_to:   form.valid_to || null,
+      }
+      if (editItem) {
+        await api.treasury.updateSignatory(editItem.id, payload)
+        showToast('تم تحديث الموقع ✅')
+      } else {
+        await api.treasury.createSignatory(payload)
+        showToast('تمت إضافة الموقع ✅')
+      }
+      setShowForm(false); setEditItem(null); setForm(emptyForm); load()
+    } catch(e) { showToast(parseApiError(e)[0], 'error') }
+    finally { setSaving(false) }
+  }
+
+  const del = async (item) => {
+    if (!confirm('حذف ' + item.signatory_name + '؟')) return
+    try {
+      await api.treasury.deleteSignatory(item.id)
+      showToast('تم الحذف'); load()
+    } catch(e) { showToast(parseApiError(e)[0], 'error') }
+  }
+
+  const isExpired = (item) => item.valid_to && new Date(item.valid_to) < new Date()
+  const isExpiringSoon = (item) => {
+    if (!item.valid_to) return false
+    const days = (new Date(item.valid_to) - new Date()) / (1000*60*60*24)
+    return days >= 0 && days <= 30
+  }
+
+  // تجميع حسب البنك
+  const grouped = items.reduce((acc, item) => {
+    const key = item.bank_account_id
+    if (!acc[key]) acc[key] = { bank_name: item.bank_name || item.bank_label || '—', items: [] }
+    acc[key].items.push(item)
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100">
+          <div>
+            <h2 className="font-bold text-slate-800">🔐 Authority Matrix — مصفوفة التفويض</h2>
+            <p className="text-xs text-slate-400 mt-0.5">موقعو الشيكات المعتمدون لكل حساب بنكي</p>
+          </div>
+          <div className="flex gap-2">
+            <select value={filterBank} onChange={e => setFilterBank(e.target.value)}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600 focus:outline-none focus:border-blue-400">
+              <option value="">كل البنوك</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.account_name}</option>)}
+            </select>
+            <button onClick={() => { setEditItem(null); setForm(emptyForm); setShowForm(true) }}
+              className="px-5 py-2 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800">
+              + إضافة موقع
+            </button>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-4 divide-x divide-x-reverse divide-slate-100">
+          {[
+            { label:'إجمالي الموقعين', value: items.length,                                          color:'text-slate-700' },
+            { label:'👤 منفرد',        value: items.filter(i=>i.authorization_type==='single').length, color:'text-emerald-600' },
+            { label:'👥 مشترك',        value: items.filter(i=>i.authorization_type==='joint').length,  color:'text-blue-600'    },
+            { label:'⚠️ منتهي/قريب',   value: items.filter(i=>isExpired(i)||isExpiringSoon(i)).length, color:'text-amber-600'   },
+          ].map(s => (
+            <div key={s.label} className="px-5 py-3 text-center">
+              <div className={'text-2xl font-bold ' + s.color}>{s.value}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Grouped by Bank */}
+      {loading ? (
+        <div className="py-16 text-center text-slate-400">⏳ جار التحميل...</div>
+      ) : Object.keys(grouped).length === 0 ? (
+        <div className="py-16 text-center bg-white rounded-2xl border border-slate-200">
+          <div className="text-4xl mb-3">🔐</div>
+          <div className="text-slate-500 font-semibold">لا يوجد موقعون مضافون بعد</div>
+          <div className="text-slate-400 text-sm mt-1">أضف موقعي الشيكات لكل حساب بنكي</div>
+        </div>
+      ) : (
+        Object.entries(grouped).map(([bankId, group]) => (
+          <div key={bankId} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            {/* Bank Header */}
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+              <span className="text-lg">🏦</span>
+              <span className="font-bold text-slate-800">{group.bank_name}</span>
+              <span className="text-xs text-slate-400 bg-slate-200 rounded-full px-2 py-0.5">{group.items.length} موقع</span>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-700 text-white text-xs">
+                    {['اسم الموقع','المسمى الوظيفي','نوع التفويض','نطاق المبلغ','صلاحية التفويض','الحالة',''].map(h => (
+                      <th key={h} className="px-4 py-2.5 text-right font-semibold">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.items.map((item, i) => {
+                    const expired     = isExpired(item)
+                    const expiringSoon = isExpiringSoon(item)
+                    return (
+                      <tr key={item.id} className={'border-b border-slate-50 ' + (i%2===0?'':'bg-slate-50/30') + (expired?' opacity-60':'')}>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-800">{item.signatory_name}</div>
+                          {item.signatory_email && <div className="text-xs text-slate-400">{item.signatory_email}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 text-xs">{item.signatory_title || '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className={'text-xs px-2 py-1 rounded-full font-semibold ' + (AUTH_TYPES[item.authorization_type]?.color || 'bg-slate-100 text-slate-600')}>
+                            {AUTH_TYPES[item.authorization_type]?.label || item.authorization_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs">
+                          <span className="text-blue-600">{parseFloat(item.min_amount||0).toLocaleString('ar-SA')}</span>
+                          <span className="text-slate-400 mx-1">—</span>
+                          <span className="text-blue-600">{item.max_amount != null ? parseFloat(item.max_amount).toLocaleString('ar-SA') : 'بلا حد'}</span>
+                          <span className="text-slate-400 mr-1">ر.س</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs">
+                          <div>{fmtDate(item.valid_from)} — {item.valid_to ? fmtDate(item.valid_to) : 'غير محدد'}</div>
+                          {expired      && <span className="text-red-500 font-semibold">⛔ منتهي</span>}
+                          {expiringSoon && !expired && <span className="text-amber-500 font-semibold">⚠️ ينتهي قريباً</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={'text-xs px-2 py-0.5 rounded-full font-semibold ' + (item.is_active && !expired ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
+                            {item.is_active && !expired ? 'نشط' : 'غير نشط'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            <button onClick={() => openEdit(item)}
+                              className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100">✏️</button>
+                            <button onClick={() => del(item)}
+                              className="text-xs px-2 py-1 rounded bg-red-50 text-red-500 hover:bg-red-100">🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* Form Modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="px-6 py-4 bg-slate-700 text-white flex justify-between items-center">
+              <h3 className="font-bold">{editItem ? '✏️ تعديل موقع' : '+ إضافة موقع جديد'}</h3>
+              <button onClick={() => setShowForm(false)} className="text-white/70 hover:text-white text-xl">✕</button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+
+              {/* البنك */}
+              <div>
+                <Tooltip text="الحساب البنكي الذي ينطبق عليه هذا التفويض">
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">الحساب البنكي *</label>
+                </Tooltip>
+                <select value={form.bank_account_id} onChange={e=>sf('bank_account_id',e.target.value)}
+                  className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400">
+                  <option value="">— اختر البنك —</option>
+                  {accounts.map(a=><option key={a.id} value={a.id}>{a.account_name}</option>)}
+                </select>
+              </div>
+
+              {/* الاسم والمسمى */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">اسم الموقع *</label>
+                  <input value={form.signatory_name} onChange={e=>sf('signatory_name',e.target.value)}
+                    className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
+                    placeholder="محمد أحمد العمري"/>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">المسمى الوظيفي</label>
+                  <input value={form.signatory_title} onChange={e=>sf('signatory_title',e.target.value)}
+                    className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
+                    placeholder="المدير المالي"/>
+                </div>
+              </div>
+
+              {/* البريد */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">البريد الإلكتروني</label>
+                <input value={form.signatory_email} onChange={e=>sf('signatory_email',e.target.value)}
+                  type="email" dir="ltr"
+                  className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
+                  placeholder="name@company.com"/>
+              </div>
+
+              {/* نوع التفويض */}
+              <div>
+                <Tooltip text="منفرد: يوقع وحده | مشترك: يوقع مع آخر | مجلس الإدارة: يلزم قرار مجلس">
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">نوع التفويض *</label>
+                </Tooltip>
+                <div className="flex gap-2">
+                  {Object.entries({single:'👤 منفرد', joint:'👥 مشترك', board:'🏛️ مجلس الإدارة'}).map(([k,v])=>(
+                    <button key={k} onClick={()=>sf('authorization_type',k)}
+                      className={'flex-1 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all '+(form.authorization_type===k?'bg-blue-700 text-white border-blue-700':'border-slate-200 text-slate-600 hover:bg-slate-50')}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* نطاق المبلغ */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Tooltip text="الحد الأدنى للمبلغ الذي يملك صلاحية التوقيع عليه">
+                    <label className="text-xs font-semibold text-slate-600 block mb-1">الحد الأدنى (ر.س)</label>
+                  </Tooltip>
+                  <input value={form.min_amount} onChange={e=>sf('min_amount',e.target.value)}
+                    type="number" min="0" dir="ltr"
+                    className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"/>
+                </div>
+                <div>
+                  <Tooltip text="الحد الأعلى — اتركه فارغاً لتعني بلا حد أعلى">
+                    <label className="text-xs font-semibold text-slate-600 block mb-1">الحد الأعلى (ر.س)</label>
+                  </Tooltip>
+                  <input value={form.max_amount} onChange={e=>sf('max_amount',e.target.value)}
+                    type="number" min="0" dir="ltr" placeholder="بلا حد"
+                    className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"/>
+                </div>
+              </div>
+
+              {/* صلاحية التفويض */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">تاريخ بداية التفويض *</label>
+                  <input value={form.valid_from} onChange={e=>sf('valid_from',e.target.value)}
+                    type="date" dir="ltr"
+                    className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"/>
+                </div>
+                <div>
+                  <Tooltip text="اتركه فارغاً إذا كان التفويض غير محدد المدة">
+                    <label className="text-xs font-semibold text-slate-600 block mb-1">تاريخ انتهاء التفويض</label>
+                  </Tooltip>
+                  <input value={form.valid_to} onChange={e=>sf('valid_to',e.target.value)}
+                    type="date" dir="ltr" placeholder="غير محدد"
+                    className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"/>
+                </div>
+              </div>
+
+              {/* ملاحظات + نشط */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">ملاحظات</label>
+                <textarea value={form.notes} onChange={e=>sf('notes',e.target.value)} rows={2}
+                  className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none"/>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.is_active} onChange={e=>sf('is_active',e.target.checked)}
+                  className="w-4 h-4 rounded"/>
+                <span className="text-sm text-slate-700 font-medium">التفويض نشط</span>
+              </label>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+              <button onClick={()=>setShowForm(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-100">
+                إلغاء
+              </button>
+              <button onClick={save} disabled={saving}
+                className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50">
+                {saving ? '⏳ جار الحفظ...' : (editItem ? '💾 تحديث' : '+ إضافة')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

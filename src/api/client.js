@@ -293,6 +293,12 @@ export const api = {
     updateCheckStatus: (id, status, notes='') =>
       put(`/treasury/checks/${id}/status?status=${status}&notes=${encodeURIComponent(notes)}`, {}),
 
+    // المفوضون بالتوقيع — Signatories
+    listSignatories:   (p={})   => get('/treasury/signatories', p),
+    createSignatory:   (d)      => post('/treasury/signatories', d),
+    updateSignatory:   (id, d)  => put(`/treasury/signatories/${id}`, d),
+    deleteSignatory:   (id)     => del(`/treasury/signatories/${id}`),
+
     // التسوية البنكية
     listReconciliationSessions:  (p={})           => get('/treasury/reconciliation/sessions', p),
     createReconciliationSession: (b)              => post('/treasury/reconciliation/sessions', b),
