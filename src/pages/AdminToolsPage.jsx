@@ -4,7 +4,7 @@
  * يظهر فقط لمستخدمي role: admin / system_admin
  */
 import { useState, useEffect } from 'react'
-import { useAuth } from '../AuthContext'
+import { useAuth, supabase } from '../AuthContext'
 import api from '../api/client'
 
 const fmt = n => (Number(n)||0).toLocaleString('ar-SA')
@@ -86,27 +86,23 @@ export default function AdminToolsPage() {
   const handleBackup = async () => {
     setDownloading(true); setError(null)
     try {
-      const resp = await fetch(
-        (import.meta.env.VITE_API_URL || '') + '/api/v1/admin/backup/download',
-        {
-          headers: {
-            'Authorization': 'Bearer ' + (await user?.getSession?.()?.then(s=>s?.data?.session?.access_token) || ''),
-          }
-        }
-      )
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      const base  = import.meta.env.VITE_API_URL || ''
+      const resp  = await fetch(base + '/api/v1/admin/backup/download', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      })
       if (!resp.ok) throw new Error('فشل التنزيل: ' + resp.status)
       const blob = await resp.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
       a.download = 'hasabati_backup_' + new Date().toISOString().slice(0,10) + '.json'
-      a.click()
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (e) {
       setError('خطأ في التنزيل: ' + e.message)
-    } finally {
-      setDownloading(false)
-    }
+    } finally { setDownloading(false) }
   }
 
   // ── إعادة التهيئة ─────────────────────────────────────
