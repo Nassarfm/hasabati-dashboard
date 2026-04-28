@@ -359,6 +359,10 @@ export const api = {
     updateRecurring:    (id, b)  => put(`/treasury/recurring-transactions/${id}`, b),
     deleteRecurring:    (id)     => del(`/treasury/recurring-transactions/${id}`),
     executeRecurring:   (id)     => post(`/treasury/recurring-transactions/${id}/execute`, {}),
+    getRecurring:       (id)     => get(`/treasury/recurring-transactions/${id}`),
+    getInstances:       (id)     => get(`/treasury/recurring-transactions/${id}/instances`),
+    executeInstance:    (id)     => post(`/treasury/recurring-instances/${id}/execute`, {}),
+    skipInstance:       (id, d)  => post(`/treasury/recurring-instances/${id}/skip`, d||{}),
 
     // الرسوم البنكية
     listBankFees:       (p={})   => get('/treasury/bank-fees', p),
@@ -579,25 +583,6 @@ export const api = {
     post:           (id)      => post(`/treasury/checks/${id}/post`, {}),
     clear:          (id, b)   => post(`/treasury/checks/${id}/clear`, b),
     returnCheque:   (id, b)   => post(`/treasury/checks/${id}/return`, b),
-  },
-  // ── أدوات المدير ────────────────────────────────────────
-  admin: {
-    isAdmin:           ()    => get('/admin/is-admin'),
-    backupSummary:     ()    => get('/admin/backup/summary'),
-    resetTransactions: (b={confirm:'RESET'}) => post('/admin/reset/transactions', b),
-    // التنزيل يستخدم دالة مخصصة لأنه يُرجع ملف binary
-    downloadBackup: async () => {
-      const token = localStorage.getItem('sb-access-token') ||
-                    sessionStorage.getItem('sb-access-token') || ''
-      const base = (typeof import_meta_env !== 'undefined'
-        ? import_meta_env.VITE_API_URL
-        : (window.__VITE_API_URL__ || ''))
-      const resp = await fetch(base + '/api/v1/admin/backup/download', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      })
-      if (!resp.ok) throw new Error('فشل التنزيل: ' + resp.status)
-      return resp
-    },
   },
   // ── قاعدة المعرفة والمستندات ─────────────────────────────
   knowledge: {
