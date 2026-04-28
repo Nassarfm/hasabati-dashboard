@@ -283,9 +283,19 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimName
   const types={RV:'سند قبض نقدي',PV:'سند صرف نقدي',BR:'قبض بنكي',BP:'دفعة بنكية',BT:'تحويل بنكي',IT:'تحويل داخلي'}
   const title=types[tx.tx_type]||'سند خزينة'
   const isPosted = tx.status==='posted'
-  const branchLabel      = dimNames.branch      || tx.branch_name      || tx.branch_code      || '—'
-  const costCenterLabel  = dimNames.cost_center || tx.cost_center_name || tx.cost_center      || '—'
-  const projectLabel     = dimNames.project     || tx.project_name     || tx.project_code     || '—'
+  // عرض الكود — الاسم معاً
+  const _branchName     = dimNames.branch      || tx.branch_name      || ''
+  const _ccName         = dimNames.cost_center || tx.cost_center_name || ''
+  const _projName       = dimNames.project     || tx.project_name     || ''
+  const branchLabel     = tx.branch_code
+    ? (tx.branch_code + (_branchName && _branchName !== tx.branch_code ? ' — ' + _branchName : ''))
+    : '—'
+  const costCenterLabel = tx.cost_center
+    ? (tx.cost_center + (_ccName && _ccName !== tx.cost_center ? ' — ' + _ccName : ''))
+    : '—'
+  const projectLabel    = tx.project_code
+    ? (tx.project_code + (_projName && _projName !== tx.project_code ? ' — ' + _projName : ''))
+    : '—'
   const counterpartLabel = tx.counterpart_name  || tx.beneficiary_name || '—'
   // المتعامل — يعرض الاسم من party_name أو beneficiary_name
   const partyName  = tx.party_name || tx.beneficiary_name || ''
@@ -432,10 +442,10 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimName
       ${lines.map(l=>`<tr>
         <td style="font-family:monospace;font-weight:700;color:#1e40af">${l.account_code||''}</td>
         <td>${l.account_name||l.description||''}</td>
-        <td style="color:#94a3b8;font-size:11px">${l.branch_code||'—'}</td>
-        <td style="color:#94a3b8;font-size:11px">${l.cost_center||'—'}</td>
-        <td style="color:#94a3b8;font-size:11px">${l.project_code||'—'}</td>
-        ${hasEC?`<td style="color:#b45309;font-size:11px">${l.expense_classification_code||'—'}</td>`:''}
+        <td style="color:#94a3b8;font-size:11px">${l.branch_code?(l.branch_code+(dimNames.branch&&dimNames.branch!==l.branch_code?' — '+dimNames.branch:'')):('—')}</td>
+        <td style="color:#94a3b8;font-size:11px">${l.cost_center?(l.cost_center+(dimNames.cost_center&&dimNames.cost_center!==l.cost_center?' — '+dimNames.cost_center:'')):('—')}</td>
+        <td style="color:#94a3b8;font-size:11px">${l.project_code?(l.project_code+(dimNames.project&&dimNames.project!==l.project_code?' — '+dimNames.project:'')):('—')}</td>
+        ${hasEC?`<td style="color:#b45309;font-size:11px">${l.expense_classification_code?(l.expense_classification_code+(dimNames.expense_cls?' — '+dimNames.expense_cls:'')):('—')}</td>`:''}
         <td style="text-align:center;font-family:monospace;font-weight:700;color:#1e3a5f">${l.debit>0?fmt(l.debit,3):'—'}</td>
         <td style="text-align:center;font-family:monospace;font-weight:700;color:#1e3a5f">${l.credit>0?fmt(l.credit,3):'—'}</td>
       </tr>`).join('')}
@@ -705,11 +715,13 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
   }
   const doPrint=()=>{
     const dimNames = {
-      branch:      branchName(tx.branch_code),
-      cost_center: ccName(tx.cost_center),
-      project:     projName(tx.project_code),
+      branch:      tx.branch_code ? (tx.branch_code + (branchName(tx.branch_code) !== tx.branch_code ? ' — ' + branchName(tx.branch_code) : '')) : '',
+      cost_center: tx.cost_center ? (tx.cost_center + (ccName(tx.cost_center) !== tx.cost_center ? ' — ' + ccName(tx.cost_center) : '')) : '',
+      project:     tx.project_code ? (tx.project_code + (projName(tx.project_code) !== tx.project_code ? ' — ' + projName(tx.project_code) : '')) : '',
+      expense_cls: tx.expense_classification_code ? (tx.expense_classification_code + (expClsName(tx.expense_classification_code) !== tx.expense_classification_code ? ' — ' + expClsName(tx.expense_classification_code) : '')) : '',
     }
-    printVoucher({...tx},je_lines,accLabel,'حساباتي ERP',dimNames)
+    const printTx = {...tx, party_name: tx.beneficiary_name || tx.party_name || ''}
+    printVoucher(printTx, je_lines, accLabel, 'حساباتي ERP', dimNames)
   }
 
   // حساب توازن القيد
@@ -721,7 +733,7 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
 
   return (
     <SlideOver open={!!tx} onClose={onClose} size="2xl"
-      title={'${TX_LABELS[tx.tx_type]||\'سند\'} — ' + tx.serial||'مسودة'}
+      title={(TX_LABELS[tx.tx_type]||'سند') + ' — ' + (tx.serial||'مسودة')}
       subtitle={`${fmtDate(tx.tx_date)} | ${tx.description||''}`}
       footer={
         <div className="flex items-center justify-between w-full">
@@ -2174,16 +2186,6 @@ function BankFeesTab({showToast}) {
 }
 
 // ══ ACTIVITY LOG TAB ══════════════════════════════════════
-
-const FREQ_LABELS = {
-  daily:      'يومي',
-  weekly:     'اسبوعي',
-  biweekly:   'كل اسبوعين',
-  monthly:    'شهري',
-  quarterly:  'ربع سنوي',
-  semiannual: 'نصف سنوي',
-  annual:     'سنوي',
-}
 
 function RecurringTab({showToast,openView}) {
   const [items,setItems]   = useState([])
@@ -4805,18 +4807,8 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
         {/* عمود التسوية — فقط للمعاملات البنكية */}
         {showRecon && <div className="px-2 py-3 flex items-center justify-center" onClick={e=>e.stopPropagation()}>
           {!isPosted && <span className="text-slate-200 text-[10px]">—</span>}
-          {isPosted && isReconciled && (
-            <div title="تمت التسوية — مقفول 🔒"
-              className="w-6 h-6 rounded-lg bg-emerald-500 border-2 border-emerald-500 text-white flex items-center justify-center cursor-default">
-              <span className="text-[11px] font-bold">✓</span>
-            </div>
-          )}
-          {isPosted && !isReconciled && (
-            <button title="ظهر في كشف البنك — انقر للتسوية"
-              onClick={()=>onReconcile(item.id)}
-              className="w-6 h-6 rounded-lg border-2 border-slate-300 hover:border-emerald-400 hover:bg-emerald-50 flex items-center justify-center transition-all">
-            </button>
-          )}
+          {isPosted && isReconciled && <div title="تمت التسوية — مقفول 🔒" className="w-6 h-6 rounded-lg bg-emerald-500 border-2 border-emerald-500 text-white flex items-center justify-center cursor-default"><span className="text-[11px] font-bold">✓</span></div>}
+          {isPosted && !isReconciled && <button title="ظهر في كشف البنك — انقر للتسوية" onClick={()=>onReconcile(item.id)} className="w-6 h-6 rounded-lg border-2 border-slate-300 hover:border-emerald-400 hover:bg-emerald-50 flex items-center justify-center transition-all"/>}
         </div>}
       </div>
     })}
@@ -5418,16 +5410,21 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const roles = usePartyRoles()
   const handlePrint=()=>{
     if(!form.amount||!form.bank_account_id){showToast('أكمل البيانات أولاً','error');return}
+    const _bName  = branches.find(b=>b.branch_code===form.branch_code)?.branch_name||''
+    const _ccName = costCenters.find(c=>c.code===form.cost_center)?.name_ar||''
+    const _pjName = projects.find(p=>p.code===form.project_code)?.name_ar||''
+    const _ecName = expClass.find(e=>(e.code||e.id)===form.expense_classification_code)?.name_ar||''
     const dimNames = {
-      branch:      branches.find(b=>b.branch_code===form.branch_code||b.id===form.branch_code)?.branch_name||'',
-      cost_center: costCenters.find(c=>c.code===form.cost_center||c.id===form.cost_center)?.name||'',
-      project:     projects.find(p=>p.code===form.project_code||p.id===form.project_code)?.name||'',
+      branch:      form.branch_code ? (form.branch_code + (_bName && _bName!==form.branch_code ? ' — '+_bName : '')) : '',
+      cost_center: form.cost_center ? (form.cost_center + (_ccName && _ccName!==form.cost_center ? ' — '+_ccName : '')) : '',
+      project:     form.project_code ? (form.project_code + (_pjName && _pjName!==form.project_code ? ' — '+_pjName : '')) : '',
+      expense_cls: form.expense_classification_code ? (form.expense_classification_code + (_ecName && _ecName!==form.expense_classification_code ? ' — '+_ecName : '')) : '',
     }
     const roleObj = roles.find(r=>r.role_code===form.party_role)
     printVoucher({
       ...form,
       serial:'مسودة',
-      party_name: form.party_name || '',
+      party_name: form.beneficiary_name || form.party_name || '',
       party_role: form.party_role || '',
     }, je_lines, selectedBank?.account_name||'—', 'حساباتي ERP', dimNames,
     roleObj?.role_name_ar || '')
@@ -5523,8 +5520,8 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
           </select>
         </div>
         <div>
-          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم الطرف / Party Name</label>
-          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.party_name} onChange={e=>s('party_name',e.target.value)} placeholder="اسم الشخص أو الجهة"/>
+          <label className="text-sm font-semibold text-slate-600 block mb-1.5">اسم المستفيد / Beneficiary Name</label>
+          <input className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500" value={form.beneficiary_name||''} onChange={e=>s('beneficiary_name',e.target.value)} placeholder="اسم المستفيد من السند..."/>
         </div>
       </div>
 
