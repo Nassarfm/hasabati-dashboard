@@ -1248,9 +1248,12 @@ function CashFocusedPage({showToast, openView}) {
         api.treasury.listCashTransactions(p),
         api.treasury.listBankAccounts(),
       ])
-      setItems(r?.data?.items||[])
+      const txItems = r?.data?.items||[]
+      setItems(txItems)
       setTotal(r?.data?.total||0)
       setAccounts(a?.data||[])
+      // تحميل حالة التسوية من الـ backend
+      setReconciledIds(new Set(txItems.filter(i=>i.is_reconciled).map(i=>i.id)))
     }catch(e){showToast(e.message,'error')}
     finally{setLoading(false)}
   },[filters])
@@ -1424,11 +1427,12 @@ function BankFocusedPage({showToast, openView}) {
   return (
     <div className="space-y-4">
       {/* KPI */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {[
           {l:'إجمالي الدفعات (BP)', v:(fmt(totalBP,2)) + ' ر.س', i:'💸', c:'bg-red-50 border-red-200',         t:'text-red-700'},
           {l:'إجمالي القبض (BR)',   v:(fmt(totalBR,2)) + ' ر.س', i:'🏦', c:'bg-blue-50 border-blue-200',        t:'text-blue-700'},
           {l:'مُرحَّل',             v:posted,                  i:'✅', c:'bg-emerald-50 border-emerald-200',   t:'text-emerald-700', s:'قيود محاسبية'},
+          {l:'مُسوَّى ✓',           v:reconciledCount,         i:'🔗', c:reconciledCount>0?'bg-teal-50 border-teal-300':'bg-white border-slate-200', t:'text-teal-700', s:unreconciledCount>0?unreconciledCount+' غير مُسوَّى':'كل المُرحَّل مُسوَّى'},
           {l:'مسودة',               v:drafts,                  i:'📋', c:'bg-amber-50 border-amber-200',       t:'text-amber-700'},
         ].map((k,i)=>(
           <div key={i} className={`rounded-2xl border ${k.c} p-4 flex items-center gap-3`}>
@@ -1546,14 +1550,17 @@ function TransfersFocusedPage({showToast, openView}) {
   const posted = items.filter(i=>i.status==='posted').length
   const drafts = items.filter(i=>i.status==='draft').length
   const total  = items.reduce((s,i)=>s+parseFloat(i.amount||0),0)
+  const trReconciledCount   = items.filter(i=>i.is_reconciled).length
+  const trUnreconciledCount = items.filter(i=>i.status==='posted'&&!i.is_reconciled).length
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
           {l:'إجمالي التحويلات', v:(fmt(total,2)) + ' ر.س', i:'🔄', c:'bg-purple-50 border-purple-200', t:'text-purple-700'},
-          {l:'مُرحَّل',          v:posted,                 i:'✅', c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700'},
-          {l:'مسودة',            v:drafts,                 i:'📋', c:'bg-amber-50 border-amber-200', t:'text-amber-700'},
+          {l:'مُرحَّل', v:posted, i:'✅', c:'bg-emerald-50 border-emerald-200', t:'text-emerald-700'},
+          {l:'مُسوَّى ✓', v:trReconciledCount, i:'🔗', c:trReconciledCount>0?'bg-teal-50 border-teal-300':'bg-white border-slate-200', t:'text-teal-700', s:trUnreconciledCount>0?trUnreconciledCount+' غير مُسوَّى':'كل المُرحَّل مُسوَّى'},
+          {l:'مسودة', v:drafts, i:'📋', c:'bg-amber-50 border-amber-200', t:'text-amber-700'},
         ].map((k,i)=>(
           <div key={i} className={`rounded-2xl border ${k.c} p-4 flex items-center gap-3`}>
             <span className="text-2xl">{k.i}</span>
