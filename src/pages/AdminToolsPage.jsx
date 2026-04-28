@@ -89,7 +89,7 @@ export default function AdminToolsPage() {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token || ''
       const base  = import.meta.env.VITE_API_URL || ''
-      const resp  = await fetch(base + '/api/v1/admin/backup/download', {
+      const resp  = await fetch(base + '/admin/backup/download', {
         headers: { 'Authorization': 'Bearer ' + token }
       })
       if (!resp.ok) throw new Error('فشل التنزيل: ' + resp.status)
