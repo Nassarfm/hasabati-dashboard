@@ -37,12 +37,38 @@ function getDocDate(doc) {
          doc.date    || doc.posting_date || doc.created_at || ''
 }
 
+// ── استخراج كل الأبعاد من السطر ─────────────────────────────
 function getDims(l) {
-  return {
-    branch:      l.branch_name      || l.branch?.name      || l.dim_branch      || '',
-    cost_center: l.cost_center_name || l.cost_center?.name || l.dim_cost_center || '',
-    project:     l.project_name     || l.project?.name     || l.dim_project     || '',
-  }
+  const dims = []
+  // الأعمدة الثابتة
+  if (l.branch_name      || l.branch_code)
+    dims.push({ name: l.branch_name      || l.branch_code,      type:'branch'      })
+  if (l.cost_center_name || l.cost_center)
+    dims.push({ name: l.cost_center_name || l.cost_center,      type:'cost_center' })
+  if (l.project_name     || l.project_code)
+    dims.push({ name: l.project_name     || l.project_code,     type:'project'     })
+  // الأبعاد الديناميكية (expense_classification وغيرها)
+  const extra = l.extra_dimensions || []
+  extra.forEach(d => {
+    const alreadyAdded = ['branch','cost_center','project'].includes(d.dimension_code)
+    if (!alreadyAdded && (d.value_name || d.value_code))
+      dims.push({ name: d.value_name || d.value_code, label: d.dimension_name, type:'extra' })
+  })
+  return dims
+}
+
+// ── ألوان الأبعاد حسب النوع ──────────────────────────────────
+const DIM_COLORS = {
+  branch:      'bg-blue-100 text-blue-700',
+  cost_center: 'bg-purple-100 text-purple-700',
+  project:     'bg-green-100 text-green-700',
+  extra:       'bg-amber-100 text-amber-800',
+}
+const DIM_COLORS_PRINT = {
+  branch:      'dim-b',
+  cost_center: 'dim-c',
+  project:     'dim-p',
+  extra:       'dim-e',
 }
 
 function normalizeDoc(raw, prefix, linkedJE) {
@@ -206,7 +232,7 @@ export default function JEPrintPage({ showToast: _showToast }) {
       .debit{color:#1d4ed8;font-weight:700;font-family:monospace}.credit{color:#059669;font-weight:700;font-family:monospace}
       .accode{font-family:monospace;color:#1d4ed8;font-size:10px}
       .dim{display:inline-block;font-size:9px;padding:1px 6px;border-radius:8px;font-weight:600;margin:1px}
-      .dim-b{background:#dbeafe;color:#1d4ed8}.dim-c{background:#ede9fe;color:#7c3aed}.dim-p{background:#d1fae5;color:#065f46}
+      .dim-b{background:#dbeafe;color:#1d4ed8}.dim-c{background:#ede9fe;color:#7c3aed}.dim-p{background:#d1fae5;color:#065f46}.dim-e{background:#fef3c7;color:#92400e}
       .sigs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px;padding-top:14px;border-top:1px dashed #e2e8f0}
       .sg{text-align:center}.sg-line{border-top:1px solid #94a3b8;width:100%;margin-bottom:4px}.sg-lbl{font-size:9px;color:#64748b}
       .audit{margin-top:14px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;display:flex;justify-content:space-between;font-size:9px;color:#64748b}
@@ -249,10 +275,7 @@ export default function JEPrintPage({ showToast: _showToast }) {
         <td style="font-weight:600">${l.account_name||l.account_title||'—'}</td>
         <td style="color:#64748b;font-size:10px">${l.description||l.narration||'—'}</td>
         <td>
-          ${d.branch?`<span class="dim dim-b">${d.branch}</span>`:''}
-          ${d.cost_center?`<span class="dim dim-c">${d.cost_center}</span>`:''}
-          ${d.project?`<span class="dim dim-p">${d.project}</span>`:''}
-          ${!d.branch&&!d.cost_center&&!d.project?'<span style="color:#cbd5e1;font-size:9px">—</span>':''}
+          ${d.length>0?d.map(dim=>`<span class="dim ${DIM_COLORS_PRINT[dim.type]||'dim-e'}" title="${dim.label||''}">${dim.name}</span>`).join(''):'<span style="color:#cbd5e1;font-size:9px">—</span>'}
         </td>
         <td class="debit">${parseFloat(l.debit||0)>0?fmt(l.debit,3):'—'}</td>
         <td class="credit">${parseFloat(l.credit||0)>0?fmt(l.credit,3):'—'}</td>
@@ -398,10 +421,13 @@ export default function JEPrintPage({ showToast: _showToast }) {
                     <div className="px-3 py-2.5 text-slate-500 text-[10px]">{l.description||l.narration||'—'}</div>
                     <div className="px-3 py-2.5">
                       <div className="flex flex-wrap gap-0.5">
-                        {d.branch&&<span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{d.branch}</span>}
-                        {d.cost_center&&<span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{d.cost_center}</span>}
-                        {d.project&&<span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{d.project}</span>}
-                        {!d.branch&&!d.cost_center&&!d.project&&<span className="text-slate-300 text-[9px]">—</span>}
+                        {getDims(l).map((d,di)=>(
+                          <span key={di} title={d.label||''}
+                            className={'text-[9px] px-1.5 py-0.5 rounded font-medium ' + (DIM_COLORS[d.type]||'bg-amber-100 text-amber-700')}>
+                            {d.name}
+                          </span>
+                        ))}
+                        {getDims(l).length===0&&<span className="text-slate-300 text-[9px]">—</span>}
                       </div>
                     </div>
                     <div className="px-3 py-2.5 font-mono font-bold text-blue-700">{parseFloat(l.debit||0)>0?fmt(l.debit,3):'—'}</div>
