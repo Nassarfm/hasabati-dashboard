@@ -283,19 +283,12 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimName
   const types={RV:'سند قبض نقدي',PV:'سند صرف نقدي',BR:'قبض بنكي',BP:'دفعة بنكية',BT:'تحويل بنكي',IT:'تحويل داخلي'}
   const title=types[tx.tx_type]||'سند خزينة'
   const isPosted = tx.status==='posted'
-  // عرض الكود — الاسم معاً
-  const _branchName     = dimNames.branch      || tx.branch_name      || ''
-  const _ccName         = dimNames.cost_center || tx.cost_center_name || ''
-  const _projName       = dimNames.project     || tx.project_name     || ''
-  const branchLabel     = tx.branch_code
-    ? (tx.branch_code + (_branchName && _branchName !== tx.branch_code ? ' — ' + _branchName : ''))
-    : '—'
-  const costCenterLabel = tx.cost_center
-    ? (tx.cost_center + (_ccName && _ccName !== tx.cost_center ? ' — ' + _ccName : ''))
-    : '—'
-  const projectLabel    = tx.project_code
-    ? (tx.project_code + (_projName && _projName !== tx.project_code ? ' — ' + _projName : ''))
-    : '—'
+  // dimNames يحتوي على "كود — اسم" مسبقاً — نستخدمه مباشرة
+  const _fmt = (code, name) => code ? (name && name !== code ? code + ' — ' + name : code) : '—'
+  const branchLabel     = _fmt(tx.branch_code,                   dimNames.branch      || tx.branch_name)
+  const costCenterLabel = _fmt(tx.cost_center,                   dimNames.cost_center || tx.cost_center_name)
+  const projectLabel    = _fmt(tx.project_code,                  dimNames.project     || tx.project_name)
+  const expClsLabel     = _fmt(tx.expense_classification_code,   dimNames.expense_cls || '')
   const counterpartLabel = tx.counterpart_name  || tx.beneficiary_name || '—'
   // المتعامل — يعرض الاسم من party_name أو beneficiary_name
   const partyName  = tx.party_name || tx.beneficiary_name || ''
@@ -442,10 +435,10 @@ function printVoucher(tx,lines,bankName,companyName='حساباتي ERP',dimName
       ${lines.map(l=>`<tr>
         <td style="font-family:monospace;font-weight:700;color:#1e40af">${l.account_code||''}</td>
         <td>${l.account_name||l.description||''}</td>
-        <td style="color:#94a3b8;font-size:11px">${l.branch_code?(l.branch_code+(dimNames.branch&&dimNames.branch!==l.branch_code?' — '+dimNames.branch:'')):('—')}</td>
-        <td style="color:#94a3b8;font-size:11px">${l.cost_center?(l.cost_center+(dimNames.cost_center&&dimNames.cost_center!==l.cost_center?' — '+dimNames.cost_center:'')):('—')}</td>
-        <td style="color:#94a3b8;font-size:11px">${l.project_code?(l.project_code+(dimNames.project&&dimNames.project!==l.project_code?' — '+dimNames.project:'')):('—')}</td>
-        ${hasEC?`<td style="color:#b45309;font-size:11px">${l.expense_classification_code?(l.expense_classification_code+(dimNames.expense_cls?' — '+dimNames.expense_cls:'')):('—')}</td>`:''}
+        <td style="color:#94a3b8;font-size:11px">${l.branch_code?l.branch_code+(dimNames.branch&&dimNames.branch!==l.branch_code?' — '+dimNames.branch:''):'—'}</td>
+        <td style="color:#94a3b8;font-size:11px">${l.cost_center?l.cost_center+(dimNames.cost_center&&dimNames.cost_center!==l.cost_center?' — '+dimNames.cost_center:''):'—'}</td>
+        <td style="color:#94a3b8;font-size:11px">${l.project_code?l.project_code+(dimNames.project&&dimNames.project!==l.project_code?' — '+dimNames.project:''):'—'}</td>
+        ${hasEC?`<td style="color:#b45309;font-size:11px">${l.expense_classification_code?l.expense_classification_code+(dimNames.expense_cls&&dimNames.expense_cls!==l.expense_classification_code?' — '+dimNames.expense_cls:''):'—'}</td>`:''}
         <td style="text-align:center;font-family:monospace;font-weight:700;color:#1e3a5f">${l.debit>0?fmt(l.debit,3):'—'}</td>
         <td style="text-align:center;font-family:monospace;font-weight:700;color:#1e3a5f">${l.credit>0?fmt(l.credit,3):'—'}</td>
       </tr>`).join('')}
@@ -570,6 +563,55 @@ function StatusBadge({status}) {
 }
 
 // ── VoucherSlideOver — معاينة السند (نسخة محسّنة) ─────────
+
+// ── TxWorkflowStrip — شريط مراحل الحركة البنكية ──────────
+function TxWorkflowStrip({ tx }) {
+  const stages = [
+    { key: 'draft',            label: 'مسودة',           icon: '📝' },
+    { key: 'pending_approval', label: 'انتظار الاعتماد', icon: '⏳' },
+    { key: 'posted',           label: 'مُرحَّل',          icon: '✅' },
+    { key: 'reconciled',       label: 'مُسوَّى',          icon: '🏦' },
+  ]
+  const stageOrder = { draft:0, pending_approval:1, posted:2, reconciled:3 }
+  const currentIdx = tx.is_reconciled ? 3
+    : stageOrder[tx.status] ?? 0
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 overflow-x-auto">
+      <div className="flex items-center min-w-max mx-auto" style={{width:'fit-content'}}>
+        {stages.map((stage, i) => {
+          const done    = i < currentIdx
+          const current = i === currentIdx
+          const pending = i > currentIdx
+          return (
+            <div key={stage.key} className="flex items-center">
+              {/* الدائرة */}
+              <div className="flex flex-col items-center gap-1">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg border-2 transition-all
+                  ${done    ? 'bg-emerald-500 border-emerald-500 text-white' : ''}
+                  ${current ? 'bg-blue-700   border-blue-700   text-white ring-4 ring-blue-100' : ''}
+                  ${pending ? 'bg-slate-100  border-slate-200  text-slate-400' : ''}`}>
+                  {done ? '✓' : stage.icon}
+                </div>
+                <span className={`text-[11px] font-semibold whitespace-nowrap
+                  ${done    ? 'text-emerald-600' : ''}
+                  ${current ? 'text-blue-700'    : ''}
+                  ${pending ? 'text-slate-400'   : ''}`}>
+                  {stage.label}
+                </span>
+              </div>
+              {/* الخط الرابط */}
+              {i < stages.length - 1 && (
+                <div className={`w-16 h-0.5 mx-2 mb-5 ${i < currentIdx ? 'bg-emerald-400' : 'bg-slate-200'}`}/>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToast}) {
   const [loading,  setLoading]  = useState(false)
   const [editMode, setEditMode] = useState(false)
@@ -715,10 +757,10 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
   }
   const doPrint=()=>{
     const dimNames = {
-      branch:      tx.branch_code ? (tx.branch_code + (branchName(tx.branch_code) !== tx.branch_code ? ' — ' + branchName(tx.branch_code) : '')) : '',
-      cost_center: tx.cost_center ? (tx.cost_center + (ccName(tx.cost_center) !== tx.cost_center ? ' — ' + ccName(tx.cost_center) : '')) : '',
-      project:     tx.project_code ? (tx.project_code + (projName(tx.project_code) !== tx.project_code ? ' — ' + projName(tx.project_code) : '')) : '',
-      expense_cls: tx.expense_classification_code ? (tx.expense_classification_code + (expClsName(tx.expense_classification_code) !== tx.expense_classification_code ? ' — ' + expClsName(tx.expense_classification_code) : '')) : '',
+      branch:      branchName(tx.branch_code),
+      cost_center: ccName(tx.cost_center),
+      project:     projName(tx.project_code),
+      expense_cls: expClsName(tx.expense_classification_code),
     }
     const printTx = {...tx, party_name: tx.beneficiary_name || tx.party_name || ''}
     printVoucher(printTx, je_lines, accLabel, 'حساباتي ERP', dimNames)
@@ -815,6 +857,9 @@ function VoucherSlideOver({tx, accounts, onClose, onPosted, onCancelled, showToa
               <div className="text-sm font-bold text-red-700">تم إلغاء هذا السند</div>
             </div>
           )}
+
+          {/* شريط مراحل الحركة */}
+          {!editMode && <TxWorkflowStrip tx={tx}/>}
 
           {/* نموذج التعديل */}
           {editMode&&<div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 space-y-4">
@@ -4497,6 +4542,8 @@ function TransferSlideOver({tx, accounts, onClose, onPosted, showToast}) {
             </button>}
         </div>}>
       <div className="overflow-y-auto h-full px-6 py-5 space-y-5" dir="rtl">
+        {/* شريط مراحل التحويل الداخلي */}
+        <TxWorkflowStrip tx={tx}/>
         <div className="grid grid-cols-2 gap-3 text-sm">
           {[
             ['رقم السند', tx.serial||'—'],
@@ -4750,8 +4797,8 @@ ${pendingItems.length>0?`
 function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,onSelectOne,onReconcile,reconciledIds=new Set()}) {
   const showRecon = !!onReconcile  // عمود التسوية فقط عند تمرير onReconcile
   const cols = selectable
-    ? `2rem 1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr${showRecon?' 3rem':''}`
-    : `1.5fr 1.2fr 1fr 1.5fr 1.5fr 1fr 1fr${showRecon?' 3rem':''}`
+    ? `2rem 1.5fr 1.2fr 1fr 1.5fr 1.2fr 1.2fr 1fr 1fr${showRecon?' 3rem':''}`
+    : `1.5fr 1.2fr 1fr 1.5fr 1.2fr 1.2fr 1fr 1fr${showRecon?' 3rem':''}`
   const draftItems = items.filter(x=>x.status==='draft')
   const allDraftSelected = draftItems.length>0 && draftItems.every(x=>selectedIds?.has(x.id))
   const reconciledCount = showRecon ? items.filter(i=>reconciledIds.has(i.id)).length : 0
@@ -4765,7 +4812,7 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
             title="تحديد كل المسودات"/>
         </div>
       )}
-      {['الرقم','النوع','التاريخ','الحساب','الطرف','المبلغ','الحالة'].map(h=><div key={h} className="px-3 py-3">{h}</div>)}
+      {['الرقم','النوع','التاريخ','الحساب','الطرف','المتعامل','المبلغ','الحالة'].map(h=><div key={h} className="px-3 py-3">{h}</div>)}
       {showRecon && <div className="px-2 py-3 text-center text-[11px] leading-tight">
         <div>تسوية</div>
         <div className="text-blue-300 font-normal">{reconciledCount>0?`${reconciledCount}✓`:''}</div>
@@ -4802,6 +4849,12 @@ function TxTable({items,total,loading,onView,selectable,selectedIds,onSelectAll,
         <div className="px-3 py-3 text-slate-500">{fmtDate(item.tx_date)}</div>
         <div className="px-3 py-3 text-slate-600 truncate">{item.bank_account_name||item.from_account_name||'—'}</div>
         <div className="px-3 py-3 text-slate-600 truncate">{item.party_name||item.beneficiary_name||'—'}</div>
+        <div className="px-3 py-3 text-slate-600 truncate">
+          {item.party_id
+            ? <span className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-medium">🤝 {item.party_name||item.beneficiary_name||item.party_id.slice(0,8)}</span>
+            : <span className="text-slate-300 text-xs">—</span>
+          }
+        </div>
         <div className="px-3 py-3 font-mono font-bold text-slate-800">{fmt(item.amount,3)}</div>
         <div className="px-3 py-3"><StatusBadge status={item.status}/></div>
         {/* عمود التسوية — فقط للمعاملات البنكية */}
@@ -5410,21 +5463,16 @@ function CashVoucherPage({type,onBack,onSaved,showToast}) {
   const roles = usePartyRoles()
   const handlePrint=()=>{
     if(!form.amount||!form.bank_account_id){showToast('أكمل البيانات أولاً','error');return}
-    const _bName  = branches.find(b=>b.branch_code===form.branch_code)?.branch_name||''
-    const _ccName = costCenters.find(c=>c.code===form.cost_center)?.name_ar||''
-    const _pjName = projects.find(p=>p.code===form.project_code)?.name_ar||''
-    const _ecName = expClass.find(e=>(e.code||e.id)===form.expense_classification_code)?.name_ar||''
     const dimNames = {
-      branch:      form.branch_code ? (form.branch_code + (_bName && _bName!==form.branch_code ? ' — '+_bName : '')) : '',
-      cost_center: form.cost_center ? (form.cost_center + (_ccName && _ccName!==form.cost_center ? ' — '+_ccName : '')) : '',
-      project:     form.project_code ? (form.project_code + (_pjName && _pjName!==form.project_code ? ' — '+_pjName : '')) : '',
-      expense_cls: form.expense_classification_code ? (form.expense_classification_code + (_ecName && _ecName!==form.expense_classification_code ? ' — '+_ecName : '')) : '',
+      branch:      branches.find(b=>b.branch_code===form.branch_code||b.id===form.branch_code)?.branch_name||'',
+      cost_center: costCenters.find(c=>c.code===form.cost_center||c.id===form.cost_center)?.name||'',
+      project:     projects.find(p=>p.code===form.project_code||p.id===form.project_code)?.name||'',
     }
     const roleObj = roles.find(r=>r.role_code===form.party_role)
     printVoucher({
       ...form,
       serial:'مسودة',
-      party_name: form.beneficiary_name || form.party_name || '',
+      party_name: form.party_name || '',
       party_role: form.party_role || '',
     }, je_lines, selectedBank?.account_name||'—', 'حساباتي ERP', dimNames,
     roleObj?.role_name_ar || '')
