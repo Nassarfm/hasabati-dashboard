@@ -6,7 +6,7 @@
  * ✅ يجلب القيد المحاسبي المرتبط لإظهار الأبعاد
  * ✅ تاريخ الطباعة + اسم المستخدم الطابع
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../AuthContext'
 import api from '../api/client'
 import { toArr, fmt, fmtDate, tafqeet, parseApiError } from '../utils'
