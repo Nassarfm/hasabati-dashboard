@@ -242,7 +242,7 @@ export default function JEPrintPage({ showToast: _showToast }) {
 
   // تحميل الأنواع من series_settings ديناميكياً
   useEffect(() => {
-    api.get('/settings/series').then(r => {
+    api.series.list().then(r => {
       if (Array.isArray(r?.data)) setSeriesTypes(r.data)
     }).catch(() => {})
   }, [])
