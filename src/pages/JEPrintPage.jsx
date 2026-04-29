@@ -165,9 +165,15 @@ async function smartSearch(serial) {
     items.find(i => (i.serial||'').toUpperCase() === s.toUpperCase()) ||
     items.find(i => (i.serial||'').toUpperCase().includes(s.toUpperCase()))
 
-  if (['JV','PET','ADJ','ALO'].includes(prefix)) {
-    const items = toArr(await api.accounting.getJEs({ search: s, limit: 20 }))
-    const found = findIn(items)
+  if (['JV','PET','ADJ','ALO','REC'].includes(prefix)) {
+    // نفلتر بالنوع أولاً لتجنب حد الـ 20 قيد
+    const byType = toArr(await api.accounting.getJEs({ je_type: prefix, limit: 500 }).catch(()=>({data:[]})))
+    let found = findIn(byType)
+    if (!found) {
+      // بحث عام بدون فلتر نوع
+      const bySearch = toArr(await api.accounting.getJEs({ search: s, limit: 500 }).catch(()=>({data:[]})))
+      found = findIn(bySearch)
+    }
     if (!found) throw new Error('لم يُعثر على قيد بالرقم: ' + s)
     const detail = await api.accounting.getJE(found.id)
     return normalizeDoc(detail?.data || found, prefix, null)
@@ -211,14 +217,7 @@ async function smartSearch(serial) {
     const linkedJE = found.je_id ? (await api.accounting.getJE(found.je_id))?.data : null
     return normalizeDoc(found, prefix, linkedJE)
   }
-  if (prefix === 'REC') {
-    // REC — القيود المتكررة في المحاسبة
-    const items = toArr(await api.accounting.getJEs({ search: s, limit: 20 }))
-    const found = findIn(items)
-    if (!found) throw new Error('لم يُعثر على قيد متكرر بالرقم: ' + s)
-    const detail = await api.accounting.getJE(found.id)
-    return normalizeDoc(detail?.data || found, 'JV', null)
-  }
+
   // موديولات قيد التطوير — تُظهر رسالة واضحة بدل خطأ تقني
   const PENDING_MODULES = {
     APINV: 'موديول المشتريات', APPAY: 'موديول المشتريات',
