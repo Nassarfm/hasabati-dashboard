@@ -2289,18 +2289,18 @@ function RecurringTab({ showToast }) {
       const [r, a, br, cc, pj, ec] = await Promise.all([
         api.treasury.listRecurring(),
         api.treasury.listBankAccounts(),
-        api.get('/dimensions/branches'),
-        api.get('/dimensions/cost-centers'),
-        api.get('/dimensions/projects'),
-        api.get('/dimensions/expense-classifications'),
+        api.settings.listBranches().catch(()=>({data:[]})),
+        api.settings.listCostCenters().catch(()=>({data:[]})),
+        api.settings.listProjects().catch(()=>({data:[]})),
+        api.settings.listExpenseClassifications().catch(()=>({data:[]})),
       ])
       setItems(Array.isArray(r?.data?.items) ? r.data.items : Array.isArray(r?.data) ? r.data : [])
       setAccounts(a?.data || [])
       setDimensions({
-        branches:    Array.isArray(br?.data)  ? br.data  : [],
-        costCenters: Array.isArray(cc?.data)  ? cc.data  : [],
-        projects:    Array.isArray(pj?.data)  ? pj.data  : [],
-        expClass:    Array.isArray(ec?.data)  ? ec.data  : [],
+        branches:    Array.isArray(br?.data) ? br.data : [],
+        costCenters: Array.isArray(cc?.data) ? cc.data : [],
+        projects:    Array.isArray(pj?.data) ? pj.data : [],
+        expClass:    Array.isArray(ec?.data) ? ec.data : [],
       })
     } catch(e) { showToast(e.message,'error') }
     finally { setLoading(false) }
